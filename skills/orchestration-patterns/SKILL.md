@@ -78,11 +78,18 @@ Before advancing from a parallel phase:
 
 ## Sandboxing parallel Implementers
 
-Multiple Implementers writing code simultaneously need isolation:
-- Each Implementer works on a separate git branch
+Multiple Implementers writing code simultaneously need isolation. Use the harness's isolation primitive rather than assuming branches:
+
+- **Claude Code** — `isolation: worktree` on the agent. **Landmine:** its base defaults to the repo's *default branch*, not the parent's HEAD (`worktree.baseRef: "fresh"`). Dispatching mid-plan therefore branches off `main` and silently loses the plan's in-progress work unless you set `baseRef: "head"`.
+- **pi.dev** — `worktree: true` on the run.
+- **Codex** — per-role `sandbox_mode` in `.codex/agents/*.toml`.
+
+Then, whatever the primitive:
 - No shared mutable state in the workspace
 - PRs are independent — they can be reviewed and merged separately
 - Lead coordinates merge ordering if there are dependencies
+
+Isolation is only warranted for genuinely parallel independent work; for ordinary in-repo implementation the agent should write to the current tree.
 
 ## Inter-agent handoff
 
@@ -93,11 +100,18 @@ When handing off between agents (sequential), include in the handoff:
 
 Don't assume the next agent will read the full conversation history. Be explicit.
 
-## Stall detection
+## You cannot watch a worker mid-flight — steer or inspect instead
 
-If a worker agent hasn't produced output within the expected window:
-1. Check for a transient failure (exit 75) — retry if so
-2. Check for a structural failure (exit 1) — escalate to human
-3. Check for a missing dependency (the agent is waiting on input that hasn't arrived)
+**A dispatching agent does not observe a worker's intermediate tool calls or output.** It gets the final result. Any pattern premised on noticing a worker "going quiet" or "stalling" mid-run is unimplementable on every harness we support — don't write plans that depend on it.
 
-Do not let a stalled agent block a plan indefinitely without surfacing it.
+What you *can* do, per harness:
+
+| Need | Claude Code | pi.dev | Codex |
+|---|---|---|---|
+| Correct a worker mid-run | `SendMessage` (auto-resumes a completed agent, full history retained) | `steer` / `follow_up` | `followup_task` |
+| Stop a worker | — | — | `interrupt_agent` |
+| Inspect what's running | sibling roster (**snapshot at spawn time** — later agents are invisible) | `subagent_wait` `details.completions` | `list_agents`, `/agent` |
+
+Design implication: bound the work instead of watching it. Give each dispatch a scope small enough that a wrong result is cheap, acceptance criteria checkable from the returned artifact alone, and — where the harness supports it — a turn or budget cap. When a returned result is wrong or incomplete, prefer resuming/steering that worker over re-dispatching a fresh one: the resumed agent retains its context, a new one starts cold.
+
+Runtime-level failure signalling (exit codes, result-file contracts, retry policy) belongs to the consumer's agent-runtime local skill, not here — it is a property of a specific autonomous runtime, not of dispatch.

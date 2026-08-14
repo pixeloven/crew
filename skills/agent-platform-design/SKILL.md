@@ -61,6 +61,17 @@ Add an agent when: the role genuinely requires a different operational stance OR
 
 Most specialization resolves into a skill. New agents require justification.
 
+## Harness capability claims carry a verification date
+
+Any skill asserting what a harness can or cannot do is a **perishable claim**. Harnesses ship capabilities faster than documentation about them gets revisited: in one recent audit, three of four documented harnesses carried materially wrong capability claims, and one ("this harness has no subagent registry") was written twelve days *after* the feature it denied had stabilized.
+
+Rules for capability claims:
+
+- **Date them.** Write "verified <date> against <source URL>" next to the claim, so a reader knows how stale it is.
+- **Prefer "verify at use" over hardcoded absolutes.** "Check whether your version exposes X" ages better than "X does not exist" — the same treatment `litellm-routing-model` gives version-sensitive gateway behavior.
+- **Negative claims are the dangerous ones.** "The harness can't do X" makes agents stop looking. Before writing one, check the primary source; and when writing it, say what would falsify it.
+- **Re-check on a cadence**, not only when something breaks. A capability that appeared silently produces no error — just a foundation quietly instructing agents not to use it.
+
 ## Skill design guidelines
 
 - Description carries trigger language and the load cue — for skills no agent always-loads, the description is the only load path, so name the tasks and phrases that should trigger it

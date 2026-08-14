@@ -28,12 +28,15 @@ Dispatch agents per the plan's phase structure:
 For feature implementation tasks, Implementer works from the spec's plan.md:
 phases execute in order, each gated by its verification criteria.
 
-## Monitoring Execution
+## Checking a phase (not monitoring it)
 
-Track each agent's output against the phase's acceptance criteria. After each phase:
-- Check that acceptance criteria are met
+You do not see a worker's intermediate output — only its final result (see `orchestration-patterns`). Evaluate **after** each dispatch returns, from the returned artifact:
+
+- Check that acceptance criteria are met — they must be checkable from the artifact alone, not from having watched the work
 - Check that no protected seams were crossed without flagging (per the project's protected-seams registry skill, if it defines one)
 - Check that the validation gate condition is satisfied before advancing
+
+If the result is wrong or incomplete, prefer **steering that worker** (resume / follow-up, per the harness table in `orchestration-patterns`) over dispatching a fresh one — the resumed worker keeps its context.
 
 ## Delta Handling
 
