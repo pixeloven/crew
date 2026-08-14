@@ -58,6 +58,8 @@ Editing config-as-code does **not** mutate live DB entities or reload a running 
 Two distinct pressures push toward narrowing a server's exposed tools:
 
 - **Scope / least-privilege.** Only per-server `allowed_tools` allowlisting reliably restricts which of a server's tools are exposed (as of v1.86.2 — `disallowed_tools` was broken; re-verify on upgrade). Use it to expose a low-privilege subset of a broad server (e.g. only the generation tools of an image server that also carries host-path/manifest operations — see `comfyui`).
+
+> **Allowlisting is name-based — a tool that takes its destructive action as an *argument* cannot be gated.** `allowed_tools` filters by tool name, so if one tool multiplexes several operations behind a parameter, allowing it allows all of them. Concrete case: Coder's `create_workspace_build` takes `transition: start|stop|delete`, which makes "allow start and stop but never delete" **inexpressible at the gateway** (see `coder-workspace-dispatch`). Before granting a capability group, check whether any of its tools multiplex a destructive verb; if one does, the gateway is not where you enforce that boundary — you need upstream-side scoping (a narrower service identity, a restricted role) or you accept the destructive verb as part of the grant. Audit for this whenever a new server joins a group.
 - **Tool-count budget.** Large catalogs blow the model's tool-count limit — OpenAI caps a request at **128 tools**, and small-context local models overflow well before that. Mitigate with per-server `allowed_tools`, tightly-scoped groups, and/or the consumer's **Tool Search** (defers a large catalog behind meta-tools — see `openclaw-platform-operations`).
 
 ## Rules
