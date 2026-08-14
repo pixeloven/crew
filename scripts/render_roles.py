@@ -50,7 +50,7 @@ def validate_frontmatter(role, fm_file, data):
         if name != role:
             sys.exit(f"{origin}: name '{name}' must equal the role dir name '{role}' (lowercase)")
     else:
-        for field in ("tools", "model", "thinking", "max_turns"):
+        for field in ("tools", "model", "thinking", "turnBudget"):
             if field not in data:
                 sys.exit(f"{origin}: missing '{field}'")
 

@@ -3,7 +3,7 @@ description: Proactive option analysis. Queries the project's knowledge corpus (
 tools: read, bash, grep, find
 model: litellm:gpt-5.4
 thinking: high
-max_turns: 25
+turnBudget: {"maxTurns":25}
 ---
 
 <!-- GENERATED from roles/researcher/ — edit there and run scripts/render_roles.py -->

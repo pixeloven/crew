@@ -3,7 +3,7 @@ description: Read-mostly diagnostic agent. Investigates alerts, traces flows acr
 tools: read, bash, grep, find
 model: litellm:gpt-5.4-nano
 thinking: medium
-max_turns: 25
+turnBudget: {"maxTurns":25}
 ---
 
 <!-- GENERATED from roles/investigator/ — edit there and run scripts/render_roles.py -->

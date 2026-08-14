@@ -15,7 +15,7 @@ Codex loads portable `SKILL.md` skills from `.agents/skills/` (repo-level, scann
 **User-level (recommended — no vendoring into the repo):**
 
 ```sh
-git clone --depth 1 -b v0.12.0 https://github.com/ductiletoaster/harmony-crew /tmp/hc
+git clone --depth 1 -b v0.13.0 https://github.com/ductiletoaster/harmony-crew /tmp/hc
 mkdir -p ~/.agents/skills && cp -R /tmp/hc/skills/. ~/.agents/skills/
 ```
 
