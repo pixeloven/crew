@@ -1,0 +1,10 @@
+{
+  "name": "harmony-crew-core",
+  "description": "Portable agent foundation: 8 crew roles, planning/review/orchestration disciplines, stack conventions, onboarding + doctor. Works on a bare repo — no platform required.",
+  "version": "0.14.0",
+  "author": {
+    "name": "ductiletoaster"
+  },
+  "repository": "https://github.com/ductiletoaster/harmony-crew",
+  "license": "MIT"
+}

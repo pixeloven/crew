@@ -50,7 +50,10 @@ For boundary awareness:
 
 For plans and memory:
 - `plan-execution` — how dispatched tasks relate to the plan
-- `memory-substrate` / `vault-tools` — Pre-Task Recall, Post-Session Persistence, durable notes
+- `memory-substrate` *(capabilities)* / `vault-tools` *(capabilities)* — Pre-Task Recall, Post-Session Persistence, durable notes
+
+> Skills marked *(capabilities)* ship in the **capabilities** bundle. If this project installed **core** only they won't resolve — skip the step they enable and say so in your output rather than improvising a substitute.
+
 
 ## Validation before handing off
 
@@ -68,4 +71,4 @@ For plans and memory:
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="implementer"`.
+If the knowledge-base capability is available, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="implementer"`.

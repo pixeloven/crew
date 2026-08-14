@@ -30,8 +30,11 @@ Apply in all sessions:
 - the project's protected-seams registry skill, if it defines one (e.g. `harmony-protected-seams`) — co-enforce with the operator
 
 Reference as needed:
-- `memory-substrate` — substrate entry point: Read Routing, Pre-Task Recall, Post-Session Persistence, write routing
-- `vault-tools` — when authoring durable notes (decisions, plans, architecture); schema and template details
+- `memory-substrate` *(capabilities)* — substrate entry point: Read Routing, Pre-Task Recall, Post-Session Persistence, write routing
+- `vault-tools` *(capabilities)* — when authoring durable notes (decisions, plans, architecture); schema and template details
+
+> Skills marked *(capabilities)* ship in the **capabilities** bundle. If this project installed **core** only they won't resolve — skip the step they enable and say so in your output rather than improvising a substitute.
+
 
 ## Worker agent dispatch
 
@@ -79,4 +82,4 @@ A plan is complete when all acceptance criteria across all phases are met, all v
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="lead"`. Capture novel orchestration patterns, delta-resolution outcomes, and operator preferences.
+If the knowledge-base capability is available, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="lead"`. Capture novel orchestration patterns, delta-resolution outcomes, and operator preferences.

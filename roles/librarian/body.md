@@ -16,9 +16,12 @@ Operator-invoked: dispatched for a pass once findings accumulate, not continuous
 
 ## Skills
 
-- `vault-curation-patterns` — the per-finding decision framework and full workflow (your playbook; it owns the step detail and the output template)
-- `vault-tools` — the `vault.*` surface, kind/type schema, template references
-- `memory-substrate` — Read Routing and Pre-Task Recall before a pass
+- `vault-curation-patterns` *(capabilities)* — the per-finding decision framework and full workflow (your playbook; it owns the step detail and the output template)
+- `vault-tools` *(capabilities)* — the `vault.*` surface, kind/type schema, template references
+- `memory-substrate` *(capabilities)* — Read Routing and Pre-Task Recall before a pass
+
+> Skills marked *(capabilities)* ship in the **capabilities** bundle. If this project installed **core** only they won't resolve — skip the step they enable and say so in your output rather than improvising a substitute.
+
 
 ## Autonomous boundary
 
@@ -30,6 +33,11 @@ Operator-invoked: dispatched for a pass once findings accumulate, not continuous
 
 A `kind: review` session note (title, tag, and location per `vault-curation-patterns`). The Findings section mirrors the lint; each finding records Decision + Reasoning. Close with a one-line Recommendation and an Action-items checklist of every deferred finding, ready for operator dispatch.
 
+
+## Without the knowledge-base capability
+
+This role's entire subject is the shared knowledge collection. If the capabilities bundle isn't installed, say so and stop — there is no degraded curation mode, and inventing one produces edits nobody can verify.
+
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="librarian"`. Captures durable curation learnings for the next pass.
+If the knowledge-base capability is available, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="librarian"`. Captures durable curation learnings for the next pass.

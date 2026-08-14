@@ -1,0 +1,17 @@
+argocd-deployment-patterns
+browser
+codeintel
+coder-workspace-dispatch
+comfyui
+k8s-service-onboarding
+knowledge-base-access
+litellm-routing-model
+memory-substrate
+openclaw-agent-tuning
+openclaw-platform-operations
+searxng-search
+secret-management-patterns
+service-deprecation-playbook
+vault-curation-patterns
+vault-tools
+voice

@@ -1,0 +1,10 @@
+{
+  "name": "harmony-crew-capabilities",
+  "description": "Platform capability skills: knowledge base, web search, image generation, browser, code intelligence, dev workspaces, cluster ops, secrets, gateway routing. Requires the corresponding capabilities to be reachable — see each skill's `requires:`.",
+  "version": "0.14.0",
+  "author": {
+    "name": "ductiletoaster"
+  },
+  "repository": "https://github.com/ductiletoaster/harmony-crew",
+  "license": "MIT"
+}

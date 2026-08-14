@@ -38,6 +38,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: slices/openclaw.txt + docs/CATALOG.md match frontmatter
         run: python3 scripts/gen_catalog.py --check
+      - name: bundles/ match the source tree
+        run: python3 scripts/gen_bundles.py --check
 
   version-bump:
     name: Version bumped on content change

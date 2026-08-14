@@ -51,4 +51,4 @@ Don't guess at scope. Apply `triage:needs-clarification` (or the project's equiv
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="triage"`. Capture routing patterns and label conventions for the project.
+If the knowledge-base capability is available, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="triage"`. Capture routing patterns and label conventions for the project.
