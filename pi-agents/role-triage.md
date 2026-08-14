@@ -3,7 +3,7 @@ description: Intake and routing agent. Filters signal from noise, structures inc
 tools: read, bash, grep, find
 model: litellm:gpt-5.4-nano
 thinking: low
-max_turns: 10
+turnBudget: {"maxTurns":10}
 ---
 
 <!-- GENERATED from roles/triage/ — edit there and run scripts/render_roles.py -->

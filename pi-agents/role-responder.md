@@ -3,7 +3,7 @@ description: Drafting and knowledge agent. Answers questions from the project's 
 tools: read, bash, grep, find
 model: litellm:gpt-5.4-mini
 thinking: low
-max_turns: 15
+turnBudget: {"maxTurns":15}
 ---
 
 <!-- GENERATED from roles/responder/ — edit there and run scripts/render_roles.py -->

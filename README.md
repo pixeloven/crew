@@ -5,7 +5,7 @@ A cross-project **agent foundation** for the projects I own — one shared skill
 | Harness | What it runs | Consumes | How |
 |---------|-------------|----------|-----|
 | **Claude Code** | operator/dev sessions + subagents | the **full** foundation (8 role agents + all skills) | plugin (this repo's marketplace) |
-| **pi.dev** | autonomous workers | the **full** foundation (8 role agents + all skills) | pi package |
+| **pi.dev** | autonomous workers | the **full** foundation (8 role agents + all skills) | pi package (`pi-subagents` ≥ 0.29.0) |
 | **OpenAI Codex** | dev sessions (CLI / IDE / cloud) + subagents | `AGENTS.md` natively + the full skill catalog; **dispatches subagents** (crew roles not yet rendered to `.codex/agents/`) | skills copied into `.agents/skills/` (pinned tag) |
 | **OpenClaw** | assistant/companion agents (personas) | a **consumption slice** of skills (no roles) | skills installed into the gateway |
 
@@ -79,7 +79,7 @@ No `ref` ⇒ tracks the latest release on `main` (`autoUpdate` pulls it on start
 In `.pi/settings.json` — pin the tag for reproducible builds:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.28.0", "git:github.com/ductiletoaster/harmony-crew@v0.12.0"] }
+{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/ductiletoaster/harmony-crew@v0.13.0"] }
 ```
 
 The project adds its own `.pi/skills/` + `.pi/agents/` overlay; pi walks it from cwd to git root before the package.
@@ -102,7 +102,7 @@ OpenClaw agents run a different runtime (ClawHub skills + persona workspace file
 
 ```sh
 # init container (a GH token is needed only for a PRIVATE foundation repo; mount it init-only)
-git clone --depth 1 -b v0.12.0 https://<token>@github.com/ductiletoaster/harmony-crew /tmp/hc
+git clone --depth 1 -b v0.13.0 https://<token>@github.com/ductiletoaster/harmony-crew /tmp/hc
 while read -r s; do
   openclaw skills install /tmp/hc/skills/$s --global --as $s      # → ~/.openclaw/skills (auto-loaded)
 done < /tmp/hc/slices/openclaw.txt

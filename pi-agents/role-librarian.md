@@ -3,7 +3,7 @@ description: Maintains shared-vault knowledge-collection quality. Reads lint fin
 tools: read, bash, grep, find
 model: litellm:gpt-5.4-mini
 thinking: medium
-max_turns: 20
+turnBudget: {"maxTurns":20}
 ---
 
 <!-- GENERATED from roles/librarian/ — edit there and run scripts/render_roles.py -->

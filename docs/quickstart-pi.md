@@ -5,14 +5,22 @@
 In `.pi/settings.json` — pin the tag for reproducible builds:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.28.0", "git:github.com/ductiletoaster/harmony-crew@v0.12.0"] }
+{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/ductiletoaster/harmony-crew@v0.13.0"] }
 ```
 
 Bump the pin to update; the release tag list is the changelog.
 
-## 2. Verify
+## 2. Verify — do this, don't assume
 
-A pi session should list the eight `role-*` agents from the package. The foundation's skills load from the package's `skills/` tree.
+```
+/subagents-doctor
+```
+
+It should list the eight crew agents (`lead`, `triage`, `investigator`, `researcher`, `responder`, `librarian`, `reviewer`, `implementer`) alongside pi's built-ins, and show the foundation's skills loaded from the package's `skills/` tree.
+
+> **Why this step is not optional.** Package **agent** discovery and package **skill** discovery are separate mechanisms with separate manifest keys, and a wrong agents key fails *silently* — skills load, agents don't, and nothing errors. This foundation shipped exactly that bug until v0.13.0 (the manifest declared `pi.agents`, which neither pi core nor pi-subagents reads). If the doctor lists skills but no crew agents, check the package's manifest key before anything else.
+
+Package agent discovery requires `pi-subagents` **≥ 0.29.0**.
 
 ## 3. The behavioral contract — where it lives
 

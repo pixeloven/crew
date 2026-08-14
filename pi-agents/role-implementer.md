@@ -3,7 +3,7 @@ description: Privileged write path. Executes a single scoped task end-to-end —
 tools: read, write, edit, bash, grep, find
 model: litellm:gpt-5.3-codex
 thinking: medium
-max_turns: 30
+turnBudget: {"maxTurns":30}
 ---
 
 <!-- GENERATED from roles/implementer/ — edit there and run scripts/render_roles.py -->

@@ -3,7 +3,7 @@ description: Adversarial pre-merge review. Hard-coded skeptical posture — assu
 tools: read, bash, grep, find
 model: litellm:gpt-5.4
 thinking: high
-max_turns: 20
+turnBudget: {"maxTurns":20}
 ---
 
 <!-- GENERATED from roles/reviewer/ — edit there and run scripts/render_roles.py -->

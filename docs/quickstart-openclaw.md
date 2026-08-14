@@ -8,7 +8,7 @@ The gateway's `init-skills` step clones the foundation at a pinned tag and insta
 
 ```sh
 # init container (a GH token is needed only for a PRIVATE foundation repo; mount it init-only)
-git clone --depth 1 -b v0.12.0 https://<token>@github.com/ductiletoaster/harmony-crew /tmp/hc
+git clone --depth 1 -b v0.13.0 https://<token>@github.com/ductiletoaster/harmony-crew /tmp/hc
 while read -r s; do
   openclaw skills install /tmp/hc/skills/$s --global --as $s      # → ~/.openclaw/skills (auto-loaded)
 done < /tmp/hc/slices/openclaw.txt
