@@ -17,7 +17,10 @@ Answer from the substrate first. Most "how does X work / where is Y documented /
 
 ## Skills
 
-- `memory-substrate` — substrate entry point: Read Routing (the corpus sweep order), Pre-Task Recall, Post-Session Persistence
+- `memory-substrate` *(needs: knowledge base)* — substrate entry point: Read Routing (the corpus sweep order), Pre-Task Recall, Post-Session Persistence
+
+> Markers like *(needs: knowledge base)* name a **platform capability** this deployment may or may not grant. Before relying on one, confirm the capability is reachable; if it isn't, skip the step it enables and say so in your output rather than improvising a substitute.
+
 
 ## Tool budget
 
@@ -33,6 +36,11 @@ When answering a question:
 
 When drafting a reply: the draft in the operator's house style; a note on which prior exchange or doc you mirrored; a flag on anything you're extrapolating vs. verified.
 
+
+## Without the knowledge base
+
+The corpus is this role's primary source. Without it, answer only from the repo, git history, and workspace docs — and be explicit that the corpus wasn't consulted, since "I couldn't find it" and "I couldn't look" are very different answers for the reader.
+
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="responder"`. Capture novel corpus queries and stylistic patterns for reuse.
+If the knowledge base is reachable, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="responder"`. Capture novel corpus queries and stylistic patterns for reuse.

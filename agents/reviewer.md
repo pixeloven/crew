@@ -45,7 +45,10 @@ Pre-merge review of code, configs, and designs. Enforce project conventions, det
 - `seam-alert-routing` — how to route a detected crossing (who is notified, what happens next)
 - the project's protected-seams registry skill, if it defines one (e.g. `harmony-protected-seams`) — check every diff against it
 - the project's platform-conventions local skill, if it defines one (e.g. `harmony-platform-conventions`) — verify toleration, StorageClass, security context, ESO compliance
-- `memory-substrate` — Pre-Task Recall / Post-Session Persistence entry point
+- `memory-substrate` *(needs: knowledge base)* — Pre-Task Recall / Post-Session Persistence entry point
+
+> Markers like *(needs: knowledge base)* name a **platform capability** this deployment may or may not grant. Before relying on one, confirm the capability is reachable; if it isn't, skip the step it enables and say so in your output rather than improvising a substitute.
+
 
 ## Output format
 
@@ -72,4 +75,4 @@ A PR without a description fails the test-plan-adequacy check. Open with "Pass w
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="reviewer"`. Capture recurring review findings and project convention drift patterns.
+If the knowledge base is reachable, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="reviewer"`. Capture recurring review findings and project convention drift patterns.

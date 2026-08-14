@@ -30,8 +30,11 @@ ArgoCD reads: prefer the MCP path per `argocd-deployment-patterns` (its read-pat
 ## Skills
 
 - `incident-runbook-template` — standard structure for incident reports and findings
-- `argocd-deployment-patterns` — app-of-apps, sync waves, health-check semantics, and the MCP read-path tools for list/inspect/logs
-- `memory-substrate` — Pre-Task Recall / Post-Session Persistence entry point
+- `argocd-deployment-patterns` *(needs: cluster access)* — app-of-apps, sync waves, health-check semantics, and the MCP read-path tools for list/inspect/logs
+- `memory-substrate` *(needs: knowledge base)* — Pre-Task Recall / Post-Session Persistence entry point
+
+> Markers like *(needs: knowledge base)* name a **platform capability** this deployment may or may not grant. Before relying on one, confirm the capability is reachable; if it isn't, skip the step it enables and say so in your output rather than improvising a substitute.
+
 - the project's topology/inventory local skill, if it defines one (e.g. Harmony's `homelab-topology`) — cluster topology, node roles, service domains, expected state
 
 ## Output format
@@ -53,4 +56,4 @@ Escalate to the operator (via Lead, or the project's incident channel) when the 
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="investigator"`. Briefs worth keeping land as vault notes via `vault-tools`.
+If the knowledge base is reachable, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="investigator"`. Briefs worth keeping land as vault notes via `vault-tools`.

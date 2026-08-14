@@ -24,9 +24,12 @@ Operator-invoked: dispatched for a pass once findings accumulate, not continuous
 
 ## Skills
 
-- `vault-curation-patterns` — the per-finding decision framework and full workflow (your playbook; it owns the step detail and the output template)
-- `vault-tools` — the `vault.*` surface, kind/type schema, template references
-- `memory-substrate` — Read Routing and Pre-Task Recall before a pass
+- `vault-curation-patterns` *(needs: knowledge base)* — the per-finding decision framework and full workflow (your playbook; it owns the step detail and the output template)
+- `vault-tools` *(needs: knowledge base)* — the `vault.*` surface, kind/type schema, template references
+- `memory-substrate` *(needs: knowledge base)* — Read Routing and Pre-Task Recall before a pass
+
+> Markers like *(needs: knowledge base)* name a **platform capability** this deployment may or may not grant. Before relying on one, confirm the capability is reachable; if it isn't, skip the step it enables and say so in your output rather than improvising a substitute.
+
 
 ## Autonomous boundary
 
@@ -38,6 +41,11 @@ Operator-invoked: dispatched for a pass once findings accumulate, not continuous
 
 A `kind: review` session note (title, tag, and location per `vault-curation-patterns`). The Findings section mirrors the lint; each finding records Decision + Reasoning. Close with a one-line Recommendation and an Action-items checklist of every deferred finding, ready for operator dispatch.
 
+
+## Without the knowledge base
+
+This role's entire subject is the shared knowledge collection. If the knowledge-base capability isn't reachable, say so and stop — there is no degraded curation mode, and inventing one produces edits nobody can verify.
+
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="librarian"`. Captures durable curation learnings for the next pass.
+If the knowledge base is reachable, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="librarian"`. Captures durable curation learnings for the next pass.

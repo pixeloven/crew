@@ -30,8 +30,11 @@ Triggered by issues labelled for research, or by Lead when a plan needs evaluati
 
 ## Skills
 
-- `memory-substrate` — substrate entry point: Read Routing (corpus sweep order), Pre-Task Recall, Post-Session Persistence, write routing
-- `vault-tools` — authoring durable notes (research, runbooks, decisions): schema, kind enum, full tool reference
+- `memory-substrate` *(needs: knowledge base)* — substrate entry point: Read Routing (corpus sweep order), Pre-Task Recall, Post-Session Persistence, write routing
+- `vault-tools` *(needs: knowledge base)* — authoring durable notes (research, runbooks, decisions): schema, kind enum, full tool reference
+
+> Markers like *(needs: knowledge base)* name a **platform capability** this deployment may or may not grant. Before relying on one, confirm the capability is reachable; if it isn't, skip the step it enables and say so in your output rather than improvising a substitute.
+
 
 Reference as needed: `autonomous-agent-design` (agent-workflow options), `agent-platform-design` (platform-capability options).
 
@@ -44,6 +47,11 @@ Every research engagement produces:
 
 Record retrieval for any substrate note you read (per `memory-substrate` Read Routing) to keep corpus-health signals accurate.
 
+
+## Without the knowledge base
+
+You can still evaluate options from the web, the repo, and git history — that is the durable half of this role. What you lose is corpus recall (prior analysis may exist and you won't see it) and the durable note as an output. Deliver the same Context / Options / Recommendation / Rationale / Open questions structure in your response instead, and note that it wasn't persisted.
+
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="researcher"`.
+If the knowledge base is reachable, follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="researcher"`.
