@@ -48,6 +48,25 @@ Two distinct stores with different privacy scope; do not conflate them. This is 
 
 Local memory is the agent talking to itself; the shared KB is the platform's common corpus. An agent's identity `MEMORY.md` is therefore **also a searchable local-memory source**, not just a character file. Granting an OpenClaw surface access to the shared KB is a capability grant like any other — add the KB group to its VK (see the capability-parity pattern in `litellm-routing-model`).
 
+## Multi-agent: OpenClaw *has* it — we decline it by policy
+
+OpenClaw supports sub-agents and agent-to-agent messaging. Personas being leaf surfaces is **our configuration decision**, not a missing capability — record it as such so nobody re-derives it, and so it stays reversible.
+
+| Capability | Mechanism | Our posture |
+|---|---|---|
+| Sub-agents | `sessions_spawn` (non-blocking, push-based; `sessions_yield` to await; `context: isolated \| fork`) | unused |
+| Cross-agent spawn | `sessions_spawn.agentId`, gated by `subagents.allowAgents` (**default: same-agent only**; `["*"]` opens it). `maxSpawnDepth` 1–5 (default 1), `maxConcurrent` 8 | **left at default** |
+| Agent-to-agent messaging | `sessions_send` to another session on the same Gateway by `sessionKey` / `label` / `agentId`; `timeoutSeconds: 0` = fire-and-forget | unused |
+| Swarm (experimental) | `tools.swarm.enabled`; Code Mode `agents.run()` with structured results, fan-out, `agents_wait`, `maxTotalPerGroup` backstop | **off** |
+| Gateway `bindings[]` | inbound routing only — not dispatch | n/a |
+| Cross-*instance* A2A | does not exist upstream and is not planned | genuinely unavailable |
+
+**Why decline it.** Personas are *characters*, not fungible workers — the 8 identity layers in `openclaw-agent-tuning` exist to protect exactly what fan-out over personas would dilute. Adding spawn/message tools also spends tool budget against the 128-tool cap that small-context local models overflow well before.
+
+**The escape hatch, if fan-out is ever wanted:** add a lean **non-persona `worker` agent id** and open `allowAgents` to that id only — upstream's own recommendation. Don't make companions dispatch.
+
+**Reaching a persona from outside:** `openclaw agent --agent <id> --message-file <packet> --json` is the supported handle for a crew role to dispatch *into* a persona while the persona itself stays a leaf.
+
 ## MCP tool-list caching → roll the consumer on a VK change
 
 An OpenClaw gateway caches its MCP tool list from the connection it makes at **startup**. A change to that VK's access groups (adding or removing a capability) is invisible until the gateway reconnects — **restart the pod** after changing its VK. This is rollout landmine (c) in `litellm-routing-model`, seen from the consumer side.

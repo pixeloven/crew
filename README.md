@@ -6,10 +6,10 @@ A cross-project **agent foundation** for the projects I own — one shared skill
 |---------|-------------|----------|-----|
 | **Claude Code** | operator/dev sessions + subagents | the **full** foundation (8 role agents + all skills) | plugin (this repo's marketplace) |
 | **pi.dev** | autonomous workers | the **full** foundation (8 role agents + all skills) | pi package |
-| **OpenAI Codex** | solo dev sessions (CLI / IDE / cloud) | `AGENTS.md` natively + the full skill catalog (**no roles** — Codex has no subagent registry) | skills copied into `.agents/skills/` (pinned tag) |
+| **OpenAI Codex** | dev sessions (CLI / IDE / cloud) + subagents | `AGENTS.md` natively + the full skill catalog; **dispatches subagents** (crew roles not yet rendered to `.codex/agents/`) | skills copied into `.agents/skills/` (pinned tag) |
 | **OpenClaw** | assistant/companion agents (personas) | a **consumption slice** of skills (no roles) | skills installed into the gateway |
 
-The same `skills/<name>/SKILL.md` tree feeds all four. Claude Code and pi.dev also run the **8 crew roles** (`lead`, `implementer`, …) with a per-runtime agent variant. **Codex does not** — it reads the same `AGENTS.md` and skills but executes inline, solo, where the routing table would dispatch a worker. **OpenClaw does not either** — its agents are project personas, so it consumes only the skill *slice* that lets an agent *use the platform* (web search, image gen, knowledge base), not the operator/dev catalog.
+The same `skills/<name>/SKILL.md` tree feeds all four. Claude Code and pi.dev run the **8 crew roles** (`lead`, `implementer`, …) with a per-runtime agent variant. **Codex** reads the same `AGENTS.md` and skills and dispatches subagents from the routing table's instruction — the crew roles aren't rendered to its `.codex/agents/` format yet, so it delegates to its own built-ins guided by the table. **OpenClaw** runs project personas rather than roles, and by deliberate policy keeps them as leaves (it *has* dispatch — see `openclaw-platform-operations`), consuming only the skill *slice* that lets an agent *use the platform*.
 
 > **Status.** Seeded from Harmony's agents + skills, now generalized: the catalog carries generic patterns, and each consumer's concrete values live in its own overlay via declared local-skill **slots** (starter stubs: [`templates/local-skills/`](templates/local-skills/)). Harmony remains the worked example throughout.
 
@@ -47,7 +47,7 @@ The same `skills/<name>/SKILL.md` tree feeds all four. Claude Code and pi.dev al
 | **Planning · review · orchestration** | `plan-*`, `pr-review-checklist`, `orchestration-patterns`, seam skills | ✓ | ✓ | ✓* | — |
 | **Build / tune OpenClaw** (operator) | `openclaw-platform-operations`, `openclaw-agent-tuning` | ✓ | ✓ | ✓ | — |
 
-*✓\** = Codex loads the planning/review disciplines but has no worker dispatch — it applies them **solo, inline**. *✓ (slice)* = part of the OpenClaw **consumption slice**. The machine-readable slice is [`slices/openclaw.txt`](slices/openclaw.txt), generated from `audience` frontmatter (currently `searxng-search`, `comfyui`, `knowledge-base-access`); `memory-substrate` and `vault-tools` are crew-side references, not slice members. Actual availability of a capability at runtime also depends on the consumer's LiteLLM VK access groups (see `litellm-routing-model`) — the skill is the guidance; the VK grants the tools.
+*✓\** = Codex loads the planning/review disciplines and can dispatch subagents; the crew roles are not yet rendered to `.codex/agents/`, so delegation targets its built-in agents. *✓ (slice)* = part of the OpenClaw **consumption slice**. The machine-readable slice is [`slices/openclaw.txt`](slices/openclaw.txt), generated from `audience` frontmatter (currently `searxng-search`, `comfyui`, `knowledge-base-access`); `memory-substrate` and `vault-tools` are crew-side references, not slice members. Actual availability of a capability at runtime also depends on the consumer's LiteLLM VK access groups (see `litellm-routing-model`) — the skill is the guidance; the VK grants the tools.
 
 ## What's in the box
 
@@ -79,7 +79,7 @@ No `ref` ⇒ tracks the latest release on `main` (`autoUpdate` pulls it on start
 In `.pi/settings.json` — pin the tag for reproducible builds:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.28.0", "git:github.com/ductiletoaster/harmony-crew@v0.10.0"] }
+{ "packages": ["npm:pi-subagents@0.28.0", "git:github.com/ductiletoaster/harmony-crew@v0.11.0"] }
 ```
 
 The project adds its own `.pi/skills/` + `.pi/agents/` overlay; pi walks it from cwd to git root before the package.
@@ -102,7 +102,7 @@ OpenClaw agents run a different runtime (ClawHub skills + persona workspace file
 
 ```sh
 # init container (a GH token is needed only for a PRIVATE foundation repo; mount it init-only)
-git clone --depth 1 -b v0.10.0 https://<token>@github.com/ductiletoaster/harmony-crew /tmp/hc
+git clone --depth 1 -b v0.11.0 https://<token>@github.com/ductiletoaster/harmony-crew /tmp/hc
 while read -r s; do
   openclaw skills install /tmp/hc/skills/$s --global --as $s      # → ~/.openclaw/skills (auto-loaded)
 done < /tmp/hc/slices/openclaw.txt
