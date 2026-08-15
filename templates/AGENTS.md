@@ -41,15 +41,17 @@ Delegate by work domain, without asking first. Reach for delegation by default o
 
 > **Delegate on any harness that can.** Claude Code, pi.dev, and OpenAI Codex all support subagent dispatch — Codex acts on this table's instruction to delegate, so treat the table as a request, not a description. On a harness that genuinely cannot dispatch, apply the same skills **inline, solo**; the table still documents which discipline governs which kind of work.
 
-| Task domain | Agent |
-|-------------|-------|
-| Planning, orchestration, complex multi-step work | `lead` |
-| Issue / PR intake, labeling, routing | `triage` |
-| Reactive diagnosis, health sweeps, incidents | `investigator` |
-| Pre-implementation option analysis, technology evaluation | `researcher` |
-| Write work — code, manifests, configs, PRs | `implementer` |
-| Pre-merge review, convention enforcement, seam detection | `reviewer` |
-| Fast read + draft from the corpus (answer / draft a reply) | `responder` |
+| Task domain | Agent | Activation |
+|-------------|-------|------------|
+| Planning, orchestration, complex multi-step work | `lead` | dispatch |
+| Write work — code, manifests, configs, PRs | `implementer` | dispatch |
+| Pre-merge review, convention enforcement, seam detection | `reviewer` | dispatch |
+| Pre-implementation option analysis, technology evaluation | `researcher` | dispatch |
+| Issue / PR intake, labeling, routing | `triage` | **trigger** |
+| Reactive diagnosis, health sweeps, incidents | `investigator` | **trigger** |
+| Fast read + draft (answer a question / draft a reply) | `responder` | **trigger** |
+
+**dispatch** = you invoke it from this session. **trigger** = it should run on an event or schedule with no human in the loop, which needs infrastructure you deploy — see `activation-contracts` and `templates/activation/`. A trigger-model role you haven't wired only runs when someone remembers it exists, and its work ends up absorbed into this session at a much higher cost.
 
 ### Quality gate (implementation work)
 

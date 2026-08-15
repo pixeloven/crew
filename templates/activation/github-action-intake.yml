@@ -1,0 +1,68 @@
+# Reference wiring: issue/PR events → an intake agent that classifies, labels, and routes.
+# Starting point, not a drop-in. Adapt the runner, the agent invocation, and the label taxonomy.
+#
+# Before this works: the domain:* labels must EXIST in the repo. A classifier applying
+# labels that aren't defined silently applies nothing — see activation-contracts.
+name: agent-intake
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request:
+    types: [opened, ready_for_review]
+
+# Least privilege: read the event, write the classification, nothing else.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  # One intake run per item. A reopened issue shouldn't race its own earlier run.
+  group: agent-intake-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  intake:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10          # budget: triggered work has no human watching cost
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dispatch the intake role
+        id: intake
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ITEM: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # ── EVENT ────────────────────────────────────────────────────────────
+          # Normalise both event shapes into one payload the role can act on.
+          gh issue view "$ITEM" --json number,title,body,labels > /tmp/event.json \
+            || gh pr view "$ITEM" --json number,title,body,labels > /tmp/event.json
+
+          # ── DISPATCH ─────────────────────────────────────────────────────────
+          # Invoke your harness here with a packet meeting the orchestration
+          # contract: the task, acceptance criteria checkable from the output
+          # alone, and the label taxonomy. A triggered worker starts cold AND
+          # has nobody to ask, so under-specifying fails silently.
+          #
+          #   <your-harness> run --agent triage --input /tmp/event.json > /tmp/result.json
+          #
+          echo "::notice::wire your harness invocation here"
+
+      # ── OUTPUT LOCATION ────────────────────────────────────────────────────
+      # Results must land somewhere a human will see. Apply the label AND leave
+      # the one-line routing comment — the comment is the audit trail.
+
+      # ── FAILURE SIGNAL ─────────────────────────────────────────────────────
+      # Silence is the wrong default: a trigger that fails quietly looks
+      # identical to one that found nothing to do.
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ITEM: ${{ github.event.issue.number || github.event.pull_request.number }}
+        run: |
+          gh issue comment "$ITEM" \
+            --body "Automated intake failed — [run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}). Triage this manually."

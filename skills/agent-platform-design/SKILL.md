@@ -84,6 +84,15 @@ Every skill file is loaded verbatim into an agent's context. Wording that merely
 
 **What this does not touch.** Safety and authorization gates, destructive-action warnings, accurate negative *facts*, and scope routing that names a better alternative are all correct as prohibitions — restricting an *action* is different from discouraging use of a *skill or capability*. When in doubt, ask which one a sentence restricts.
 
+## Skills that describe code are a second source of truth
+
+A skill documenting how code behaves — a label format, an exit-code contract, a parser's quirk — becomes wrong the moment that code changes, and nothing links the two. The failure is silent: the skill still reads plausibly, and an agent follows it into behaviour the code no longer has.
+
+- **Cite `file:line` for any claim about code**, so a reader can check it in one step rather than trusting it.
+- **Re-validate when the cited source changes.** A diff touching a file a skill cites is a prompt to re-read the skill, and worth calling out in review.
+- **Prefer describing the contract over the implementation.** "Exit codes distinguish transient from structural failure" survives a refactor; "exit 75 means retry" does not.
+- **When in doubt, point rather than copy.** A skill that says where the truth lives ages better than one that restates it.
+
 ## Skill design guidelines
 
 - Description carries trigger language and the load cue — for skills no agent always-loads, the description is the only load path, so name the tasks and phrases that should trigger it

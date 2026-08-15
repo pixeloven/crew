@@ -2,13 +2,14 @@
 
 # Skill catalog
 
-25 skills. `requires` legend: empty = portable (bare repo); `mcp:<group>` = needs that
+26 skills. `requires` legend: empty = portable (bare repo); `mcp:<group>` = needs that
 federated MCP capability on the consumer's virtual key; `cluster` = needs live cluster/platform
 access; `external:*` = needs a public platform. `audience` containing `persona` = part of the
 Every skill here is portable — the catalogue needs no platform.
 
 | Skill | Tier | Requires | Expects local | Description |
 |---|---|---|---|---|
+| `activation-contracts` | concept | external:github | — | How an agent role gets woken — the trigger interface (event → dispatch → output), which roles are dispatched interactively versus triggered autonomously, and reference wiring for issue events and scheduled sweeps. Load when a role should run without someone asking it to, when wiring CI or a scheduler to an agent, or when deciding whether work belongs to a cheap triggered role instead of the session you are in. |
 | `agent-platform-design` | concept | — | — | Designing agent capabilities and surfaces — MCP vs CLI interface boundary decisions, skill vs agent tradeoffs, surface naming, and the operator-layer vs autonomous-runtime scope distinction. Load when designing new agent capabilities or evaluating platform options. |
 | `ansible-conventions` | subject | — | platform-conventions, topology | Ansible role structure, inventory conventions, secret injection via op.env, and known gotchas (Jinja2/bash comment-delimiter conflicts, boot-only hardware services). Load when writing or modifying Ansible roles, playbooks, or inventory. |
 | `autonomous-agent-design` | concept | — | agent-runtime | Patterns for designing autonomous agent workflows — task decomposition, tool scoping, result contracts, failure modes, and the shadow→draft→autonomous maturity sequence. Load when designing new agent capabilities or evaluating agent workflow options. |

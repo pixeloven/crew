@@ -60,6 +60,7 @@ Your project's own skills — topology, conventions, protected seams, access map
 - One-sentence summary; `Closes #<issue>` where applicable
 - A "Test plan" section listing verification steps the reviewer should run
 - A "Questions / alternatives" section IFF you flagged uncertainty (omit it if you have nothing to say)
+- **Load-bearing assumptions** — the specific claims this change depends on and that you did not verify against source ("assumes the reaper parses this label format", "assumes this flag defaults to true"). Write them down even when confident. Naming an assumption is how you notice you made one, and it hands the reviewer a falsification list instead of a reading assignment.
 
 ## Post-Session
 
