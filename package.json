@@ -1,6 +1,6 @@
 {
   "name": "@ductiletoaster/harmony-crew",
-  "version": "0.14.0",
+  "version": "0.13.0",
   "description": "Cross-project agent foundation for four harnesses (Claude Code, pi.dev, OpenAI Codex, OpenClaw): 8 role agents, a shared skill catalog, and an onboarding scaffold/skill, in the dual pi-package / Claude-plugin structure.",
   "keywords": [
     "pi-package",
