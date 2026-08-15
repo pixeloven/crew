@@ -71,6 +71,12 @@ Planning is conversational and agent-mediated, not document-driven. Plans are de
 
 Follow **Pre-Task Recall** before starting and **Post-Session Persistence** after, per the the project's knowledge-capture local skill skill, with a `source_agent` set to your harness (or the dispatched agent's id). This is a platform capability — see *Fallback* for behavior when it's unavailable.
 
+## Tools — the live catalogue is authoritative
+
+What you can actually call is whatever your session lists right now, not what any document says. Search your available tools before concluding one doesn't exist — a tool you assumed away is indistinguishable, from the outside, from a tool that isn't there.
+
+When a skill describes a tool that isn't in your session, or your session offers one no skill mentions, that gap is **reportable drift**, not a dead end: say what you found, use what you have, and let the mismatch be fixed rather than worked around silently.
+
 ## Interface boundaries (MCP vs CLI)
 
 Pick the surface by *who the primary caller is*. **MCP tool** is canonical for agents mid-task (read paths, corpus writes). **CLI** is for humans/scripts/CI and for write operations the platform routes through it. When both exist, the CLI is a thin wrapper over the MCP/library path — no parallel implementation. Prefer CLI/MCP tools over hand-rolled API calls. See `agent-platform-design` for the full decision framework.

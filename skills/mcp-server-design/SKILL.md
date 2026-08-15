@@ -73,3 +73,19 @@ MCP servers are registered per the harness's MCP config (`.mcp.json` for Claude 
 ## Writing to the substrate from an MCP server
 
 If your MCP server emits structured knowledge (research outputs, runbooks, decisions, world facts) it should write into the platform's memory substrate rather than its own private store. See the project's knowledge-capture local skill — the substrate owns layer selection, tool routing, and the write contract.
+
+## Tool descriptions are the selection surface
+
+A tool's description is how a model decides whether to call it. Treat it as the interface, not documentation — a correct tool with an unfindable description is an unused tool.
+
+1. **Open with an imperative one-liner** — what the tool *does*, in a sentence the model can match a task against.
+2. **Say when to use it**, and when to reach for something else. Selection is comparative; a description that only describes itself gives the model nothing to choose on.
+3. **Don't dump the docstring.** Parameter detail belongs in the schema, which the model reads separately. Prose repeating the schema costs context and buries the trigger.
+4. **Avoid circular definitions.** "Runs the sync operation" tells a model nothing it couldn't guess from the name.
+5. **Cover the vocabulary a caller would use** — verbs and aliases the model might reach for, not only your internal noun. A search tool that never says "find" or "look up" loses to one that does.
+6. **Disambiguate near-neighbours explicitly.** If two tools could plausibly serve the same request, each description should say what distinguishes it.
+7. **Front-load.** Long descriptions get truncated or skimmed; the discriminating clause goes first.
+
+**Recall smoke-test for a new server.** Before shipping, write down five tasks a caller would plausibly bring, then check — without looking at the tool list — which tool each description would attract. Anything that attracts nothing needs a rewrite; anything that attracts everything is too vague to select against. This catches the failure that a schema review never will: a tool that is correct, documented, and never chosen.
+
+The same principle governs skill descriptions — see the description guidance in `agent-platform-design`.
