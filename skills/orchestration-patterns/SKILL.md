@@ -5,6 +5,37 @@ tier: concept
 requires: []
 ---
 
+## The model: hub-and-spoke, bound to your harness
+
+One agent (Lead) dispatches typed workers, each with isolated context, and mediates convergence itself. Workers return results; they do not talk to each other.
+
+That is a **policy choice with evidence behind it**, not a limitation to work around. Every harness this foundation supports converges on parent-spawns-typed-children with isolated context and structured results. Peer-to-peer between agents is either absent or scoped to one runtime, and cross-instance agent-to-agent messaging exists nowhere. Designs that assume a swarm will not port.
+
+Two layers, and keeping them apart is what makes this durable:
+
+- **Judgment stays here, and is harness-agnostic** — how to decompose a plan, what a dispatch must carry, when to converge, which deviations escalate, what "done" means. No harness supplies any of it.
+- **Mechanism belongs to the harness** — how a worker is spawned, isolated, steered, and awaited. Bind to what your harness actually provides rather than describing dispatch in prose.
+
+When the two conflict, the harness wins on mechanism and this skill wins on judgment.
+
+## Binding mechanism to your harness
+
+Look these up before relying on them; harness capabilities move faster than documentation about them (see the verification-date rule in `agent-platform-design`).
+
+| Need | Claude Code | pi.dev | Codex |
+|---|---|---|---|
+| Dispatch a worker | subagent dispatch; `workflows/` for scripted fan-out | `workflowScript` — `runs.run(key, {agent, task})` | `spawn_agent(role)` from `.codex/agents/*.toml` |
+| Fan out and await | `pipeline()` / parallel dispatch | `runs.all([...])` — every child settles, ordered outcomes | parallel `spawn_agent` + `wait_agent` |
+| Isolate a writer | `isolation: worktree` (**base defaults to the repo default branch, not parent HEAD**) | `worktree: true` | per-role `sandbox_mode` |
+| Correct mid-run | `SendMessage` (auto-resumes, full history retained) | `steer` / `follow_up` | `followup_task` |
+| Stop | `TaskStop` (by spawned name) | — | `interrupt_agent` |
+| Gate on a check | acceptance criteria in the dispatch | `gate: "<command>"` | acceptance criteria in the dispatch |
+| Carry state across dispatches | the plan store | mission `state.get/set` | the plan store |
+
+**Where a harness gives you a primitive, use it** — a scripted fan-out that awaits its children is more reliable than prose instructing an agent to remember to wait. **Where it doesn't, the judgment sections below still apply.**
+
+Two asymmetries worth designing around: only some harnesses can *stop* a worker, and only some carry durable state between dispatches. If a plan depends on either, check first and fall back to bounding the work instead.
+
 ## Workflow shapes
 
 ### Sequential
@@ -89,6 +120,20 @@ Then, whatever the primitive:
 - Lead coordinates merge ordering if there are dependencies
 
 Use isolation for genuinely parallel independent work; for ordinary single-agent in-repo implementation, write to the current tree.
+
+## The dispatch packet
+
+A worker starts cold. It does not inherit your conversation, your reasoning, or your assumptions — only what you hand it. Every dispatch carries:
+
+1. **The task** — one scoped unit, small enough that a wrong result is cheap to discard.
+2. **Acceptance criteria** — checkable **from the returned artifact alone**. If verifying requires having watched the work, the criteria are wrong.
+3. **Context that isn't obvious from the artifacts** — the constraint you know and the worker can't infer.
+4. **Where to work** — repo, branch, worktree.
+5. **A plan reference** it can pull for the wider picture.
+
+Expect back: the artifact, a status (`completed` / `blocked` / `needs-decision`), and any proposed deltas.
+
+**When a result is wrong, prefer steering that worker over dispatching a fresh one** where the harness supports it — the resumed worker keeps its context; a new one starts cold and repeats the discovery.
 
 ## Inter-agent handoff
 
