@@ -16,7 +16,7 @@ Bump the pin to update; the release tag list is the changelog.
 /subagents-doctor
 ```
 
-It should list the eight crew agents (`lead`, `triage`, `investigator`, `researcher`, `responder`, `librarian`, `reviewer`, `implementer`) alongside pi's built-ins, and show the foundation's skills loaded from the package's `skills/` tree.
+It should list the seven crew agents (`lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`) alongside pi's built-ins, and show the foundation's skills loaded from the package's `skills/` tree.
 
 > **Why this step is not optional.** Package **agent** discovery and package **skill** discovery are separate mechanisms with separate manifest keys, and a wrong agents key fails *silently* — skills load, agents don't, and nothing errors. This foundation shipped exactly that bug until v0.13.0 (the manifest declared `pi.agents`, which neither pi core nor pi-subagents reads). If the doctor lists skills but no crew agents, check the package's manifest key before anything else.
 
@@ -34,4 +34,4 @@ The project's own additions live in `.pi/skills/` and `.pi/agents/` — pi walks
 
 - Workers run with the pi frontmatter's `tools:` restrictions (e.g. Reviewer/Investigator are read-mostly by construction).
 - The Implementer variant assumes a workflow-managed push (it does not run `git push`/`gh pr create` itself) — if your runtime differs, shadow `role-implementer.md` in `.pi/agents/` with an adjusted operating-context section.
-- Capability availability (KB, search, image gen, …) is granted by the worker's LiteLLM virtual key, not by installing skills — see `litellm-routing-model`. The `doctor` skill reports what a session can actually reach.
+- Capability availability (KB, search, image gen, …) is granted by the worker's LiteLLM virtual key, not by installing skills — see the project's gateway-routing local skill. The `doctor` skill reports what a session can actually reach.

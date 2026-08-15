@@ -3,7 +3,6 @@ name: seam-alert-routing
 description: How to route seam crossing alerts — who gets notified, through what channel, and what happens next. Load when a seam crossing is detected and needs to be surfaced.
 tier: concept
 requires: [external:github]
-audience: [crew]
 expects-local: [protected-seams]
 ---
 

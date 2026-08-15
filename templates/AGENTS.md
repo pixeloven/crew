@@ -20,7 +20,7 @@ Worked example (Harmony, the platform's first consumer):
 
 This file drives **how agents behave** on this project: autonomy, delegation, routing, planning, memory, and how to apply shared platform skills to this repo's specifics. It is deliberately **behavioral, not factual** — conventions, infrastructure facts, and credentials live in **skills**, never here. Keeping this file behavioral is what lets it port across every project that consumes the platform.
 
-> **One platform, many consumers.** The agent fleet and platform skills are shared (from the foundation); each consumer supplies its **own** local skills for its specifics. Nothing in the portable sections below is project-specific — your specifics live in the **▸ Fill** blocks and in your local skills. This `AGENTS.md` drives every harness that reads it — Claude Code, pi.dev, and OpenAI Codex — all of which can dispatch subagents. If this project also runs **OpenClaw** agents, they consume a skill *slice* instead of roles — wired at the gateway, not here (see *Running OpenClaw agents* below).
+> **One platform, many consumers.** The agent fleet and platform skills are shared (from the foundation); each consumer supplies its **own** local skills for its specifics. Nothing in the portable sections below is project-specific — your specifics live in the **▸ Fill** blocks and in your local skills. This `AGENTS.md` drives every harness that reads it — Claude Code, pi.dev, and OpenAI Codex — all of which can dispatch subagents.
 
 ---
 
@@ -49,7 +49,6 @@ Delegate by work domain, without asking first. Reach for delegation by default o
 | Pre-implementation option analysis, technology evaluation | `researcher` |
 | Write work — code, manifests, configs, PRs | `implementer` |
 | Pre-merge review, convention enforcement, seam detection | `reviewer` |
-| Knowledge-collection curation (resolve corpus quality findings) | `librarian` |
 | Fast read + draft from the corpus (answer / draft a reply) | `responder` |
 
 ### Quality gate (implementation work)
@@ -70,7 +69,7 @@ Planning is conversational and agent-mediated, not document-driven. Plans are de
 
 ## Memory protocol
 
-Follow **Pre-Task Recall** before starting and **Post-Session Persistence** after, per the `memory-substrate` skill, with a `source_agent` set to your harness (or the dispatched agent's id). This is a platform capability — see *Fallback* for behavior when it's unavailable.
+Follow **Pre-Task Recall** before starting and **Post-Session Persistence** after, per the the project's knowledge-capture local skill skill, with a `source_agent` set to your harness (or the dispatched agent's id). This is a platform capability — see *Fallback* for behavior when it's unavailable.
 
 ## Interface boundaries (MCP vs CLI)
 
@@ -80,13 +79,13 @@ Pick the surface by *who the primary caller is*. **MCP tool** is canonical for a
 
 **Platform skills** (shared, from the foundation) teach *general patterns*. **This project's specific values and policies** live in **local skills** in `.claude/skills/`. When you apply a platform pattern, consult the matching local skill for this deployment's specifics. A consumer that isn't the platform's origin supplies its **own** equivalents of these local skills; the platform skills and this contract stay the same.
 
-> **▸ Fill for your project:** a table mapping each kind of project-specific concern → the local skill that holds it. (Harmony's, for reference: infrastructure/access → `homelab-topology`; platform conventions → `harmony-platform-conventions`; secrets → `secret-management-patterns`.)
+> **▸ Fill for your project:** a table mapping each kind of project-specific concern → the local skill that holds it. (Harmony's, for reference: infrastructure/access → `homelab-topology`; platform conventions → `harmony-platform-conventions`; secrets → the project's secret-paths local skill.)
 
 ## Tripwires — load the skill before the action
 
 Most conventions are reference detail — load them as soon as the task touches their domain, per *Autonomy & posture*. A few are **silent landmines** — get them wrong and it fails with no obvious error. For these, load the named skill *before* the action, every time. The skill carries the detail; this is just the trigger.
 
-> **▸ Fill for your project:** your silent landmines, each as *action → load this skill → one-line consequence*. (Harmony's, for reference: authoring a workload → `harmony-platform-conventions` → a missing control-plane toleration means the Pod never schedules, just `Pending`; editing an ExternalSecret → `secret-management-patterns` → `refreshInterval:"0"` means a new key won't sync.)
+> **▸ Fill for your project:** your silent landmines, each as *action → load this skill → one-line consequence*. (Harmony's, for reference: authoring a workload → `harmony-platform-conventions` → a missing control-plane toleration means the Pod never schedules, just `Pending`; editing an ExternalSecret → the project's secret-paths local skill → `refreshInterval:"0"` means a new key won't sync.)
 
 ## Fallback — when the platform is unavailable
 
@@ -105,12 +104,6 @@ Every role keeps its core value on a bare repo — `reviewer` reviews the diff, 
 Agents load skills on demand, without asking. Reference by name; skills carry the operational depth so this file stays behavioral. **Platform skills** (shared foundation) and **local skills** (this repo's `.claude/skills/`) resolve by name — local shadows platform where your specifics differ.
 
 > **▸ Fill for your project:** an index of the skills agents should know exist — the foundation's platform skills you rely on + your local skills, grouped by domain.
-
-## Running OpenClaw agents (only if this project does)
-
-OpenClaw agents are project **personas**, not crew roles — they don't read this file or load the plugin/package. They consume a **consumption slice** of foundation skills (web search, image gen, knowledge-base access) installed into the gateway's managed skills dir; operator skills that *build/tune* OpenClaw stay with the Claude Code / pi.dev harness. See the foundation README's *Install → OpenClaw* for the wiring pattern.
-
-> **▸ Fill for your project** (delete this section if you don't run OpenClaw): where the gateway wires the slice (the `init-skills` clone + `openclaw skills install`), which skills are in your slice, the pinned foundation tag, and each agent's `skills` allowlist. Record the specifics in your infra manifests / a local skill, not here.
 
 ## Git
 

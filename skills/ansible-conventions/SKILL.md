@@ -3,7 +3,6 @@ name: ansible-conventions
 description: Ansible role structure, inventory conventions, secret injection via op.env, and known gotchas (Jinja2/bash comment-delimiter conflicts, boot-only hardware services). Load when writing or modifying Ansible roles, playbooks, or inventory.
 tier: subject
 requires: []
-audience: [crew]
 expects-local: [platform-conventions, topology]
 ---
 

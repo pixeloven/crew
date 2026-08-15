@@ -3,7 +3,6 @@ name: autonomous-agent-design
 description: Patterns for designing autonomous agent workflows — task decomposition, tool scoping, result contracts, failure modes, and the shadow→draft→autonomous maturity sequence. Load when designing new agent capabilities or evaluating agent workflow options.
 tier: concept
 requires: []
-audience: [crew]
 expects-local: [agent-runtime]
 ---
 
@@ -79,6 +78,6 @@ Earn autonomy on narrow, well-understood surfaces before expanding. A reviewer t
 
 Autonomous agents run repeatedly — scheduled sweeps, retries, re-triggers. Every agent action must be safe to run twice:
 - Opening an issue: check for duplicates before filing
-- Writing a vault note: check the substrate first (see `memory-substrate` Read Routing) so you don't duplicate prior analysis
+- Writing a vault note: check the substrate first (see the project's knowledge-capture local skill Read Routing) so you don't duplicate prior analysis
 - Applying labels: idempotent by nature
 - Writing code: operate on a fresh branch per task

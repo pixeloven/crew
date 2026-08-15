@@ -1,3 +1,0 @@
-comfyui
-knowledge-base-access
-searxng-search

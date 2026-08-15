@@ -3,7 +3,6 @@ name: terraform-conventions
 description: "Terraform conventions — provider setup (worked example: bpg/proxmox + 1Password), variable structure, staged apply separation, and secret handling. Load when writing or reviewing Terraform configurations."
 tier: subject
 requires: []
-audience: [crew]
 expects-local: [secret-paths, topology]
 ---
 

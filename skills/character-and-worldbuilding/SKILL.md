@@ -3,10 +3,9 @@ name: character-and-worldbuilding
 description: Q&A-driven flow for defining fictional characters and their world — for companion agents, creative-project canon, and dossier writing. Methodology, not lore. Load when fleshing out a character, a setting, or a dossier.
 tier: subject
 requires: []
-audience: [crew]
 ---
 
-Use when the operator is fleshing out a fictional character (especially for a companion agent), building out a fictional setting, defining story canon, or writing a dossier. Not for technical agent configuration — that's `openclaw-agent-tuning`.
+Use when the operator is fleshing out a fictional character (especially for a companion agent), building out a fictional setting, defining story canon, or writing a dossier. Not for technical agent configuration — that's the project's persona-tuning local skill.
 
 The goal of this skill is to surface a dimensional character (or world) through structured conversation. Not to ask the operator for a full spec. People know their characters in fragments; the Q&A flow assembles fragments into shape.
 
@@ -85,7 +84,7 @@ For a companion agent voice:
 
 ## Dossier structure (fiction cluster)
 
-For a worldbuilding cluster in the vault (see `vault-tools` for write surface):
+For a worldbuilding cluster in the vault (see the project's knowledge-base tooling skill for write surface):
 
 | Note kind | What it is |
 |-----------|------------|
@@ -99,7 +98,7 @@ Each note carries `kind: note`, an appropriate `type` (`person`, `concept`, `ref
 
 ## Companion-agent workspace files
 
-For an OpenClaw companion agent specifically, the character work outputs to four canonical workspace files: `IDENTITY.md` (bare facts, third-person), `SOUL.md` (core truths and the spine, first-person), `MEMORY.md` (backstory and self-knowledge, first-person), and `USER.md` (who the user is and the current relationship state, first-person observation). The full per-file table and the application mechanics live in `openclaw-agent-tuning` (Layer 6).
+For an OpenClaw companion agent specifically, the character work outputs to four canonical workspace files: `IDENTITY.md` (bare facts, third-person), `SOUL.md` (core truths and the spine, first-person), `MEMORY.md` (backstory and self-knowledge, first-person), and `USER.md` (who the user is and the current relationship state, first-person observation). The full per-file table and the application mechanics live in the project's persona-tuning local skill (Layer 6).
 
 Hard rule: **USER.md is about the user, not about the agent.** Agent's own sensitive topics (her family, her past, her hidden indulgences) belong in SOUL.md or MEMORY.md. Mixing breaks the file's function.
 
@@ -143,6 +142,6 @@ Not done when:
 
 ## See also
 
-- `openclaw-agent-tuning` — the operational side: 8 layers of OpenClaw identity, application mechanics, model-specific failure modes
-- `vault-tools` — for writing dossier notes to the Obsidian vault
-- `memory-substrate` — for substrate-side routing of character material across personal memory, vault, world model
+- the project's persona-tuning local skill — the operational side: 8 layers of OpenClaw identity, application mechanics, model-specific failure modes
+- the project's knowledge-base tooling skill — for writing dossier notes to the Obsidian vault
+- the project's knowledge-capture local skill — for substrate-side routing of character material across personal memory, vault, world model

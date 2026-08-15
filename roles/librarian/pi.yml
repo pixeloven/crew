@@ -1,5 +1,0 @@
-description: Maintains shared-vault knowledge-collection quality. Reads lint findings and resolves them semantically per the vault-curation-patterns framework — linking, tagging into Dataview-covered MOCs, archiving, or deferring. Single-note non-destructive edits only; deletion/invalidation is operator-only. Operator-invoked.
-tools: read, bash, grep, find
-model: litellm:gpt-5.4-mini
-thinking: medium
-turnBudget: {"maxTurns":20}

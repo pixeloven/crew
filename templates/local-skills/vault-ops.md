@@ -1,6 +1,6 @@
 ---
 name: <project>-vault-ops
-description: <Project>'s knowledge-base operations — the lint/promote job names and schedules, corpus conventions, the extraction model, and where the vault lives. Load when curating the corpus or debugging KB automation. The generic tooling is the foundation's vault-tools / vault-curation-patterns skills.
+description: <Project>'s knowledge-base operations — the lint/promote job names and schedules, corpus conventions, the extraction model, and where the vault lives. Load when curating the corpus or debugging KB automation. Pair it with the project's own knowledge-base tooling and curation skills.
 ---
 
 ## Jobs

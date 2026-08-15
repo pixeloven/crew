@@ -3,7 +3,6 @@ name: mcp-server-design
 description: Designing and implementing MCP servers with FastMCP — tool design, description quality, structured error handling, failure semantics, registration, and the MCP vs CLI surface decision. Load when building new MCP tools or servers.
 tier: subject
 requires: []
-audience: [crew]
 ---
 
 ## Surface decision first
@@ -69,8 +68,8 @@ Document this asymmetry if both surfaces exist.
 
 ## Server registration
 
-MCP servers are registered per the harness's MCP config (`.mcp.json` for Claude Code, the pi MCP config for pi.dev), or federated behind the platform's LiteLLM gateway so any client whose virtual key holds the right access group can reach them — see `litellm-routing-model`.
+MCP servers are registered per the harness's MCP config (`.mcp.json` for Claude Code, the pi MCP config for pi.dev), or federated behind the platform's LiteLLM gateway so any client whose virtual key holds the right access group can reach them — see the project's gateway-routing local skill.
 
 ## Writing to the substrate from an MCP server
 
-If your MCP server emits structured knowledge (research outputs, runbooks, decisions, world facts) it should write into the platform's memory substrate rather than its own private store. See `memory-substrate` — the substrate owns layer selection, tool routing, and the write contract.
+If your MCP server emits structured knowledge (research outputs, runbooks, decisions, world facts) it should write into the platform's memory substrate rather than its own private store. See the project's knowledge-capture local skill — the substrate owns layer selection, tool routing, and the write contract.
