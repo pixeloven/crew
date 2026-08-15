@@ -1,6 +1,6 @@
 ---
 name: pr-review-checklist
-description: Structured checklist for Reviewer to run against PRs across all surface types — Python, K8s manifests, Terraform, Ansible. Load for every pre-merge review.
+description: Structured pre-merge checklist across surface types — Python, Kubernetes manifests, Terraform, Ansible — plus scope discipline, secret hygiene, and falsifying the change's load-bearing assumptions. Load before approving or requesting changes on any pull request, or when reviewing code or manifests for merge.
 tier: concept
 requires: []
 expects-local: [platform-conventions, protected-seams]

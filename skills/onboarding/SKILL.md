@@ -1,6 +1,6 @@
 ---
 name: onboarding
-description: Onboard a project to the harmony-crew foundation, or re-audit one that has drifted. Generates a new AGENTS.md, or refactors an existing AGENTS.md/CLAUDE.md, to the foundation's behavioral patterns — delegation to the shared agents, the platform↔local bridge, tripwires, fallback — and moves facts/conventions OUT of the entry files INTO local skills. Re-runnable as the project evolves to keep the entry files behavioral. Use when adopting the foundation, scaffolding a new repo, or when AGENTS.md/CLAUDE.md has accreted facts and conventions.
+description: Onboard a project to this agent foundation, or re-audit one that has drifted. Generates a new AGENTS.md, or refactors an existing AGENTS.md/CLAUDE.md, to the foundation's behavioral patterns — delegation, the platform-to-local skill bridge, tripwires, fallback — and moves facts and conventions OUT of the entry files INTO local skills. Re-runnable as the project evolves. Load when adopting the foundation, scaffolding a new repo, or when an entry file has accreted facts and conventions.
 tier: concept
 requires: []
 ---

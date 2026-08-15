@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Health-check a project's harmony-crew install and report what actually works — plugin/package present, roles resolvable, which platform capabilities this session can reach, which consumer-local skill slots are unfilled, and which onboarding profile fits. Load when asked to run the doctor, verify or debug the foundation install, check onboarding status, or answer "what capabilities do I have here".
+description: Health-check this project's agent-foundation install and report what actually works — package present, roles resolvable, which capabilities this session can genuinely reach, unfilled local-skill slots, and whether a local copy is silently shadowing a plugin one. Load when asked to run the doctor, verify or debug the install, check onboarding status, or answer "what can I actually reach here".
 tier: concept
 requires: []
 ---

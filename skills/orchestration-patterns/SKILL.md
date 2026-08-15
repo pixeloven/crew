@@ -1,6 +1,6 @@
 ---
 name: orchestration-patterns
-description: Parallel and sequential workflow composition, convergence handling, and multi-agent coordination for Lead. Load when Lead is designing or executing a multi-agent plan.
+description: Composing work across multiple agents — sequential, parallel and mixed shapes, the dispatch packet a worker needs, convergence, writer isolation, and how to bind each of those to your harness's actual primitives rather than describing them in prose. Load when planning work that spans several agents, dispatching a worker, or deciding how to split and reconverge a task.
 tier: concept
 requires: []
 ---

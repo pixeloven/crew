@@ -1,6 +1,6 @@
 ---
 name: incident-runbook-template
-description: Standard structure for cluster incident reports and ops sweep findings. Load when Investigator is producing a finding, writing a runbook, or filing a GitHub issue for a degradation.
+description: Standard structure for incident reports, diagnosis briefs, and scheduled-sweep findings — what broke, where, why, blast radius, recommended action, confidence. Load when writing up a failure, filing an issue for a degradation, reporting a health sweep, or turning an investigation into a runbook someone else can follow.
 tier: concept
 requires: []
 expects-local: [topology]
