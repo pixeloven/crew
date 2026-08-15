@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Health-check this project's agent-foundation install and report what actually works — package present, roles resolvable, which capabilities this session can genuinely reach, unfilled local-skill slots, and whether a local copy is silently shadowing a plugin one. Load when asked to run the doctor, verify or debug the install, check onboarding status, or answer "what can I actually reach here".
+description: Health-check this project's agent-foundation install and report what actually works — package present, roles resolvable, which capabilities this session can genuinely reach, unfilled local-skill slots, whether a local copy is silently shadowing a plugin one, and whether every skill on disk actually loaded into this runtime. Load when asked to run the doctor, verify or debug the install, check onboarding status, diagnose a skill that seems to be ignored or missing, or answer "what can I actually reach here".
 tier: concept
 requires: []
 ---
@@ -28,11 +28,22 @@ Run the checks below in order, then produce the report. Absence of a platform is
 
 **6. Shadowing** — the check that catches silent staleness. A project-level `.claude/agents/` or `.claude/skills/` entry **overrides** the plugin's version of the same name. List any collisions and say which copy wins, because a stale local copy makes foundation updates invisible with no error. If a local copy is an old snapshot rather than a deliberate override, that's the finding.
 
+**7. Discovery — does the runtime see every skill on disk?** This is the check nothing else can do, because it compares what the harness *actually loaded* against what exists.
+
+Agents find skills because the harness lists them, with their descriptions, before the first turn. That listing is the discovery mechanism — so a skill the runtime didn't load is invisible no matter how correctly it sits on disk, and nothing errors.
+
+- **What you see.** Your own context already holds the list — the skills available to you, each with its description. That is the authoritative side of this comparison; read it from what you were given, not from a file. On Codex, `skills.list` returns the same set on demand.
+- **What's on disk.** Enumerate the overlay directories for this harness — `.claude/skills/*.md`, `.pi/skills/*/SKILL.md`, `.agents/skills/*/SKILL.md` — plus the installed foundation catalogue.
+- **Report the difference in both directions.** On disk but not loaded is the serious one: name each and give the likely cause — wrong layout for this harness (pi and Codex want `<name>/SKILL.md` directories, Claude Code wants flat `<name>.md`), unparseable YAML frontmatter, a missing or dangling symlink, or a `name:` that disagrees with the filename. Loaded but not on disk means it came from a different install path — say which.
+- **Codex only:** its skills listing is **budgeted**. Over budget, it truncates descriptions and omits skills entirely, and it counts what it dropped (`omitted_skills`, `truncated_skill_descriptions`). If skills are missing from your listing on Codex, suspect the budget before suspecting the files, and report catalogue size as the cause — the fix is fewer or tighter skills, not a bigger index.
+
+A count matching on both sides is the pass condition. Say the number.
+
 ## The report
 
 A table — one row per check: **check | status (OK / MISSING / DEGRADED / N/A) | evidence | next action**. Then two closing lines:
 
-- **Profile:** `portable` (the foundation's catalogue alone — its skills need nothing but a repo and, for a few, GitHub) or `platform` (the project's overlay adds capability skills whose tools this session can reach — name which). This is the input `onboarding` uses to tailor the skills index.
+- **Profile:** `portable` (the foundation's catalogue alone — its skills need nothing but a repo and, for a few, GitHub) or `platform` (the project's overlay adds capability skills whose tools this session can reach — name which). This is the input `onboarding` uses to tailor its recommendations.
 - **Top action:** the single highest-leverage fix (or "healthy — nothing to do").
 
 Keep it honest: report what you *verified*, not what config files claim. A tool listed but never probed is "present", not "working".

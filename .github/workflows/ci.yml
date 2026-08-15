@@ -50,7 +50,7 @@ jobs:
               print("\n".join(bad)); sys.exit(1)
           print("all templates/ YAML parses")
           PY
-      - name: docs/CATALOG.md + skills/skill-index match frontmatter
+      - name: docs/CATALOG.md matches frontmatter
         run: python3 scripts/gen_catalog.py --check
 
   version-bump:

@@ -14,7 +14,7 @@ The same `skills/<name>/SKILL.md` tree feeds all three. Claude Code and pi.dev r
 
 ## How a skill is described
 
-Three frontmatter fields (browsable inventory: [`docs/CATALOG.md`](docs/CATALOG.md); the agent-facing map is the generated `skill-index` skill):
+Three frontmatter fields. Agents don't read this metadata — every supported harness lists installed skills with their **descriptions** to the model on its own, so the description *is* the discovery interface and carries the whole trigger. The fields below serve humans and tooling; browsable inventory: [`docs/CATALOG.md`](docs/CATALOG.md).
 
 - **`tier`** — `concept` (generic pattern) vs `subject` (about a specific tool/product).
 - **`requires`** — what the skill's guidance needs at runtime. Almost everything here is `[]`; a few need `external:github`.

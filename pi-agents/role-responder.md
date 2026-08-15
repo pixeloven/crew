@@ -27,20 +27,18 @@ Answer from what's already written down first. Most "how does X work / where is 
 
 ## Skills
 
-Discover your skills through `skill-index`. It is generated from the live catalogue, so it always reflects
-what is actually installed. Consult it early in a task and again whenever the work moves into a new domain,
-then load whatever matches what you are doing — loading a skill is cheap, re-deriving its conventions is not.
+Your harness lists every installed skill, with a description of what it is for, before your first turn — the
+foundation's and this project's own, together. Treat that list as capability you already have: when the work
+touches a skill's domain, load it. Loading one is cheap; re-deriving the conventions it carries is not, and
+those conventions are what this project actually expects.
 
-For this role the index sections that usually matter are knowledge access.
+This role's depth comes mostly from the project's own knowledge skills; `platform-glossary` is the
+foundation piece that matters most, for getting the shared nouns right.
 
-The index groups skills by the platform capability each one uses. Reach for those capabilities as the default
-path — let a failed call, not an assumption, tell you something is unavailable. If one is genuinely
-unreachable, say so plainly and carry on with what you can do; run `doctor` when you want to know what this
-deployment grants.
-
-Your project's own skills — topology, conventions, protected seams, access maps — are indexed in its
-`AGENTS.md`. Load those for anything deployment-specific.
-
+A skill that needs a capability — a knowledge base, a cluster, GitHub — says so in its own text. Reach for
+that capability as the default path, and let a failed call rather than an assumption tell you it is
+unavailable; run `doctor` to see what this deployment actually grants. The project's own skills hold its
+topology, conventions, protected seams and access maps — its `AGENTS.md` says which covers what.
 ## Tool budget
 
 **Read:** the repo and its docs, git history, GitHub (`gh` / `git log` / `git show`), and the project's knowledge corpus where it has one.
@@ -62,4 +60,4 @@ Answer from the repo, git history, and workspace docs, and be explicit that the 
 
 ## Post-Session
 
-When the knowledge base is reachable, persist durable learnings from this session per the knowledge-capture guidance in the index, attributing them to `source_agent="responder"`. If it is confirmed unreachable, note what went uncaptured.
+When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="responder"`. If it is confirmed unreachable, note what went uncaptured.

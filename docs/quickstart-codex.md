@@ -12,6 +12,10 @@ Codex reads the repo-root **`AGENTS.md`** natively (it originated the standard) 
 
 Codex loads portable `SKILL.md` skills from `.agents/skills/` (repo-level, scanned from cwd up to the repo root) and `~/.agents/skills/` (user-level). The foundation's frontmatter extras (`tier`, `requires`, `expects-local`) are ignored by Codex — the files load as-is.
 
+> **Codex budgets its skills listing — unlike pi and Claude Code.** It renders a model-visible list of installed skills with their descriptions (that listing is how agents discover skills), but the list has a context budget. Over it, Codex **truncates descriptions and omits skills entirely**, reporting the loss only in telemetry (`omitted_skills`, `truncated_skill_descriptions`, `truncated_description_chars_per_skill`) — the session shows no error. Verified in `codex-cli` 0.147.0.
+>
+> Practical consequences: keep the installed catalogue tight rather than copying every skill you might one day want, front-load the discriminating words in each description, and if a skill seems to be ignored on Codex, suspect the budget before the files. `doctor`'s discovery check compares what actually loaded against what's on disk; Codex also exposes `skills.list` for an on-demand answer.
+
 **User-level (recommended — no vendoring into the repo):**
 
 ```sh
