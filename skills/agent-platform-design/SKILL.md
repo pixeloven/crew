@@ -75,7 +75,7 @@ Rules for capability claims:
 
 Every skill file is loaded verbatim into an agent's context. Wording that merely *reads* as balanced documentation can behave as a suppressant — the model acts on what it retains, and negations retain well. the project's persona-tuning local skill states the same rule from the identity side: **add by example, not by prohibition.**
 
-- **Lead with the action, not the absence.** "You carry no fixed skill list" primes against the very behaviour the sentence exists to produce. "Discover your skills through the index" produces it. Headings matter most — they're the scan-level unit.
+- **Lead with the action, not the absence.** "You carry no fixed skill list" primes against the very behaviour the sentence exists to produce. "When the work touches a skill's domain, load it" produces it. Headings matter most — they're the scan-level unit.
 - **Negative capability claims need a positive counterpart.** "The parent doesn't observe a worker mid-flight" is fine *next to* "so bound the work and steer with these primitives." Alone, it just tells the agent to stop trying.
 - **Prefer "check, then use" over "probably unavailable."** A capability that might not be granted should be attempted and reported, not pre-emptively written off. Let a failed call establish absence.
 - **Don't undersell a skill's own subject.** "The real gate is CI, not this" tells the agent its current path is second-rate; if both matter, say both matter.

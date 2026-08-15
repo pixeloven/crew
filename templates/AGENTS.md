@@ -107,11 +107,23 @@ Every role keeps its core value on a bare repo — `reviewer` reviews the diff, 
 
 > **▸ Fill for your project:** any deployment-specific capabilities and their no-platform fallback (only if they differ from the above).
 
-## Skills catalog
+## Skills — how agents find them
 
-Agents load skills on demand, without asking. Reference by name; skills carry the operational depth so this file stays behavioral. **Platform skills** (shared foundation) and **local skills** (this repo's `.claude/skills/`) resolve by name — local shadows platform where your specifics differ.
+Your harness lists every installed skill, with its description, before the first turn — foundation skills and this repo's own, together. **That listing is the discovery mechanism**, so there is no index to write or maintain here: put a skill where the harness looks and agents can find it. Load one the moment the work touches its domain; loading is cheap, re-deriving conventions is not. Where a local skill shares a name with a foundation one, the local copy wins.
 
-> **▸ Fill for your project:** an index of the skills agents should know exist — the foundation's platform skills you rely on + your local skills, grouped by domain.
+The concern → local skill mapping under *Applying platform skills to local specifics* above is the only routing worth writing down, because it encodes a judgement the descriptions can't make for you. Don't restate the catalogue here — it goes stale the day someone adds a skill.
+
+**Registration is what fails silently, not indexing.** A skill is discoverable only if it sits where that harness looks:
+
+| Harness | Location |
+|---|---|
+| Claude Code | `.claude/skills/<name>.md` |
+| pi.dev | `.pi/skills/<name>/SKILL.md` |
+| Codex | `.agents/skills/<name>/SKILL.md` |
+
+Miss one and that harness simply never sees the skill — no error, no warning. If you support more than one, single-source the file and symlink the others. Run `doctor` to compare what actually loaded against what's on disk.
+
+Because discovery runs entirely on descriptions, a skill's `description` is its whole interface: say what it's for and when to reach for it, and front-load the discriminating words. A skill nothing matches against is a skill nobody loads.
 
 ## Git
 

@@ -53,20 +53,20 @@ Don't guess at scope. Apply `triage:needs-clarification` (or the project's equiv
 
 ## Skills
 
-Discover your skills through `skill-index`. It is generated from the live catalogue, so it always reflects
-what is actually installed. Consult it early in a task and again whenever the work moves into a new domain,
-then load whatever matches what you are doing — loading a skill is cheap, re-deriving its conventions is not.
+You have a list of available skills, each with a description of what it is for — the foundation's and this
+project's own, together. Treat it as capability you already have: when the work touches a skill's domain,
+load it. Loading one is cheap; re-deriving the conventions it carries is not, and those conventions are what
+this project actually expects.
 
-For this role the index sections that usually matter are intake, routing, and seam alerting.
+For this role, `intake-process` and `seam-detection` carry most of the weight.
 
-The index groups skills by the platform capability each one uses. Reach for those capabilities as the default
-path — let a failed call, not an assumption, tell you something is unavailable. If one is genuinely
-unreachable, say so plainly and carry on with what you can do; run `doctor` when you want to know what this
-deployment grants.
+If you expect a skill and it isn't in that list, treat the gap as reportable drift rather than an absence to
+work around: say what you expected, use what you have, and run `doctor` to find out why it didn't load.
 
-Your project's own skills — topology, conventions, protected seams, access maps — are indexed in its
-`AGENTS.md`. Load those for anything deployment-specific.
-
+A skill that needs a capability — a knowledge base, a cluster, GitHub — says so in its own text. Reach for
+that capability as the default path, and let a failed call rather than an assumption tell you it is
+unavailable; run `doctor` to see what this deployment actually grants. The project's own skills hold its
+topology, conventions, protected seams and access maps — its `AGENTS.md` says which covers what.
 ## Post-Session
 
-When the knowledge base is reachable, persist durable learnings from this session per the knowledge-capture guidance in the index, attributing them to `source_agent="triage"`. If it is confirmed unreachable, note what went uncaptured.
+When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="triage"`. If it is confirmed unreachable, note what went uncaptured.
