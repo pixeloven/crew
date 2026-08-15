@@ -33,7 +33,7 @@ Config is read at **startup** — every voice change needs a gateway restart to 
 ## Per-harness
 
 - **OpenClaw:** the primary consumer — voice is channel config as above (operator wires it; the agent just talks).
-- **Claude Code / pi.dev:** can call `/audio/transcriptions` and `/audio/speech` directly through the LiteLLM base URL when a task needs transcription or narration, but there's no dedicated tool — it's a plain OpenAI-compatible request.
+- **Claude Code / pi.dev:** call `/audio/transcriptions` or `/audio/speech` directly through the LiteLLM base URL whenever a task needs transcription or narration — a plain OpenAI-compatible HTTP request with the VK as bearer token, no tool wrapper required.
 
 ## Notes
 

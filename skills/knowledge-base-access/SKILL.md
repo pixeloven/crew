@@ -20,7 +20,7 @@ Every platform agent has **two complementary knowledge layers**. Reach for the r
 
 ## Using the shared KB
 
-Availability depends on your virtual key's access groups (see `litellm-routing-model`); if a tool below isn't present, you weren't granted that capability.
+Reach the corpus with the tools below. (Which are present follows your VK's access groups — if one isn't in your tool list, that capability wasn't granted; see `litellm-routing-model`.)
 
 - **Search first** — `qmd_search-query`: semantic + keyword search over the corpus; returns snippets with their source. This is the entry point.
 - **Read a specific note** — `vault_readNote(path)` / `vault_getNote(path)` once search points you at one.
@@ -35,7 +35,7 @@ Availability depends on your virtual key's access groups (see `litellm-routing-m
 ## Boundaries
 
 - **Don't put private or persona content in the shared KB** — it's read by every agent and the whole operator fleet. Personal/character material belongs in local memory.
-- **Contributing back is a capability, not a default** — only write to the shared KB when you have a durable, org-relevant finding *and* your VK grants vault write.
+- **Contribute back when you have a durable, org-relevant finding** and your VK grants vault write. If you're unsure a fact is durable, write it as `kind: fleeting` rather than skipping it — the corpus promotes vetted fleeting notes later. Personal/persona material stays in local memory.
 - **Degrade gracefully** — if the KB is unreachable (no access group, or the gateway is down), fall back to local memory and say what you skipped.
 
 ## See also

@@ -2,7 +2,7 @@
 
 # Skill catalog
 
-41 skills. `requires` legend: empty = portable (bare repo); `mcp:<group>` = needs that
+42 skills. `requires` legend: empty = portable (bare repo); `mcp:<group>` = needs that
 federated MCP capability on the consumer's virtual key; `cluster` = needs live cluster/platform
 access; `external:*` = needs a public platform. `audience` containing `persona` = part of the
 OpenClaw consumption slice (`slices/openclaw.txt`).
@@ -46,6 +46,7 @@ OpenClaw consumption slice (`slices/openclaw.txt`).
 | `searxng-search` | subject | mcp:search | crew, persona | litellm-access-map | Privacy-respecting public web search via the platform's self-hosted SearXNG MCP. Use when you need current public-web information (upstream docs, vendor changelogs, GitHub issues outside your own org) that the vault doesn't have. Two tools available — `searxng-searxng_web_search` for queries and `searxng-web_url_read` for URL-to-markdown extraction. |
 | `secret-management-patterns` | subject | cluster | crew | secret-paths | 1Password → ESO → K8s secret flow. Covers ExternalSecret lifecycle, refreshInterval convention, force-sync procedure, and rate limit recovery. Load when creating or modifying ExternalSecrets, rotating credentials, or troubleshooting secret sync. |
 | `service-deprecation-playbook` | subject | cluster | crew | — | Pattern for cleanly sunsetting a platform service — data migration, ArgoCD removal, namespace cleanup, DNS, and secret cleanup. Load when removing or decommissioning a service from the platform. |
+| `skill-index` | concept | — | crew | — | The catalogue of every available skill, grouped by the platform capability it uses, with each skill's trigger description. Consult this when choosing which skill to load for a task — it is the map, and it is generated from the live catalogue so it always matches what is installed. Load it early in any non-trivial task, and again whenever the work moves into a new domain. |
 | `terraform-conventions` | subject | — | crew | secret-paths, topology | Terraform conventions — provider setup (worked example: bpg/proxmox + 1Password), variable structure, staged apply separation, and secret handling. Load when writing or reviewing Terraform configurations. |
 | `vault-curation-patterns` | concept | mcp:kb | crew | vault-ops | Decision framework for the librarian agent — how to resolve each lint finding type, when to MOC vs tag, when to archive vs invalidate, how to recognize Dataview-covered notes. Load when triaging lint findings or running a curation pass. |
 | `vault-tools` | subject | mcp:kb | crew | vault-ops | Writing, indexing, and managing the lifecycle of vault notes — vault_writeNote, retrieval tracking, consolidation, orphan detection. Load when authoring, editing, searching, or curating notes via the vault.* MCP surface. |

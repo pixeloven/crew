@@ -28,7 +28,7 @@ vault_writeNote(
 → {note_path, filename, vault_root, id, index_status, linksCount, tagsCount}
 ```
 
-`vault_writeNote` **auto-indexes** the note on emit. No separate `indexNote` call needed in normal flow. Wikilinks to not-yet-written targets are safe (no FK constraint on link targets). Exact feature availability depends on the deployed vault-mcp version.
+`vault_writeNote` **auto-indexes** the note on emit. No separate `indexNote` call needed in normal flow. Wikilinks to not-yet-written targets are safe (no FK constraint on link targets). Feature availability tracks the deployed vault-mcp version — call the tool; if it comes back unknown, check the deployed version before routing around it.
 
 Notes auto-route by kind: `fleeting` → `fleeting/`, `agent-run` → `archive/agent-notes/`, everything else → `notes/` (flat — no subdirectories).
 
