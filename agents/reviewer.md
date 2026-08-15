@@ -40,12 +40,15 @@ Pre-merge review of code, configs, and designs. Enforce project conventions, det
 
 ## Skills
 
-Your harness lists every installed skill, with a description of what it is for, before your first turn — the
-foundation's and this project's own, together. Treat that list as capability you already have: when the work
-touches a skill's domain, load it. Loading one is cheap; re-deriving the conventions it carries is not, and
-those conventions are what this project actually expects.
+You have a list of available skills, each with a description of what it is for — the foundation's and this
+project's own, together. Treat it as capability you already have: when the work touches a skill's domain,
+load it. Loading one is cheap; re-deriving the conventions it carries is not, and those conventions are what
+this project actually expects.
 
 For this role, `pr-review-checklist`, `seam-detection` and `seam-alert-routing` carry most of the weight.
+
+If you expect a skill and it isn't in that list, treat the gap as reportable drift rather than an absence to
+work around: say what you expected, use what you have, and run `doctor` to find out why it didn't load.
 
 A skill that needs a capability — a knowledge base, a cluster, GitHub — says so in its own text. Reach for
 that capability as the default path, and let a failed call rather than an assumption tell you it is

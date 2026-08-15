@@ -29,7 +29,19 @@ harmony-crew/
 - **Roles:** edit `roles/<role>/` (shared `body.md`, per-runtime `claude.yml`/`pi.yml`, optional `{{RUNTIME_CONTEXT}}` appendix), run `scripts/render_roles.py`, commit source + rendered output together. CI fails on drift.
 - **Skills:** schema-v2 frontmatter (`name`, `description` ≥110 chars with trigger language, `tier`, `requires`, optional `expects-local`). No project-specific values — the dividing test is **"no project context baked in"**, not width: a single-language convention skill is fine if any project benefits; anything binding to one deployment's vault, gateway, cluster, secret paths, or domains belongs in that consumer's overlay (deferral goes through an `expects-local` slot).
 - **Generated artifacts:** after any frontmatter change, run `scripts/gen_catalog.py` and commit `docs/CATALOG.md`.
-- **Discovery is the harness's job, not ours.** pi builds an `<available_skills>` block from every loaded skill's name + description (`core/skills.js`); Claude Code and Codex render equivalent listings. So the catalogue needs no in-repo index — one would be a second, staler copy of what the runtime already injects, and on Codex it would compete for a **budgeted** skills listing that silently truncates descriptions and omits skills when the catalogue grows. That is why `description` quality is a hard gate here and why the catalogue stays small: those are the only two levers on discovery that actually exist.
+- **Discovery is the harness's job, not ours — and that is a dependency, so it gets verified and dated.** Each supported harness lists installed skills, with their descriptions, to the model itself. Verified 2026-08-15:
+
+  | Harness | Mechanism | Evidence |
+  |---|---|---|
+  | pi.dev 0.84.1 | `formatSkillsForPrompt` → `<available_skills>` with name/description/location | `core/skills.js:257-278` |
+  | Claude Code | system-reminder listing of available skills with descriptions | observed in-session |
+  | codex-cli 0.147.0 | model-visible skills list + `skills.list`/`skills.read` tools | binary strings |
+
+  This is why the catalogue needs no in-repo index: one would be a second, staler copy of what the runtime already injects. **Re-verify on a major harness upgrade** — if a harness ever stopped listing skills, roles would still say "you have a list of available skills" and agents would quietly stop loading them.
+
+  **The listing is not guaranteed complete, and roles must not claim it is.** Codex budgets its listing and, over budget, truncates descriptions and omits skills outright, reporting the loss only in telemetry. A skill can also be absent because it is in the wrong layout for that harness, has unparseable frontmatter, or sits behind a dangling symlink. So roles state the observable fact (*you have a list*) rather than the mechanism, and instruct agents to report an expected-but-missing skill as drift; `doctor`'s discovery check exists to answer why.
+
+  Consequently `description` quality is a hard gate here and the catalogue stays small — those are the only two levers on discovery that actually exist.
 
 ## Versioning
 
