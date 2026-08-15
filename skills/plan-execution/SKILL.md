@@ -21,8 +21,9 @@ Before dispatching any agent:
 Dispatch agents per the plan's phase structure:
 
 - **Sequential phases**: dispatch the next agent only after the previous phase's validation gate passes
-- **Parallel phases**: dispatch multiple agents simultaneously; wait for all to complete before the convergence point
-- **Agent selection**: match the task to the right agent role (Implementer for write work, Reviewer for review, Investigator for diagnosis, Researcher for option analysis)
+- **Parallel phases**: dispatch concurrently and converge on completion — use your harness's fan-out primitive where it has one (the binding table in the orchestration guidance), since a primitive that awaits its children beats remembering to
+- **Agent selection**: match the task to the right role — write work, review, diagnosis, option analysis
+- **The packet**: every dispatch carries the contract in the orchestration guidance; a worker starts cold
 
 For feature implementation tasks, Implementer works from the spec's plan.md:
 phases execute in order, each gated by its verification criteria.

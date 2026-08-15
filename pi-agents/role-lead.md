@@ -55,7 +55,7 @@ Match tasks to agents by role:
 - Responder — fast corpus answer or draft
 - Triage — intake (labeling, routing)
 
-When you dispatch a worker, include: the scoped task, acceptance criteria, the skills the worker should load, the workspace assignment (repo/branch/worktree), and a plan reference it can pull for context. Expect back: the result artifact, a status (completed / blocked / needs-decision), and any proposed deltas.
+Dispatch per the packet contract in the orchestration guidance — the worker starts cold, so what you hand it is all it has. Expect back the artifact, a status (completed / blocked / needs-decision), and any proposed deltas.
 
 For feature implementation, the plan is developed in plan mode (research delegated to Researcher; seam audit + adversarial review via Reviewer for sensitive designs), persisted per the plan-generation guidance, and executed by Implementer per the plan-execution guidance.
 
