@@ -11,6 +11,7 @@ Every review opens with a one-sentence summary judgment (Pass / Pass with requir
 ## Universal checks (all PRs)
 
 - [ ] PR scope matches stated purpose — no unrelated changes bundled
+- [ ] **Load-bearing assumptions listed, and each one falsified against source.** This is the highest-yield check in the list: the common defect is a claim the author asserted but never ground-truthed. If the PR names no assumptions, that is itself a finding — every non-trivial change rests on something.
 - [ ] No secrets hardcoded in any changed file (tokens, passwords, API keys)
 - [ ] The project's protected-seams registry checked (e.g. `harmony-protected-seams`), if it defines one — per `seam-detection`
 - [ ] Commit message follows `<type>(<scope>): <subject>` format

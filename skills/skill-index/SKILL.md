@@ -44,6 +44,7 @@ Run `doctor` when you want to know what this deployment grants.
 
 ## Uses: GitHub
 
+- **`activation-contracts`** — How an agent role gets woken — the trigger interface (event → dispatch → output), which roles are dispatched interactively versus triggered autonomously, and reference wiring for issue events and scheduled sweeps. Load when a role should run without someone asking it to, when wiring CI or a scheduler to an agent, or when deciding whether work belongs to a cheap triggered role instead of the session you are in.
 - **`github-actions-conventions`** — GitHub Actions workflow conventions — workflow structure, secret access, gh CLI usage, uv-based Python CI, gitleaks scanning, and automated-commit patterns. Load when writing or reviewing GitHub Actions workflows or CI pipelines.
 - **`github-repo-workflow`** — Clone, edit, commit, push, and PR-create against any GitHub repo using git and gh. Auth is already wired via GH_TOKEN + gh credential helper — no setup required. Load when a task involves editing files in a GitHub repo, opening or reviewing a PR, or operating on issues.
 - **`intake-process`** — How Triage classifies incoming GitHub issues and PRs — domain labels, work type, and routing decisions. Load when processing new issues, PRs, or unlabelled work items.

@@ -21,9 +21,8 @@ Before dispatching any agent:
 Dispatch agents per the plan's phase structure:
 
 - **Sequential phases**: dispatch the next agent only after the previous phase's validation gate passes
-- **Parallel phases**: dispatch concurrently and converge on completion — use your harness's fan-out primitive where it has one (the binding table in the orchestration guidance), since a primitive that awaits its children beats remembering to
-- **Agent selection**: match the task to the right role — write work, review, diagnosis, option analysis
-- **The packet**: every dispatch carries the contract in the orchestration guidance; a worker starts cold
+- **Parallel phases**: dispatch multiple agents simultaneously; wait for all to complete before the convergence point
+- **Agent selection**: match the task to the right agent role (Implementer for write work, Reviewer for review, Investigator for diagnosis, Researcher for option analysis)
 
 For feature implementation tasks, Implementer works from the spec's plan.md:
 phases execute in order, each gated by its verification criteria.
@@ -37,6 +36,12 @@ You do not see a worker's intermediate output — only its final result (see `or
 - Check that the validation gate condition is satisfied before advancing
 
 If the result is wrong or incomplete, prefer **steering that worker** (resume / follow-up, per the harness table in `orchestration-patterns`) over dispatching a fresh one — the resumed worker keeps its context.
+
+## Dispatching a review
+
+A review dispatched as "review this" returns generic observations. A review dispatched with a hypothesis returns findings.
+
+Before dispatching, **extract the single load-bearing question** — the one claim that, if false, makes the change wrong. Then task the reviewer with falsifying it specifically, alongside the standard checklist. The implementer's load-bearing-assumptions list is where to look first; if it's empty on a non-trivial change, that absence is the first thing to probe.
 
 ## Delta Handling
 

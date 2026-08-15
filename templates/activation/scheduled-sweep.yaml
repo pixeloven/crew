@@ -1,0 +1,64 @@
+# Reference wiring: a periodic sweep (diagnosis, curation, drift detection) that
+# dispatches an agent role on a schedule. Starting point, not a drop-in.
+#
+# Adapt: the schedule, the runner image, the role invoked, and the credentials.
+# See activation-contracts for the trigger interface this implements.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: agent-sweep
+  labels:
+    app.kubernetes.io/component: agent-activation
+spec:
+  # Pick a quiet hour. Cheap roles are the point of a sweep — run it often
+  # enough to catch drift, rarely enough that duplicates don't pile up.
+  schedule: "0 6 * * *"
+  concurrencyPolicy: Forbid          # a slow run must not overlap the next
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  startingDeadlineSeconds: 600
+  jobTemplate:
+    spec:
+      backoffLimit: 1                # budget: don't retry an expensive agent run repeatedly
+      activeDeadlineSeconds: 1800    # hard cap — unattended work needs a ceiling
+      template:
+        spec:
+          restartPolicy: Never
+          # Least privilege: this identity should read what it diagnoses and
+          # write only its findings. Widening these verbs is a seam crossing.
+          serviceAccountName: agent-sweep
+          containers:
+            - name: sweep
+              image: <your-agent-runner-image>:<tag>
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -eu
+                  # ── EVENT ──────────────────────────────────────────────────
+                  # For a schedule the event is "it is time"; gather the state
+                  # the role needs to act on.
+                  #
+                  # ── DISPATCH ───────────────────────────────────────────────
+                  # Invoke the role with a packet meeting the orchestration
+                  # contract. Acceptance criteria must be checkable from the
+                  # produced artifact alone — nobody is watching this run.
+                  #
+                  # ── OUTPUT LOCATION ────────────────────────────────────────
+                  # File findings where a human looks. DEDUPLICATE FIRST: a
+                  # daily sweep that files unconditionally produces a queue of
+                  # duplicates within a week. Check for an open item first.
+                  #
+                  # ── FAILURE SIGNAL ─────────────────────────────────────────
+                  # Exit non-zero on failure so the Job records it, and make
+                  # sure something alerts on failed Jobs in this namespace —
+                  # an unwatched CronJob failing nightly is indistinguishable
+                  # from a clean sweep.
+                  echo "wire your harness invocation here"
+              env:
+                - name: HOME
+                  value: /tmp
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsNonRoot: true
+                capabilities: { drop: ["ALL"] }
+                seccompProfile: { type: RuntimeDefault }
