@@ -49,10 +49,10 @@ Use after `searxng-searxng_web_search` when a snippet isn't enough and you need 
 ## Discipline
 
 - **Anchor with a quoted unique landmark.** SearXNG dispatches to engines that tokenise aggressively — `pi.dev` loses the dot, `@org/package` may lose the org prefix, and a query of all-common terms ends up matching everything. Wrap a unique term (`"pi-subagents"`, a version string, a known URL fragment) in quotes. A bare `pi.dev coding agent subagents api` returns generic noise; `"pi-subagents" npm package` returns the actual project pages on the first try.
-- **Don't over-narrow with categories.** SearXNG accepts a `categories` param (e.g. `it`) that filters to developer-focused engines. Useful for generic technical queries — but on already-anchored queries, narrowing the engine pool can drop relevant general results. Try without the filter first; only narrow if the result set is too noisy.
-- **Don't loop more than ~5 searches without a clear reason.** Bandwidth, bot detection on upstream engines, and your own context budget all push back.
+- **Use `categories` as a second pass, not a first.** SearXNG accepts a `categories` param (e.g. `it`) that filters to developer-focused engines. Useful for generic technical queries — but on already-anchored queries, narrowing the engine pool can drop relevant general results. Try without the filter first; only narrow if the result set is too noisy.
+- **Budget about five searches per question.** A well-anchored query usually lands in one or two; past five, state the reason you're continuing (upstream bot detection and your own context budget both push back).
 - **Don't query for things obviously inside the platform itself.** LiteLLM endpoints, vault notes, internal docs — those have direct tools.
-- **If a search or read tool returns an error, stop and report.** Don't auto-retry. SearXNG's limiter is conservative for a reason.
+- **Don't retry in a loop.** SearXNG's limiter is deliberately conservative — a burst of automatic retries makes it worse. One reformulated attempt is fine; if it errors again, report the gap and move on.
 
 ## Why this and not Exa / Perplexity / Gemini
 

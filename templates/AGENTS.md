@@ -84,19 +84,19 @@ Pick the surface by *who the primary caller is*. **MCP tool** is canonical for a
 
 ## Tripwires — load the skill before the action
 
-Most conventions are reference detail (load when you need them). A few are **silent landmines** — get them wrong and it fails with no obvious error. For these, load the named skill *before* the action, every time. The skill carries the detail; this is just the trigger.
+Most conventions are reference detail — load them as soon as the task touches their domain, per *Autonomy & posture*. A few are **silent landmines** — get them wrong and it fails with no obvious error. For these, load the named skill *before* the action, every time. The skill carries the detail; this is just the trigger.
 
 > **▸ Fill for your project:** your silent landmines, each as *action → load this skill → one-line consequence*. (Harmony's, for reference: authoring a workload → `harmony-platform-conventions` → a missing control-plane toleration means the Pod never schedules, just `Pending`; editing an ExternalSecret → `secret-management-patterns` → `refreshInterval:"0"` means a new key won't sync.)
 
 ## Fallback — when the platform is unavailable
 
-The platform (corpus, LLM gateway, cluster) is an **enhancement, not a prerequisite**. If a capability is unreachable, degrade gracefully rather than fail — and say what you skipped:
+The platform (corpus, LLM gateway, cluster) is the **default path — reach for it first**, and let an actual failed call, not an assumption, establish that something is unavailable. Once a capability is confirmed unreachable, degrade gracefully rather than fail — and say what you skipped:
 
 - **No corpus / memory substrate** → work from the repo, git history, and the web; skip Pre-Task Recall and Post-Session persistence (note it).
 - **No MCP gateway** → fall back to direct CLIs.
 - **No cluster / live-infra access** → operate on the repo (code, manifests, plans); defer anything needing live infra and say so.
 
-Every role keeps its core value on a bare repo — `reviewer` reviews the diff, `researcher` evaluates from web + repo, `implementer` edits code — and uses platform capabilities only to sharpen that.
+Every role keeps its core value on a bare repo — `reviewer` reviews the diff, `researcher` evaluates from web + repo, `implementer` edits code — and sharpens that with platform capabilities wherever they're reachable.
 
 > **▸ Fill for your project:** any deployment-specific capabilities and their no-platform fallback (only if they differ from the above).
 

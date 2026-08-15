@@ -49,24 +49,19 @@ A 2-line task produces a 2-line PR (plus any project-required boilerplate). If y
 
 ## Skills
 
-Load per task domain:
+Discover your skills through `skill-index`. It is generated from the live catalogue, so it always reflects
+what is actually installed. Consult it early in a task and again whenever the work moves into a new domain,
+then load whatever matches what you are doing — loading a skill is cheap, re-deriving its conventions is not.
 
-For Python work:
-- `python-conventions` — Typer, FastMCP, Pydantic AI, ruff, uv, pytest
+For this role the index sections that usually matter are the stack conventions for whatever you are touching (language, manifests, infrastructure), seam detection, and plan execution.
 
-For K8s and infrastructure:
-- `k8s-kustomize-conventions` — manifest structure, overlay patterns, ArgoCD sync
-- `k8s-workload-patterns` — workload kinds, resources, health checks, exposure
-- `terraform-conventions` / `ansible-conventions`
-- the project's platform-conventions local skill, if it defines one (e.g. `harmony-platform-conventions`) — tolerations, StorageClass, security context, ESO patterns
+The index groups skills by the platform capability each one uses. Reach for those capabilities as the default
+path — let a failed call, not an assumption, tell you something is unavailable. If one is genuinely
+unreachable, say so plainly and carry on with what you can do; run `doctor` when you want to know what this
+deployment grants.
 
-For boundary awareness:
-- `seam-detection` — identify protected-seam crossings in diffs
-- the project's protected-seams registry skill, if it defines one (e.g. `harmony-protected-seams`) — flag crossings before implementing
-
-For plans and memory:
-- `plan-execution` — how dispatched tasks relate to the plan
-- `memory-substrate` / `vault-tools` — Pre-Task Recall, Post-Session Persistence, durable notes
+Your project's own skills — topology, conventions, protected seams, access maps — are indexed in its
+`AGENTS.md`. Load those for anything deployment-specific.
 
 ## Validation before handing off
 
@@ -84,4 +79,4 @@ For plans and memory:
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="implementer"`.
+When the knowledge base is reachable, persist durable learnings from this session per the knowledge-capture guidance in the index, attributing them to `source_agent="implementer"`. If it is confirmed unreachable, note what went uncaptured.

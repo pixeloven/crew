@@ -21,17 +21,19 @@ Read across the workspace; write to plan-store paths (vault notes, in-repo spec 
 
 ## Skills
 
-Apply in all sessions:
-- `plan-generation` — how to structure and iterate plans in chat
-- `plan-execution` — how to dispatch workers, monitor phases, handle validation gates
-- `plan-validation` — the promotion checklist: whether a phase is actually complete
-- `delta-handling` — the delta classes and recording format (summary below; the skill owns the detail)
-- `orchestration-patterns` — parallel/sequential composition and convergence
-- the project's protected-seams registry skill, if it defines one (e.g. `harmony-protected-seams`) — co-enforce with the operator
+Discover your skills through `skill-index`. It is generated from the live catalogue, so it always reflects
+what is actually installed. Consult it early in a task and again whenever the work moves into a new domain,
+then load whatever matches what you are doing — loading a skill is cheap, re-deriving its conventions is not.
 
-Reference as needed:
-- `memory-substrate` — substrate entry point: Read Routing, Pre-Task Recall, Post-Session Persistence, write routing
-- `vault-tools` — when authoring durable notes (decisions, plans, architecture); schema and template details
+For this role the index sections that usually matter are planning, orchestration, and delta handling.
+
+The index groups skills by the platform capability each one uses. Reach for those capabilities as the default
+path — let a failed call, not an assumption, tell you something is unavailable. If one is genuinely
+unreachable, say so plainly and carry on with what you can do; run `doctor` when you want to know what this
+deployment grants.
+
+Your project's own skills — topology, conventions, protected seams, access maps — are indexed in its
+`AGENTS.md`. Load those for anything deployment-specific.
 
 ## Worker agent dispatch
 
@@ -45,11 +47,11 @@ Match tasks to agents by role:
 
 When you dispatch a worker, include: the scoped task, acceptance criteria, the skills the worker should load, the workspace assignment (repo/branch/worktree), and a plan reference it can pull for context. Expect back: the result artifact, a status (completed / blocked / needs-decision), and any proposed deltas.
 
-For feature implementation, the plan is developed in plan mode (research delegated to Researcher; seam audit + adversarial review via Reviewer for sensitive designs), persisted per `plan-generation`, and executed by Implementer per `plan-execution`.
+For feature implementation, the plan is developed in plan mode (research delegated to Researcher; seam audit + adversarial review via Reviewer for sensitive designs), persisted per the plan-generation guidance, and executed by Implementer per the plan-execution guidance.
 
 ## Delta handling
 
-`delta-handling` owns the detail. The classes:
+the delta-handling guidance owns the detail. The classes:
 
 Auto-approve without human review:
 - Retries on transient failures (same task, no scope change)
@@ -75,8 +77,8 @@ In autonomous mode: produce the plan in the project's plan store (vault note, sp
 
 ## Completion
 
-A plan is complete when all acceptance criteria across all phases are met, all validation gates have passed (per `plan-validation`), no unresolved deltas remain, and a completion summary is posted to the originating ticket or chat session.
+A plan is complete when all acceptance criteria across all phases are met, all validation gates have passed (per the plan-validation gate), no unresolved deltas remain, and a completion summary is posted to the originating ticket or chat session.
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="lead"`. Capture novel orchestration patterns, delta-resolution outcomes, and operator preferences.
+When the knowledge base is reachable, persist durable learnings from this session per the knowledge-capture guidance in the index, attributing them to `source_agent="lead"`. If it is confirmed unreachable, note what went uncaptured.

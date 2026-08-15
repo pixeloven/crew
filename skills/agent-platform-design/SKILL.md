@@ -72,6 +72,19 @@ Rules for capability claims:
 - **Negative claims are the dangerous ones.** "The harness can't do X" makes agents stop looking. Before writing one, check the primary source; and when writing it, say what would falsify it.
 - **Re-check on a cadence**, not only when something breaks. A capability that appeared silently produces no error — just a foundation quietly instructing agents not to use it.
 
+## Prompt language: a skill is an instruction, not a description
+
+Every skill file is loaded verbatim into an agent's context. Wording that merely *reads* as balanced documentation can behave as a suppressant — the model acts on what it retains, and negations retain well. `openclaw-agent-tuning` states the same rule from the identity side: **add by example, not by prohibition.**
+
+- **Lead with the action, not the absence.** "You carry no fixed skill list" primes against the very behaviour the sentence exists to produce. "Discover your skills through the index" produces it. Headings matter most — they're the scan-level unit.
+- **Negative capability claims need a positive counterpart.** "The parent doesn't observe a worker mid-flight" is fine *next to* "so bound the work and steer with these primitives." Alone, it just tells the agent to stop trying.
+- **Prefer "check, then use" over "probably unavailable."** A capability that might not be granted should be attempted and reported, not pre-emptively written off. Let a failed call establish absence.
+- **Don't undersell a skill's own subject.** "The real gate is CI, not this" tells the agent its current path is second-rate; if both matter, say both matter.
+- **Watch bolded prohibitions.** Bold survives compression into behaviour more than the qualifying sentence after it, so a bolded "Don't X" with a nuanced follow-up usually lands as a flat ban.
+- **Budget, don't deter.** "Don't loop more than ~5 searches" reads as discouragement; "budget about five per question, and say why if you continue" reads as guidance.
+
+**What this does not touch.** Safety and authorization gates, destructive-action warnings, accurate negative *facts*, and scope routing that names a better alternative are all correct as prohibitions — restricting an *action* is different from discouraging use of a *skill or capability*. When in doubt, ask which one a sentence restricts.
+
 ## Skill design guidelines
 
 - Description carries trigger language and the load cue — for skills no agent always-loads, the description is the only load path, so name the tasks and phrases that should trigger it

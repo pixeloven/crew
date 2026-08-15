@@ -27,7 +27,7 @@ Don't use this for:
 - `semgrep_scan_with_custom_rule(code, rule)` — scan with an **inline** YAML rule you supply.
 - `get_abstract_syntax_tree(code, language)` — the AST for structural reasoning.
 
-**Tokenless limitation (important).** Without a Semgrep cloud token, the MCP is crippled: registry configs (`p/*`, `auto`) are login-gated and return **0 findings**, and `semgrep_scan` rejects local `config` *paths* (path-traversal guard). In practice **only `semgrep_scan_with_custom_rule` (inline rule) works reliably** through the MCP. So treat the MCP as a *supplement* for ad-hoc inline checks — the real, comprehensive SAST gate is the CLI running in CI against the vendored ruleset baseline, not this MCP. (`semgrep_findings` is deliberately excluded from the allowlist — it needs a cloud token we don't set and would only surface auth errors.)
+**Token-dependent scope.** `security_check` and `semgrep_scan_with_custom_rule` (inline rule) work without a Semgrep cloud token — use them freely. What a token changes: registry configs (`p/*`, `auto`) are login-gated and return **0 findings**, and `semgrep_scan` rejects local `config` *paths* (path-traversal guard). In practice **only `semgrep_scan_with_custom_rule` (inline rule) works reliably** through the MCP. So treat the MCP as a *supplement* for ad-hoc inline checks — the real, comprehensive SAST gate is the CLI running in CI against the vendored ruleset baseline, not this MCP. (`semgrep_findings` is deliberately excluded from the allowlist — it needs a cloud token we don't set and would only surface auth errors.)
 
 ## CLI tools (dev images: pi.dev / Claude Code)
 
@@ -48,4 +48,4 @@ The `semgrep` MCP routes through LiteLLM MCP — the client config supplies the 
 
 ## Security
 
-SAST results are advisory signal, not proof — a clean scan is not a guarantee, and findings need triage (false positives are common). The comprehensive gate is CI, not an interactive scan. Structural rewrites (`ast-grep -r`, Serena rename) mutate code — review the diff before committing, same as any edit.
+SAST results are advisory signal, not proof — a clean scan is not a guarantee, and findings need triage (false positives are common). An interactive scan catches issues at the point of change, where they're cheapest to fix; CI's vendored ruleset is the comprehensive backstop. Run both. Structural rewrites (`ast-grep -r`, Serena rename) mutate code — review the diff before committing, same as any edit.

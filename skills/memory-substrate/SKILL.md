@@ -60,7 +60,7 @@ When starting any non-trivial task, sweep the substrate before reaching for exte
 2. **Specific note** → `vault_readNote(path)` or `vault_getNote(path)`.
 3. **Metadata-shaped query** ("orphans", "by issue N", "stale") → `vault_findOrphans()` / `vault_findByIssue(...)` / `vault_findStale()`.
 4. **What references this?** → `vault_getBacklinks(path)`.
-5. **External** (web, GitHub, docs) only when the substrate is insufficient.
+5. **External** (web, GitHub, docs) — go here once the substrate has been checked and doesn't cover it; current upstream/vendor material usually lives there rather than in the corpus.
 
 Call `vault_recordRetrieval(path)` on every note you actually read — it feeds the stale/orphan signal that keeps the corpus honest.
 

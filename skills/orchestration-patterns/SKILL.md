@@ -89,7 +89,7 @@ Then, whatever the primitive:
 - PRs are independent — they can be reviewed and merged separately
 - Lead coordinates merge ordering if there are dependencies
 
-Isolation is only warranted for genuinely parallel independent work; for ordinary in-repo implementation the agent should write to the current tree.
+Use isolation for genuinely parallel independent work; for ordinary single-agent in-repo implementation, write to the current tree.
 
 ## Inter-agent handoff
 
@@ -100,17 +100,17 @@ When handing off between agents (sequential), include in the handoff:
 
 Don't assume the next agent will read the full conversation history. Be explicit.
 
-## You cannot watch a worker mid-flight — steer or inspect instead
+## Steer or inspect a worker — you get its final result, not its intermediate output
 
-**A dispatching agent does not observe a worker's intermediate tool calls or output.** It gets the final result. Any pattern premised on noticing a worker "going quiet" or "stalling" mid-run is unimplementable on every harness we support — don't write plans that depend on it.
-
-What you *can* do, per harness:
+A dispatching agent receives the worker's **final result**; intermediate tool calls and output stay inside the worker. Design around that: bound the work rather than watching it, and use the steering primitives below when a result needs correcting.
 
 | Need | Claude Code | pi.dev | Codex |
 |---|---|---|---|
 | Correct a worker mid-run | `SendMessage` (auto-resumes a completed agent, full history retained) | `steer` / `follow_up` | `followup_task` |
-| Stop a worker | — | — | `interrupt_agent` |
+| Stop a worker | `TaskStop` (by the name the agent was spawned with) | — | `interrupt_agent` |
 | Inspect what's running | sibling roster (**snapshot at spawn time** — later agents are invisible) | `subagent_wait` `details.completions` | `list_agents`, `/agent` |
+
+Verify these against your harness's current docs before relying on an absence — this table is a point-in-time snapshot and the harnesses move.
 
 Design implication: bound the work instead of watching it. Give each dispatch a scope small enough that a wrong result is cheap, acceptance criteria checkable from the returned artifact alone, and — where the harness supports it — a turn or budget cap. When a returned result is wrong or incomplete, prefer resuming/steering that worker over re-dispatching a fresh one: the resumed agent retains its context, a new one starts cold.
 

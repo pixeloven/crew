@@ -12,7 +12,7 @@ Before writing an MCP tool, confirm the primary caller: agent, human, or both. T
 
 The FastMCP-specific consequences:
 - When MCP is the canonical surface, the MCP tool owns validation, schema, and side effects. Any CLI shim forwards structured args and translates exit codes — it never duplicates logic; it calls the MCP tool or the underlying library directly.
-- Human-primary capabilities belong in the project's CLI; don't add an MCP tool unless agents genuinely need it.
+- Human-primary capabilities belong in the project's CLI; add an MCP tool when an agent is a caller.
 
 ## FastMCP basics
 

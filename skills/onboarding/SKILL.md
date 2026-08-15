@@ -10,7 +10,7 @@ audience: [crew]
 
 harmony-crew is an **opinionated** foundation — like the Karpathy guidelines, it takes a stance on how agents should work, and this skill *shapes a project to match it*. It **generates** an `AGENTS.md` for a new project, **audits and refactors** an existing one, and is meant to be **re-run** as the project grows so the entry files don't drift back toward fact-stuffing.
 
-The foundation publishes to **four harnesses** (Claude Code, pi.dev, OpenAI Codex, OpenClaw). Onboarding is mainly about the harnesses driven by an `AGENTS.md` — Claude Code and pi.dev (crew roles + skills) and **Codex** (same `AGENTS.md` read natively, full skill catalog, **no roles** — it applies the routing table's disciplines inline, solo). If the project *also* runs **OpenClaw** agents, they consume a **skill slice** (not roles, not `AGENTS.md`); onboarding's job there is narrower — flag that the gateway must wire the consumption-slice install (see [step 5](#5-if-the-project-runs-openclaw)).
+The foundation publishes to **four harnesses** (Claude Code, pi.dev, OpenAI Codex, OpenClaw). Onboarding is mainly about the harnesses driven by an `AGENTS.md` — Claude Code and pi.dev (crew roles + skills) and **Codex** (same `AGENTS.md` read natively, full skill catalog, and its own subagent dispatch — it delegates when the routing table instructs it to). If the project *also* runs **OpenClaw** agents, they consume a **skill slice** (not roles, not `AGENTS.md`); onboarding's job there is narrower — flag that the gateway must wire the consumption-slice install (see [step 5](#5-if-the-project-runs-openclaw)).
 
 ## The stance (what "good" looks like)
 
@@ -18,7 +18,7 @@ The foundation publishes to **four harnesses** (Claude Code, pi.dev, OpenAI Code
 2. **Delegate by default** to the foundation's roles — `lead`, `triage`, `investigator`, `researcher`, `implementer`, `reviewer`, `librarian`, `responder`. The entry file's routing table is what makes delegation automatic instead of an afterthought.
 3. **Merge-don't-replace.** The foundation supplies the behavioral spine; the project fills only its specifics (ask-list, tripwires, local-skills map, verification commands, repo). The canonical shape is [`templates/AGENTS.md`](../../templates/AGENTS.md).
 4. **Trigger vs detail.** A silent landmine's *trigger* lives always-on (a Tripwire line + an imperative skill `description`); its *detail* lives in the skill, loaded on demand. Never duplicate the detail into the entry file.
-5. **Platform is an enhancement, not a prerequisite.** Agents degrade gracefully when the corpus / gateway / cluster is unreachable (the Fallback section). Onboarding must not assume the platform is wired before value is delivered.
+5. **Reach for the platform first; degrade only on a real failure.** Agents use the corpus / gateway / cluster as the default path and fall back gracefully once a call actually fails (the Fallback section). Onboarding delivers value before the platform is wired, and never assumes a capability is absent without checking.
 
 ## Procedure
 
@@ -31,7 +31,7 @@ The foundation publishes to **four harnesses** (Claude Code, pi.dev, OpenAI Code
 ### 2a. New project (no AGENTS.md) → generate
 - Start from `templates/AGENTS.md`.
 - Fill what you can **infer** from the repo: verification commands (`package.json` / `pyproject.toml` / `Makefile`), the remote URL (`git remote`), the stack. Leave the judgment slots (ask-list, tripwires, local-skills map) marked for the operator **with concrete suggestions**, not blanks.
-- **Tailor the skills index to the doctor's profile.** A `portable` project indexes only `requires: []` skills; a `platform` project adds the capability skills whose tools the probe actually reached; never index a skill for a capability the project can't reach — it's an instruction the agent can't follow.
+- **Tailor the skills index to the doctor's profile.** A `portable` project indexes only `requires: []` skills; a `platform` project adds the capability skills whose tools the probe actually reached; never index a skill for a capability the project can't reach — it's an instruction the agent can't follow. If a probe fails, confirm the capability is genuinely ungranted rather than transiently down before dropping its skill, and re-run onboarding when a new capability is granted so the index picks it up.
 - Add a one-line `CLAUDE.md` (`@AGENTS.md`) if this is a Claude Code project (pi reads `AGENTS.md` directly).
 
 ### 2b. Existing entry files → audit + refactor

@@ -17,14 +17,23 @@ Runs autonomously on schedule (health sweeps, alerts) and on-demand under Lead's
 **Read:** everything the project gives you — source control (`git log` / `gh issue view` / `gh pr view`), the Kubernetes API (`kubectl get` / `describe` / `logs`), read-path MCP tools (e.g. ArgoCD), the knowledge corpus.
 **Write:** GitHub issues (findings) and issue comments (status updates) — nothing else. No write access to cluster resources, code, or configs; no `kubectl apply` / `edit` / `delete`.
 
-ArgoCD reads: prefer the MCP path per `argocd-deployment-patterns` (its read-path tools and health-sweep pattern); fall back to `kubectl get applications.argoproj.io -n argocd` only when the gateway is unavailable.
+ArgoCD reads: prefer the MCP path per the deployment-patterns guidance (its read-path tools and health-sweep pattern); fall back to `kubectl get applications.argoproj.io -n argocd` only when the gateway is unavailable.
 
 ## Skills
 
-- `incident-runbook-template` — standard structure for incident reports and findings
-- `argocd-deployment-patterns` — app-of-apps, sync waves, health-check semantics, and the MCP read-path tools for list/inspect/logs
-- `memory-substrate` — Pre-Task Recall / Post-Session Persistence entry point
-- the project's topology/inventory local skill, if it defines one (e.g. Harmony's `homelab-topology`) — cluster topology, node roles, service domains, expected state
+Discover your skills through `skill-index`. It is generated from the live catalogue, so it always reflects
+what is actually installed. Consult it early in a task and again whenever the work moves into a new domain,
+then load whatever matches what you are doing — loading a skill is cheap, re-deriving its conventions is not.
+
+For this role the index sections that usually matter are incident structure and deployment/cluster diagnosis.
+
+The index groups skills by the platform capability each one uses. Reach for those capabilities as the default
+path — let a failed call, not an assumption, tell you something is unavailable. If one is genuinely
+unreachable, say so plainly and carry on with what you can do; run `doctor` when you want to know what this
+deployment grants.
+
+Your project's own skills — topology, conventions, protected seams, access maps — are indexed in its
+`AGENTS.md`. Load those for anything deployment-specific.
 
 ## Output format
 
@@ -45,4 +54,4 @@ Escalate to the operator (via Lead, or the project's incident channel) when the 
 
 ## Post-Session
 
-Follow the **Post-Session Persistence** pattern in `memory-substrate` using `source_agent="investigator"`. Briefs worth keeping land as vault notes via `vault-tools`.
+When the knowledge base is reachable, persist durable learnings from this session per the knowledge-capture guidance in the index, attributing them to `source_agent="investigator"`. If it is confirmed unreachable, note what went uncaptured.
