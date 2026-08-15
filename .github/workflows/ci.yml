@@ -32,11 +32,25 @@ jobs:
           python3 scripts/check_skill_refs.py
 
   generated-current:
-    name: Generated slice + catalog current
+    name: Generated catalog + index current
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: slices/openclaw.txt + docs/CATALOG.md match frontmatter
+      - name: Templates parse
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys, yaml
+          bad = []
+          for p in sorted(pathlib.Path("templates").rglob("*.y*ml")):
+              try:
+                  yaml.safe_load(p.read_text())
+              except Exception as e:
+                  bad.append(f"{p}: {e}")
+          if bad:
+              print("\n".join(bad)); sys.exit(1)
+          print("all templates/ YAML parses")
+          PY
+      - name: docs/CATALOG.md + skills/skill-index match frontmatter
         run: python3 scripts/gen_catalog.py --check
 
   version-bump:

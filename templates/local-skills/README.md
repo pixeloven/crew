@@ -24,3 +24,11 @@ Local skills **shadow** foundation skills on name collision.
 
 Each `<slot>.md` file in this directory is a starter stub — copy it into your overlay,
 rename, and fill the ▸ blocks.
+
+**Two kinds of slot.** Five of these are *declared* — a foundation skill names them in its
+`expects-local` frontmatter, so the doctor can report them as unfilled: `platform-conventions`,
+`topology`, `protected-seams`, `secret-paths`, `agent-runtime`. The other two —
+`litellm-access-map` and `vault-ops` — are *recommended vocabulary*: no foundation skill defers
+to them (the skills that did now live in consumer overlays), but they name concerns most
+platform-running consumers have, and using the same names keeps overlays legible to each other.
+Both kinds are valid in `expects-local` if your own skills want to declare them.

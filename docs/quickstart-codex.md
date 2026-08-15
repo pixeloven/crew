@@ -10,7 +10,7 @@ Codex reads the repo-root **`AGENTS.md`** natively (it originated the standard) 
 
 ## 2. Install the skills
 
-Codex loads portable `SKILL.md` skills from `.agents/skills/` (repo-level, scanned from cwd up to the repo root) and `~/.agents/skills/` (user-level). The foundation's schema-v2 frontmatter extras (`tier`/`requires`/`audience`/`expects-local`) are ignored by Codex — the files load as-is.
+Codex loads portable `SKILL.md` skills from `.agents/skills/` (repo-level, scanned from cwd up to the repo root) and `~/.agents/skills/` (user-level). The foundation's frontmatter extras (`tier`, `requires`, `expects-local`) are ignored by Codex — the files load as-is.
 
 **User-level (recommended — no vendoring into the repo):**
 
