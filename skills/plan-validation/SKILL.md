@@ -3,7 +3,6 @@ name: plan-validation
 description: How to check whether a plan phase is complete — acceptance criteria evaluation, validation gate promotion, and what counts as done. Load when Lead is deciding whether to advance from one phase to the next.
 tier: concept
 requires: []
-audience: [crew]
 ---
 
 ## What a validation gate is

@@ -3,7 +3,6 @@ name: plan-generation
 description: How to propose, structure, and iterate plans in chat mode — when a plan is warranted, the high-level checklist → detailed spec progression, phase/dependency/success-criteria format, and the handoff to autonomous execution. Load when developing a plan with the operator before execution begins.
 tier: concept
 requires: []
-audience: [crew]
 ---
 
 Plans are first-class artifacts that bridge chat-mode collaboration with autonomous execution. When asked to plan work, produce a structured plan rather than jumping to implementation.

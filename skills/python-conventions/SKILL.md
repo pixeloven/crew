@@ -3,7 +3,6 @@ name: python-conventions
 description: Python conventions — stack, tooling, uv-workspace project structure, and patterns for CLI (Typer), MCP servers (FastMCP), Pydantic AI, testing (pytest), and packaging (uv). Load for any Python work.
 tier: subject
 requires: []
-audience: [crew]
 ---
 
 ## Runtime and tooling

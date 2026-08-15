@@ -3,7 +3,6 @@ name: k8s-kustomize-conventions
 description: Kustomize base+overlay structure, overlay patch patterns, manifest validation, and ArgoCD sync conventions. Load when writing or modifying Kubernetes manifests or kustomization files.
 tier: subject
 requires: []
-audience: [crew]
 expects-local: [platform-conventions]
 ---
 

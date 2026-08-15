@@ -3,7 +3,6 @@ name: plan-execution
 description: How Lead reads an approved plan, dispatches worker agents per its phase structure, monitors acceptance criteria and validation gates, handles deltas, and drives execution to completion. Load when executing a persisted plan in autonomous mode.
 tier: concept
 requires: []
-audience: [crew]
 expects-local: [protected-seams]
 ---
 

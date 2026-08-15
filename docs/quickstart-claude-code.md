@@ -19,7 +19,7 @@ No `ref` ⇒ tracks the latest release on `main`; `autoUpdate` pulls it on start
 
 ## 2. Restart and verify
 
-**Restart Claude Code** — plugins load at startup, not live. Then verify: the agent list (visible when dispatching, or via `/agents`) should show the eight roles (`lead`, `triage`, `investigator`, `researcher`, `responder`, `librarian`, `reviewer`, `implementer`), and the skill list should include foundation skills like `platform-glossary`. If neither appears, the marketplace fetch failed — check the repo is reachable from your machine.
+**Restart Claude Code** — plugins load at startup, not live. Then verify: the agent list (visible when dispatching, or via `/agents`) should show the seven roles (`lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`), and the skill list should include foundation skills like `platform-glossary`. If neither appears, the marketplace fetch failed — check the repo is reachable from your machine.
 
 ## 3. Decide your autonomy posture
 

@@ -3,7 +3,6 @@ name: onboarding
 description: Onboard a project to the harmony-crew foundation, or re-audit one that has drifted. Generates a new AGENTS.md, or refactors an existing AGENTS.md/CLAUDE.md, to the foundation's behavioral patterns — delegation to the shared agents, the platform↔local bridge, tripwires, fallback — and moves facts/conventions OUT of the entry files INTO local skills. Re-runnable as the project evolves to keep the entry files behavioral. Use when adopting the foundation, scaffolding a new repo, or when AGENTS.md/CLAUDE.md has accreted facts and conventions.
 tier: concept
 requires: []
-audience: [crew]
 ---
 
 # Onboarding
@@ -15,7 +14,7 @@ The foundation publishes to **four harnesses** (Claude Code, pi.dev, OpenAI Code
 ## The stance (what "good" looks like)
 
 1. **Entry files drive behavior; skills carry facts.** `AGENTS.md` / `CLAUDE.md` hold *behavior* — delegation, routing, posture, planning, memory, the platform↔local bridge, tripwires, fallback. Infrastructure facts, conventions, credentials, and command catalogs belong in **local skills** (`.claude/skills/`). A fact sitting in the entry file is a bug to fix.
-2. **Delegate by default** to the foundation's roles — `lead`, `triage`, `investigator`, `researcher`, `implementer`, `reviewer`, `librarian`, `responder`. The entry file's routing table is what makes delegation automatic instead of an afterthought.
+2. **Delegate by default** to the foundation's roles — `lead`, `triage`, `investigator`, `researcher`, `implementer`, `reviewer`, `responder`. The entry file's routing table is what makes delegation automatic instead of an afterthought.
 3. **Merge-don't-replace.** The foundation supplies the behavioral spine; the project fills only its specifics (ask-list, tripwires, local-skills map, verification commands, repo). The canonical shape is [`templates/AGENTS.md`](../../templates/AGENTS.md).
 4. **Trigger vs detail.** A silent landmine's *trigger* lives always-on (a Tripwire line + an imperative skill `description`); its *detail* lives in the skill, loaded on demand. Never duplicate the detail into the entry file.
 5. **Reach for the platform first; degrade only on a real failure.** Agents use the corpus / gateway / cluster as the default path and fall back gracefully once a call actually fails (the Fallback section). Onboarding delivers value before the platform is wired, and never assumes a capability is absent without checking.
@@ -51,7 +50,7 @@ This skill is idempotent. Run it again whenever the entry files have grown — a
 OpenClaw agents are personas, not crew roles — they don't load `AGENTS.md` or the plugin/package. They consume a **skill slice** installed into the gateway's managed skills dir. If the project runs OpenClaw, check (and flag to the operator if missing):
 - The gateway's `init-skills` step clones harmony-crew at its **pinned tag** and installs the consumption slice **from `slices/openclaw.txt`** via `openclaw skills install <path> --global` (see `docs/quickstart-openclaw.md`) — never a hand-typed list. A private foundation repo needs an **init-only** GH token.
 - Each agent's `agents.list[].skills` allowlist exposes only the slice entries that match its LiteLLM VK grants (web search / image gen / KB) — don't hand an agent a skill for a capability its VK can't reach.
-- **Operator skills stay operator-only** — `openclaw-platform-operations` / `openclaw-agent-tuning` are for whoever *builds* the gateway (a Claude Code / pi.dev session), never installed into OpenClaw agents.
+- **Operator skills stay operator-only** — the skills for building and tuning a gateway live in the consumer's own overlay, never installed into persona agents.
 This is a wiring check, not an `AGENTS.md` edit — record the specifics (slice list, tag, allowlists) in the project's local infra manifests, not here.
 
 ## Done when (measure the outcome; don't gate it)

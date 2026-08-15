@@ -33,7 +33,7 @@ url = "https://<your-litellm-host>/mcp"
 bearer_token_env_var = "LITELLM_API_KEY"
 ```
 
-Set `LITELLM_API_KEY` to the surface's **virtual key** — per the capability-parity pattern, a Codex surface is a new consumer: mint it its own VK with explicit `mcp_access_groups` (see `litellm-routing-model`); never reuse another surface's key. The VK decides which capabilities (KB, search, image gen, cluster reads, …) this Codex install can reach.
+Set `LITELLM_API_KEY` to the surface's **virtual key** — per the capability-parity pattern, a Codex surface is a new consumer: mint it its own VK with explicit `mcp_access_groups` (see the project's gateway-routing local skill); never reuse another surface's key. The VK decides which capabilities (KB, search, image gen, cluster reads, …) this Codex install can reach.
 
 ## 4. Verify
 

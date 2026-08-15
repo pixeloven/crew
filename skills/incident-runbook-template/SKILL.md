@@ -3,7 +3,6 @@ name: incident-runbook-template
 description: Standard structure for cluster incident reports and ops sweep findings. Load when Investigator is producing a finding, writing a runbook, or filing a GitHub issue for a degradation.
 tier: concept
 requires: []
-audience: [crew]
 expects-local: [topology]
 ---
 

@@ -3,7 +3,6 @@ name: seam-detection
 description: How to identify protected seam crossings in diffs and proposed changes. Defines what to look for in each seam and how to report a finding. Load when Reviewer is scanning a diff or Lead is monitoring agent output for seam violations.
 tier: concept
 requires: []
-audience: [crew]
 expects-local: [protected-seams]
 ---
 
@@ -42,7 +41,7 @@ git diff HEAD~1 -- '*.yaml' | grep -E '(storageClassName|tolerations)'
 
 ### Seam 3 — LiteLLM MCP access boundary
 
-The load-bearing boundary is the **server `access_groups` ∩ team allowlist ∩ VK groups** intersection (mechanism in `litellm-routing-model`; the project's registry names it as a seam), not a VK-vs-MCP credential split.
+The load-bearing boundary is the **server `access_groups` ∩ team allowlist ∩ VK groups** intersection (mechanism in the project's gateway-routing local skill; the project's registry names it as a seam), not a VK-vs-MCP credential split.
 
 **Scan for in diffs:**
 - A VK's `mcp_access_groups` (or `object_permission`) changed — a consumer's opted-in capability groups widened or narrowed

@@ -1,12 +1,14 @@
 {
   "name": "harmony-crew",
-  "owner": { "name": "ductiletoaster" },
-  "description": "Cross-project agent foundation for three harnesses: Claude Code, pi.dev, and OpenClaw.",
+  "owner": {
+    "name": "ductiletoaster"
+  },
+  "description": "Cross-project agent foundation for Claude Code, pi.dev, and OpenAI Codex.",
   "plugins": [
     {
       "name": "harmony-crew",
       "source": "./",
-      "description": "8 role agents + 41 skills: a reusable cross-harness agent foundation with onboarding, doctor, and per-consumer overlay slots."
+      "description": "Portable agent methodology: 7 crew roles, planning/review/orchestration disciplines, stack conventions, onboarding + doctor. Needs no platform."
     }
   ]
 }

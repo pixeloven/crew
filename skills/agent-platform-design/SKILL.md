@@ -3,7 +3,6 @@ name: agent-platform-design
 description: Designing agent capabilities and surfaces — MCP vs CLI interface boundary decisions, skill vs agent tradeoffs, surface naming, and the operator-layer vs autonomous-runtime scope distinction. Load when designing new agent capabilities or evaluating platform options.
 tier: concept
 requires: []
-audience: [crew]
 ---
 
 ## Two surfaces — keep them distinct
@@ -68,13 +67,13 @@ Any skill asserting what a harness can or cannot do is a **perishable claim**. H
 Rules for capability claims:
 
 - **Date them.** Write "verified <date> against <source URL>" next to the claim, so a reader knows how stale it is.
-- **Prefer "verify at use" over hardcoded absolutes.** "Check whether your version exposes X" ages better than "X does not exist" — the same treatment `litellm-routing-model` gives version-sensitive gateway behavior.
+- **Prefer "verify at use" over hardcoded absolutes.** "Check whether your version exposes X" ages better than "X does not exist" — the same treatment the project's gateway-routing local skill gives version-sensitive gateway behavior.
 - **Negative claims are the dangerous ones.** "The harness can't do X" makes agents stop looking. Before writing one, check the primary source; and when writing it, say what would falsify it.
 - **Re-check on a cadence**, not only when something breaks. A capability that appeared silently produces no error — just a foundation quietly instructing agents not to use it.
 
 ## Prompt language: a skill is an instruction, not a description
 
-Every skill file is loaded verbatim into an agent's context. Wording that merely *reads* as balanced documentation can behave as a suppressant — the model acts on what it retains, and negations retain well. `openclaw-agent-tuning` states the same rule from the identity side: **add by example, not by prohibition.**
+Every skill file is loaded verbatim into an agent's context. Wording that merely *reads* as balanced documentation can behave as a suppressant — the model acts on what it retains, and negations retain well. the project's persona-tuning local skill states the same rule from the identity side: **add by example, not by prohibition.**
 
 - **Lead with the action, not the absence.** "You carry no fixed skill list" primes against the very behaviour the sentence exists to produce. "Discover your skills through the index" produces it. Headings matter most — they're the scan-level unit.
 - **Negative capability claims need a positive counterpart.** "The parent doesn't observe a worker mid-flight" is fine *next to* "so bound the work and steer with these primitives." Alone, it just tells the agent to stop trying.
@@ -90,7 +89,6 @@ Every skill file is loaded verbatim into an agent's context. Wording that merely
 - Description carries trigger language and the load cue — for skills no agent always-loads, the description is the only load path, so name the tasks and phrases that should trigger it
 - `tier`: `concept` (generic pattern) vs `subject` (about a specific tool/product)
 - `requires`: the runtime capability the skill's guidance operates — `[]` (portable), `mcp:<group>`, `cluster`, or `external:github|web`; onboarding profiles and doctor checks filter on this
-- `audience`: `[crew]` or `[crew, persona]` — `persona` membership derives the OpenClaw consumption slice (`slices/openclaw.txt` is generated from it)
 - Content: operational and prescriptive, not aspirational
 - No `agents` field in frontmatter — agents load skills by explicit reference in their system prompts
 

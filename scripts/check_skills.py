@@ -7,8 +7,6 @@ Schema v2 fields (exactly these, in any order):
                always-loads, the description is the only load path
   tier         concept | subject
   requires     [] | list of mcp:<group> / cluster / external:github / external:web / cli:<tool>
-  audience     non-empty subset of {crew, persona}; persona membership derives
-               the OpenClaw consumption slice (see scripts/gen_catalog.py)
   expects-local  OPTIONAL — the consumer-local skill slots this skill defers to
                (see templates/local-skills/README.md); the onboarding doctor
                reports unfilled slots
@@ -25,9 +23,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MIN_DESC = 110
 TIERS = {"concept", "subject"}
-AUDIENCES = {"crew", "persona"}
 REQUIRES_RE = re.compile(r"^(mcp:[a-z0-9-]+|cluster|external:(github|web)|cli:[a-z0-9-]+)$")
-ALLOWED_FIELDS = {"name", "description", "tier", "requires", "audience", "expects-local"}
+ALLOWED_FIELDS = {"name", "description", "tier", "requires", "expects-local"}
 # Canonical consumer-local slot names — documented in templates/local-skills/README.md,
 # each with a starter stub in that directory.
 LOCAL_SLOTS = {
@@ -99,9 +96,6 @@ def main():
             for r in req:
                 if not (isinstance(r, str) and REQUIRES_RE.match(r)):
                     errors.append(f"{rel}: invalid requires entry {r!r}")
-        aud = fm.get("audience")
-        if not (isinstance(aud, list) and aud and set(aud) <= AUDIENCES):
-            errors.append(f"{rel}: audience must be a non-empty subset of {sorted(AUDIENCES)}")
         if "expects-local" in fm:
             slots = fm["expects-local"]
             if not (isinstance(slots, list) and slots and set(slots) <= LOCAL_SLOTS):
