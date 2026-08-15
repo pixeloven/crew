@@ -1,6 +1,6 @@
 ---
 name: k8s-workload-patterns
-description: Kubernetes workload design patterns — Deployment, StatefulSet, DaemonSet selection, resource limits, health checks, storage tiers, and service exposure. Load when designing or reviewing workload manifests.
+description: Kubernetes workload design patterns — choosing between Deployment, StatefulSet, DaemonSet and Job, resource requests and limits, probes and health checks, storage tier selection, security context, and service exposure. Load when writing or reviewing a workload manifest, choosing a controller kind, or sizing a pod.
 tier: subject
 requires: []
 expects-local: [platform-conventions, topology]

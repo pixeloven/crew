@@ -1,6 +1,6 @@
 ---
 name: seam-alert-routing
-description: How to route seam crossing alerts — who gets notified, through what channel, and what happens next. Load when a seam crossing is detected and needs to be surfaced.
+description: How to route a detected seam crossing — who decides, through which channel, what happens while it waits, and the escalation format for a PR comment, an execution pause, or a filed issue. Load when a change needs sign-off before it can proceed, or when deciding how to surface a risky finding rather than silently blocking on it.
 tier: concept
 requires: [external:github]
 expects-local: [protected-seams]

@@ -1,6 +1,6 @@
 ---
 name: seam-detection
-description: How to identify protected seam crossings in diffs and proposed changes. Defines what to look for in each seam and how to report a finding. Load when Reviewer is scanning a diff or Lead is monitoring agent output for seam violations.
+description: How to spot a change that touches a protected pattern and needs human sign-off before merge — detection patterns and greps for ExternalSecret contracts, tolerations and StorageClass selection, MCP access groups, runtime exit-code contracts, and RBAC (ClusterRole, RoleBinding, verb widening, wildcards, escalation-adjacent verbs like escalate/bind/impersonate). Load when scanning a diff for risky changes, or reviewing anything that adds or widens permissions, secrets, storage, or a runtime contract.
 tier: concept
 requires: []
 expects-local: [protected-seams]

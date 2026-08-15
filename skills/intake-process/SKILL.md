@@ -1,6 +1,6 @@
 ---
 name: intake-process
-description: How Triage classifies incoming GitHub issues and PRs — domain labels, work type, and routing decisions. Load when processing new issues, PRs, or unlabelled work items.
+description: How to classify incoming issues and pull requests — domain labels, work type, complexity, and the routing decision. Load when triaging new issues or PRs, deciding who or what should handle an item, labelling an unsorted backlog, or setting up an intake convention.
 tier: concept
 requires: [external:github]
 ---

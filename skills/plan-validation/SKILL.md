@@ -1,6 +1,6 @@
 ---
 name: plan-validation
-description: How to check whether a plan phase is complete — acceptance criteria evaluation, validation gate promotion, and what counts as done. Load when Lead is deciding whether to advance from one phase to the next.
+description: How to tell whether a phase is actually finished — evaluating acceptance criteria, promoting a validation gate, and what does and does not count as done. Load when deciding whether to advance to the next phase, whether work is complete, or what evidence 'done' requires.
 tier: concept
 requires: []
 ---
