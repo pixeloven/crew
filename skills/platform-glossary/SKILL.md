@@ -1,6 +1,6 @@
 ---
 name: platform-glossary
-description: The platform's shared vocabulary — the resolved meaning of the ambiguous nouns every consumer reuses (app, surface, consumer, tenant, gateway, platform, workload, deployment/service, component, project, skill, MCP server vs MCP consumer) plus the three-level naming hierarchy (platform / deployment / K8s-primitive). Load when naming a thing, reasoning about where a workload lives, or before writing docs or manifests that use these terms. Generic; a consumer's concrete names live in its own local architecture skill.
+description: The platform's shared vocabulary — the resolved meaning of the ambiguous nouns every consumer reuses (app, surface, consumer, tenant, gateway, platform, workload, deployment/service, component, project, skill, MCP server vs MCP consumer) plus the three-level naming hierarchy (platform / deployment / K8s-primitive) plus two human-vs-machine traps — "the operator" always means the human, and "crew" means this foundation's roles rather than a firstmate-lineage tool's dispatched workers. Load when naming a thing, reasoning about where a workload lives, or before writing docs or manifests that use these terms. Generic; a consumer's concrete names live in its own local architecture skill.
 tier: concept
 requires: []
 ---
@@ -25,6 +25,36 @@ Bare use of an ambiguous term below is banned in favour of the qualified form.
 | **project** | banned bare — the ArgoCD **`AppProject`** (an RBAC / allow-list boundary) · the **consumer project** (the actor / repo that consumes the platform) · a **repo**. Say which. |
 | **skill** | a loadable capability doc (`skills/<name>/SKILL.md`). A **platform skill** is generic and lives in the foundation; a **local skill** holds a consumer's specifics and lives in that consumer's overlay, **shadowing** the platform skill of the same name. |
 | **MCP server** vs **MCP consumer** | an **MCP server** *exposes* tools / resources over MCP (the provider being called). An **MCP consumer** (client) is a runtime that *connects to and calls* an MCP server — typically a surface. Name which side you mean; "MCP client" alone hides it. |
+| **the operator** | **the human being who directs the work** — the person an agent escalates to, asks for a decision, or reports to. This is the default and winning reading of the phrase in every agent contract, prompt, plan, and doc. A *tool* named "operator" is written in code style (`operator`); see below. |
+| **crew** | banned bare when both senses are in play — the foundation's **crew roles** (lead, implementer, reviewer, triage, …) versus an external tool's **crew of dispatched workers**. Say "crew role" or name the tool's vocabulary explicitly; see below. |
+
+### "the operator" is a person, not a program
+
+Escalation instructions across the fleet say things like *"ask the operator"*, *"the operator approves"*, *"escalate to the operator"*. **These always mean a human.** An agent that reads them as naming a program will do something plausible and wrong, which is the worst failure shape available.
+
+A component may still be *named* operator. The rule that keeps both usable:
+
+- **Prose keeps "the operator" for the human.** Unqualified, unhedged, no disambiguation at each use — the existing corpus stays correct by default.
+- **A project called operator is always code-styled** (`operator`) and never capitalized as a proper noun. Capitalization is invisible at the start of a sentence — exactly where *"The operator should…"* appears — so it cannot carry the distinction.
+- Where a sentence would still be ambiguous, say "the `operator` project" or "the `operator` repo". Never "Operator".
+
+Kubernetes "operators" (controllers that reconcile a custom resource) are a third sense. They are usually disambiguated by their neighbouring nouns (CRD, controller, reconcile); qualify when they are not.
+
+### "crew" — the foundation's roles vs. an external tool's workers
+
+Two vocabularies use *crew* for different things, and both appear in this fleet's working context:
+
+| Vocabulary | "crew" means | The human is | A worker is |
+|---|---|---|---|
+| **this foundation** (harmony-crew) | the **set of agent roles** — lead, implementer, reviewer, researcher, triage, investigator, librarian, responder | **the operator** | a dispatched **role**, e.g. "a reviewer" |
+| **firstmate lineage** (`kunchenguid/firstmate` and its forks, e.g. `pixeloven/operator`) | the **fleet of dispatched worker agents** in a running session | **the captain** | a **crewmate** (or a **secondmate** — a persistent worker with its own isolated home) |
+
+Rules:
+
+- **Never translate between them silently.** A firstmate *crewmate* is a running process in a git worktree; a foundation *crew role* is a declarative capability definition. They are not the same kind of thing and one does not implement the other.
+- Use the tool's own word when talking about that tool ("spawn a crewmate", "the captain approves the merge"), and this foundation's word when talking about roles ("dispatch the reviewer").
+- **"the captain" and "the operator" denote the same human** in a session that spans both. Do not introduce a third name for that person.
+- In our own prose, prefer **"crew role"** over bare "crew" whenever a firstmate-lineage tool is anywhere in scope.
 
 ### "agent" is overloaded — always qualify
 
