@@ -1,13 +1,13 @@
 ---
 name: mcp-server-design
-description: Designing and implementing MCP servers with FastMCP — tool design, description quality, structured error handling, failure semantics, registration, and the MCP vs CLI surface decision. Load when building new MCP tools or servers.
+description: Designing and implementing MCP servers with FastMCP — tool design, description quality, structured error handling, failure semantics, registration, and the three-class surface decision (MCP vs AXI vs CLI). Load when building new MCP tools or servers.
 tier: subject
 requires: []
 ---
 
 ## Surface decision first
 
-Before writing an MCP tool, confirm the primary caller: agent, human, or both. The full MCP-vs-CLI decision table — and the off-the-shelf-first default that precedes it — lives in `agent-platform-design`; apply it before writing any server code.
+Before writing an MCP tool, confirm the primary caller *and* whose credentials the capability carries. The full three-class decision table — MCP (federated, authorization-carrying) vs AXI (local agent tooling, no auth of its own) vs CLI (humans, scripts, CI) — and the off-the-shelf-first default that precedes it both live in `agent-platform-design`; apply it before writing any server code. A capability whose credential must never leave one machine belongs in an AXI, however convenient federating it would be.
 
 The FastMCP-specific consequences:
 - When MCP is the canonical surface, the MCP tool owns validation, schema, and side effects. Any CLI shim forwards structured args and translates exit codes — it never duplicates logic; it calls the MCP tool or the underlying library directly.

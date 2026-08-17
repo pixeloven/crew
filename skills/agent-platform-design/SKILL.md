@@ -1,6 +1,6 @@
 ---
 name: agent-platform-design
-description: Designing agent capabilities and surfaces — MCP vs CLI interface boundary decisions, skill vs agent tradeoffs, surface naming, and the operator-layer vs autonomous-runtime scope distinction. Load when designing new agent capabilities or evaluating platform options.
+description: Designing agent capabilities and surfaces — the three interface classes (MCP, AXI, CLI) and which one a capability belongs in, skill vs agent tradeoffs, surface naming, and the operator-layer vs autonomous-runtime scope distinction. Load when designing a new agent capability, deciding whether a tool federates through the gateway or stays local to one machine, or evaluating platform options.
 tier: concept
 requires: []
 ---
@@ -14,17 +14,65 @@ requires: []
 
 Requirements diverge between surfaces. Design decisions made for Scope 1 don't automatically apply to Scope 2. Establish clear surface naming conventions early so discussions don't conflate the two.
 
-## Interface boundary: MCP vs CLI
+## Interface boundary: three classes — MCP, AXI, CLI
 
-For any new capability, decide the primary caller:
+For any new capability, two answers pick the class: **who calls it**, and **whose credentials it carries**. Capability never picks it — the same capability legitimately exists in more than one class.
 
-| Primary caller | Pattern |
-|---|---|
-| LLM mid-task (agents) | MCP tool first; optional CLI shim for human debug |
-| Human at terminal / cron / CI | CLI command only; no MCP unless agents also need it |
-| Both | MCP is canonical; CLI is a thin wrapper — no parallel implementation |
+| Class | Primary caller | Authorization | Where it runs |
+|---|---|---|---|
+| **MCP** | An LLM mid-task, across every consumer | **Federated** — the gateway is the authorization boundary; tools are virtual-key-scoped and shared | Anywhere the gateway reaches: cluster services, vendor APIs |
+| **AXI** | An agent, on the machine it is already running on | **None of its own** — it inherits that machine's credentials and the invoking user's identity | Local: a workstation, a worker's own sandbox |
+| **CLI** | Humans, scripts, CI | Whatever the shell already holds | Terminals, pipelines, runbooks |
 
-The MCP tool owns validation, schema, and side effects. The CLI forwards structured args and translates exit codes. Drift between surfaces is a bug.
+**AXI** — *Agent eXperience Interface* — is a CLI built for an agent to invoke over shell execution rather than for a human to read: token-efficient structured output, minimal default schemas, definitive empty states, structured errors with meaningful exit codes, no interactive prompts, and next-step suggestions in the output. It is a published 10-principle standard; read it before building or reviewing one. Nothing stops a human from running an AXI — the class describes who it is *designed* for, not who is allowed.
+
+### Authorization decides it
+
+A tool placed behind the gateway is reachable by **every** consumer whose key carries its access group. That is the point: one place to grant, one place to revoke, one place to budget and audit. It is also precisely why a personal workplace credential must not go there — federating a mailbox, a chat account, or a calendar OAuth token turns one person's private surface into a capability every holder of that key inherits, and the gateway cannot narrow it back down to the human it belongs to.
+
+An AXI has **no auth story, deliberately.** It runs as you, on your machine, against credentials that never leave it. Treat that as a property to use rather than a hole to plug: it is what makes AXI the right class for workplace credentials — chat, mail, calendar OAuth — where the blast radius should stay the machine that already holds the credential.
+
+So:
+
+- The credential must be **shared, centrally granted and revocable** → **MCP**.
+- The credential is **personal to one machine or one human** and must never leave it → **AXI**.
+- The caller is a **human, a script, or CI** → **CLI**.
+
+When agents and humans need the same *shared* capability, MCP stays canonical and the CLI is a thin wrapper over it — no parallel implementation, and drift between the two is a bug. The MCP tool owns validation, schema, and side effects; the CLI forwards structured args and translates exit codes.
+
+### Failure modes of choosing wrong
+
+- **MCP for a personal credential.** The credential becomes a shared capability. Every consumer holding that access group can read the mailbox or post as the account, and revocation is all-or-nothing.
+- **MCP for something only one machine needs.** Tool schemas are resident in every consumer's context window whether or not the tool is ever called, and tool-list budgets are finite — a niche tool crowds out ones agents actually use.
+- **AXI for something several consumers need.** N installs, N credential copies, no central revocation, no shared budget or audit trail — and an in-cluster agent with no workstation cannot reach it at all.
+- **CLI (human-shaped) for an agent caller.** Help text where the agent expected data, prose errors on a stream it doesn't read, prompts that hang an unattended run, ambiguous empty output it re-runs to confirm. It works — and it spends turns on every single call.
+
+### The measured cost
+
+The AXI standard publishes benchmark data covering all three classes over one task set. Browser automation, **490 runs** (14 tasks × 7 conditions × 5 repeats), Claude Sonnet 4.6:
+
+| Class | Condition measured | Cost/task | Input tokens/task | Success | Turns |
+|---|---|---|---|---|---|
+| **AXI** | `chrome-devtools-axi` | **$0.074** | **~79K** | 100% | 4.5 |
+| **CLI** (raw baseline) | `agent-browser` | $0.088 | ~93K | 99% | 4.8 |
+| **MCP** | `chrome-devtools-mcp` | $0.100 | **~185K** | 99% | 6.2 |
+
+MCP's overhead is mechanical rather than incidental: tool schemas sit resident in context — the same run attributes **~28.5% of input tokens** to them — so the cost is paid every turn whether or not a tool is called, and it compounds across multi-step tasks. That is the ~2.3× token gap between the AXI and MCP arms. A second benchmark in the same repository (GitHub operations, 425 runs) orders the three classes identically.
+
+Read the numbers as an order-of-magnitude signal rather than a neutral result — they are the standard author's own published runs, and the AXI arm is the one being advocated. The *mechanism* is checkable independently of whose benchmark measured it, and it is the part that should drive design.
+
+Sources, verified 2026-08-17 against `kunchenguid/axi@408a6536625e5b05e5c56e6c4a04fe83e1f510a5` (2026-08-16): summary table in `README.md`; per-condition figures and the schema-overhead limitation in `bench-browser/published-results/report.md` (which reports the MCP arm at $0.1005 — the README summary rounds it to $0.101); the 10 principles in `.agents/skills/axi/SKILL.md`. Published as the `axi.md` site (`docs/index.html` in that repo).
+
+### Worked example: both classes stay
+
+Browser automation is the case where one capability correctly lives in two classes at once:
+
+- **`chrome-devtools-axi`** — local workstation browsing. Runs against the browser on the machine the agent is already working on, using whatever that browser is logged into. No key, no gateway, no shared state.
+- **A federated browser MCP** — a shared headless browser (e.g. browserless behind a Playwright-MCP server) exposed as a virtual-key-scoped access group. Every consumer holding the group gets it, including agents running in-cluster with no workstation to borrow.
+
+**Both stay.** They are not redundant and the newer one does not supersede the other; the chooser is the caller. An agent on a workstation reaches for the AXI. An agent in the cluster — or any consumer that has to be centrally granted and revoked — reaches for the MCP. Consolidating them would either strand the in-cluster agents or push a personal browser session behind a shared key.
+
+The general form: a capability being available in one class is not an argument for removing it from another. Ask which caller each one serves before proposing consolidation.
 
 ### Off-the-shelf > custom — the strong default
 

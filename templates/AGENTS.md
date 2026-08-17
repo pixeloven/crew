@@ -79,9 +79,9 @@ What you can actually call is whatever your session lists right now, not what an
 
 When a skill describes a tool that isn't in your session, or your session offers one no skill mentions, that gap is **reportable drift**, not a dead end: say what you found, use what you have, and let the mismatch be fixed rather than worked around silently.
 
-## Interface boundaries (MCP vs CLI)
+## Interface boundaries (MCP · AXI · CLI)
 
-Pick the surface by *who the primary caller is*. **MCP tool** is canonical for agents mid-task (read paths, corpus writes). **CLI** is for humans/scripts/CI and for write operations the platform routes through it. When both exist, the CLI is a thin wrapper over the MCP/library path — no parallel implementation. Prefer CLI/MCP tools over hand-rolled API calls. See `agent-platform-design` for the full decision framework.
+Pick the class by *who the primary caller is* and *whose credentials the capability carries*. **MCP** is canonical for agents mid-task (read paths, corpus writes) and is federated — the gateway is the authorization boundary, so anything behind it is reachable by every consumer holding its access group. **AXI** is agent-facing tooling that runs locally on the machine the agent is on; it inherits that machine's credentials, which is why personal/workplace credentials stay there instead of behind a shared key. **CLI** is for humans, scripts, and CI, and for write operations the platform routes through it. When MCP and CLI both exist for a shared capability, the CLI is a thin wrapper over the MCP/library path — no parallel implementation. Prefer CLI/MCP/AXI tools over hand-rolled API calls. See `agent-platform-design` for the full decision framework.
 
 ## Applying platform skills to local specifics
 
