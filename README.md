@@ -37,7 +37,7 @@ Enable the plugin in `.claude/settings.json` (or `~/.claude/settings.json` for a
 ```json
 {
   "extraKnownMarketplaces": {
-    "harmony-crew": { "source": { "source": "github", "repo": "ductiletoaster/harmony-crew" }, "autoUpdate": true }
+    "harmony-crew": { "source": { "source": "github", "repo": "pixeloven/crew" }, "autoUpdate": true }
   },
   "enabledPlugins": { "harmony-crew@harmony-crew": true }
 }
@@ -50,7 +50,7 @@ No `ref` ⇒ tracks the latest release on `main` (`autoUpdate` pulls it on start
 In `.pi/settings.json` — pin the tag for reproducible builds:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/ductiletoaster/harmony-crew@v0.13.0"] }
+{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.13.0"] }
 ```
 
 The project adds its own `.pi/skills/` + `.pi/agents/` overlay; pi walks it from cwd to git root before the package.

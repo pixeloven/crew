@@ -1,10 +1,10 @@
 {
   "name": "harmony-crew",
   "description": "Portable cross-project agent foundation for three harnesses (Claude Code, pi.dev, OpenAI Codex): 7 role agents, a methodology skill catalogue, and an onboarding scaffold/skill.",
-  "version": "0.24.0",
+  "version": "0.24.1",
   "author": {
-    "name": "ductiletoaster"
+    "name": "PixelOven"
   },
-  "repository": "https://github.com/ductiletoaster/harmony-crew",
+  "repository": "https://github.com/pixeloven/crew",
   "license": "MIT"
 }

@@ -9,7 +9,7 @@ Add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for 
 ```json
 {
   "extraKnownMarketplaces": {
-    "harmony-crew": { "source": { "source": "github", "repo": "ductiletoaster/harmony-crew" }, "autoUpdate": true }
+    "harmony-crew": { "source": { "source": "github", "repo": "pixeloven/crew" }, "autoUpdate": true }
   },
   "enabledPlugins": { "harmony-crew@harmony-crew": true }
 }

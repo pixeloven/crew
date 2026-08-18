@@ -1,7 +1,7 @@
 {
   "name": "harmony-crew",
   "owner": {
-    "name": "ductiletoaster"
+    "name": "PixelOven"
   },
   "description": "Cross-project agent foundation for Claude Code, pi.dev, and OpenAI Codex.",
   "plugins": [
