@@ -1,12 +1,12 @@
 {
-  "name": "harmony-crew",
+  "name": "crew",
   "owner": {
     "name": "PixelOven"
   },
   "description": "Cross-project agent foundation for Claude Code, pi.dev, and OpenAI Codex.",
   "plugins": [
     {
-      "name": "harmony-crew",
+      "name": "crew",
       "source": "./",
       "description": "Portable agent methodology: 7 crew roles, planning/review/orchestration disciplines, stack conventions, onboarding + doctor. Needs no platform."
     }
