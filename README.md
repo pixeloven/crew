@@ -37,9 +37,9 @@ Enable the plugin in `.claude/settings.json` (or `~/.claude/settings.json` for a
 ```json
 {
   "extraKnownMarketplaces": {
-    "harmony-crew": { "source": { "source": "github", "repo": "pixeloven/crew" }, "autoUpdate": true }
+    "crew": { "source": { "source": "github", "repo": "pixeloven/crew" }, "autoUpdate": true }
   },
-  "enabledPlugins": { "harmony-crew@harmony-crew": true }
+  "enabledPlugins": { "crew@crew": true }
 }
 ```
 

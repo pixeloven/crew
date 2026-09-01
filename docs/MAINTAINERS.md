@@ -5,7 +5,7 @@ How the foundation itself is built, versioned, and kept honest. Consumers don't 
 ## Layout
 
 ```
-harmony-crew/
+crew/
 ├── roles/<role>/                   # SINGLE SOURCE for the 7 role agents (body + per-runtime frontmatter)
 │   └── expected-local-skills.txt   # backtick-token allowlist: local-skill names agent bodies may cite as examples
 ├── skills/<name>/SKILL.md          # one tree → all three harnesses read it (schema-v2 frontmatter)

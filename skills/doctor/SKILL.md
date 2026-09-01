@@ -12,7 +12,7 @@ Run the checks below in order, then produce the report. Absence of a platform is
 ## The checks
 
 **1. Installation.**
-- Claude Code: `.claude/settings.json` (project or user) has the `harmony-crew` marketplace + `enabledPlugins` entry. pi.dev: `.pi/settings.json` packages include `harmony-crew` (note the pinned tag — report if it lags the installed catalog's version). OpenAI Codex: the catalog is present in the repo's `.agents/skills/` or `~/.agents/skills/` (report which, and the pinned tag if recorded), and `config.toml` has an `mcp_servers` entry for the LiteLLM gateway with a `bearer_token_env_var`.
+- Claude Code: `.claude/settings.json` (project or user) has the `crew` marketplace + `enabledPlugins` entry. pi.dev: `.pi/settings.json` packages include `harmony-crew` (note the pinned tag — report if it lags the installed catalog's version). OpenAI Codex: the catalog is present in the repo's `.agents/skills/` or `~/.agents/skills/` (report which, and the pinned tag if recorded), and `config.toml` has an `mcp_servers` entry for the LiteLLM gateway with a `bearer_token_env_var`.
 - The seven roles resolve: the harness's agent list contains `lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer` (or the `role-*` pi variants). If skills load but agents don't (or vice versa), the install is partial — say which half. On **Codex**, the foundation does not yet render `.codex/agents/*.toml`, so report the roles as *not yet rendered for this harness* (a known gap, not a broken install) and confirm instead that the `AGENTS.md` routing table is present — that table is what triggers Codex's delegation.
 
 **2. Entry file.**
