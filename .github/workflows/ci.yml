@@ -21,6 +21,14 @@ jobs:
       - name: Validate plugin manifests (JSON) + SKILL.md schema-v2 frontmatter
         run: python3 scripts/check_skills.py
 
+      # Layout, separately from the catalogue schema above. Frontmatter can be
+      # perfect while the file sits where no harness reads it -- which is how 26
+      # skills in a consumer repo stayed invisible to Claude Code for months.
+      - name: Skill layout is what the harnesses read
+        run: |
+          python3 scripts/check_skill_layout.py --selftest
+          python3 scripts/check_skill_layout.py .
+
   roles-rendered:
     name: agents/ + pi-agents/ rendered from roles/
     runs-on: ubuntu-latest
