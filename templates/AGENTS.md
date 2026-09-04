@@ -85,7 +85,7 @@ Pick the class by *who the primary caller is* and *whose credentials the capabil
 
 ## Applying platform skills to local specifics
 
-**Platform skills** (shared, from the foundation) teach *general patterns*. **This project's specific values and policies** live in **local skills** in `.claude/skills/`. When you apply a platform pattern, consult the matching local skill for this deployment's specifics. A consumer that isn't the platform's origin supplies its **own** equivalents of these local skills; the platform skills and this contract stay the same.
+**Platform skills** (shared, from the foundation) teach *general patterns*. **This project's specific values and policies** live in **local skills** in `.agents/skills/`. When you apply a platform pattern, consult the matching local skill for this deployment's specifics. A consumer that isn't the platform's origin supplies its **own** equivalents of these local skills; the platform skills and this contract stay the same.
 
 > **▸ Fill for your project:** a table mapping each kind of project-specific concern → the local skill that holds it. (Harmony's, for reference: infrastructure/access → `homelab-topology`; platform conventions → `harmony-platform-conventions`; secrets → the project's secret-paths local skill.)
 
@@ -113,15 +113,24 @@ Your harness lists every installed skill, with its description, before the first
 
 The concern → local skill mapping under *Applying platform skills to local specifics* above is the only routing worth writing down, because it encodes a judgement the descriptions can't make for you. Don't restate the catalogue here — it goes stale the day someone adds a skill.
 
-**Registration is what fails silently, not indexing.** A skill is discoverable only if it sits where that harness looks:
+**Layout is what fails silently, not indexing.** Every skill is a directory containing `SKILL.md`, named for the skill. There is no flat form anywhere:
 
-| Harness | Location |
-|---|---|
-| Claude Code | `.claude/skills/<name>.md` |
-| pi.dev | `.pi/skills/<name>/SKILL.md` |
-| Codex | `.agents/skills/<name>/SKILL.md` |
+| Harness | Reads | Needs |
+|---|---|---|
+| pi.dev | `.agents/skills/<name>/SKILL.md` | nothing — walks cwd to git root |
+| Codex | `.agents/skills/<name>/SKILL.md` | nothing |
+| Claude Code | `.claude/skills/<name>/SKILL.md` | a symlink to the above |
 
-Miss one and that harness simply never sees the skill — no error, no warning. If you support more than one, single-source the file and symlink the others. Run `doctor` to compare what actually loaded against what's on disk.
+So one canonical tree serves all three:
+
+```sh
+.agents/skills/<name>/SKILL.md                          # the real file
+ln -s ../../.agents/skills/<name> .claude/skills/<name> # Claude Code
+```
+
+Claude Code is the only harness that does not read `.agents/`, and it requires the **directory** form — a flat `.claude/skills/<name>.md` is invisible to it with no error. That is easy to get wrong because flat files *do* work for `.claude/agents/` and `.claude/commands/`, and pi accepts them too. One consumer ran 26 local skills flat for months; every one was absent from every Claude Code session, including the sessions that wrote the tripwires telling agents to load them.
+
+**Verify against the running harness, not the file tree** — the tree looks right in exactly the case that fails. For Claude Code that means a separate process (`claude -p`), because skills load at session start and a session cannot observe its own change. For Codex, `codex debug prompt-input` renders the model-visible prompt with no API call. Run `doctor` to compare what actually loaded against what's on disk.
 
 Because discovery runs entirely on descriptions, a skill's `description` is its whole interface: say what it's for and when to reach for it, and front-load the discriminating words. A skill nothing matches against is a skill nobody loads.
 

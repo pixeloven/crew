@@ -6,11 +6,11 @@ consumer-local skill that holds the concrete values for that deployment. Skills 
 the slots they defer to in `expects-local:` frontmatter; the Phase-4 onboarding doctor
 reports which slots a project has not yet filled.
 
-A consumer fills a slot by creating a local skill in its overlay (`.claude/skills/` /
-`.pi/skills/`) — conventionally named `<project>-<slot>` (Harmony's `platform-conventions`
+A consumer fills a slot by creating a local skill in its overlay
+(`.agents/skills/<name>/SKILL.md`, symlinked into `.claude/skills/`) — conventionally named `<project>-<slot>` (Harmony's `platform-conventions`
 slot is filled by `harmony-platform-conventions`), though any name works: what matters
 is that the content exists locally and the project's `AGENTS.md` skill index points at it.
-Local skills **shadow** foundation skills on name collision.
+Local skills **shadow** foundation skills on name collision in pi's flat namespace; under Claude Code the plugin copy is namespaced `plugin:skill`, so both are visible.
 
 | Slot | Holds | Harmony's filling (the worked example) |
 |---|---|---|
