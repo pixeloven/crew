@@ -24,7 +24,7 @@ Three frontmatter fields. Agents don't read this metadata — every supported ha
 
 **7 role agents**, single-sourced in `roles/<role>/` (shared `body.md` + per-runtime frontmatter + optional runtime-context appendix) and rendered by `scripts/render_roles.py` into `agents/*.md` (Claude format) and `pi-agents/role-*.md` (pi format): `lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`. Edit `roles/`, never the rendered trees — CI fails on drift.
 
-**25 skills** (`skills/<name>/SKILL.md`), each carrying `tier`, `requires`, and optional `expects-local` frontmatter, with the full inventory generated into [`docs/CATALOG.md`](docs/CATALOG.md). Deployment-specific skills — node IPs, one cluster's topology, a gateway's access map — belong in the consumer's **local** overlay, never here.
+**26 skills** (`skills/<name>/SKILL.md`), each carrying `tier`, `requires`, and optional `expects-local` frontmatter, with the full inventory generated into [`docs/CATALOG.md`](docs/CATALOG.md). Deployment-specific skills — node IPs, one cluster's topology, a gateway's access map — belong in the consumer's **local** overlay, never here.
 
 ## Install
 
