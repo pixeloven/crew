@@ -24,7 +24,7 @@ Three frontmatter fields. Agents don't read this metadata — every supported ha
 
 **7 role agents**, single-sourced in `roles/<role>/` (shared `body.md` + per-runtime frontmatter + optional runtime-context appendix) and rendered by `scripts/render_roles.py` into `agents/*.md` (Claude format) and `pi-agents/role-*.md` (pi format): `lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`. Edit `roles/`, never the rendered trees — CI fails on drift.
 
-**26 skills** (`skills/<name>/SKILL.md`), each carrying `tier`, `requires`, and optional `expects-local` frontmatter, with the full inventory generated into [`docs/CATALOG.md`](docs/CATALOG.md). Deployment-specific skills — node IPs, one cluster's topology, a gateway's access map — belong in the consumer's **local** overlay, never here.
+**25 skills** (`skills/<name>/SKILL.md`), each carrying `tier`, `requires`, and optional `expects-local` frontmatter, with the full inventory generated into [`docs/CATALOG.md`](docs/CATALOG.md). Deployment-specific skills — node IPs, one cluster's topology, a gateway's access map — belong in the consumer's **local** overlay, never here.
 
 ## Install
 
@@ -50,7 +50,7 @@ No `ref` ⇒ tracks the latest release on `main` (`autoUpdate` pulls it on start
 In `.pi/settings.json` — pin the tag for reproducible builds:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.13.0"] }
+{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.26.0"] }
 ```
 
 The project adds its own `.pi/skills/` + `.pi/agents/` overlay; pi walks it from cwd to git root before the package.

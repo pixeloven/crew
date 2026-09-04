@@ -12,18 +12,28 @@ Codex reads the repo-root **`AGENTS.md`** natively (it originated the standard) 
 
 Codex loads portable `SKILL.md` skills from `.agents/skills/` (repo-level, scanned from cwd up to the repo root) and `~/.agents/skills/` (user-level). The foundation's frontmatter extras (`tier`, `requires`, `expects-local`) are ignored by Codex — the files load as-is.
 
-> **Codex budgets its skills listing — unlike pi and Claude Code.** It renders a model-visible list of installed skills with their descriptions (that listing is how agents discover skills), but the list has a context budget. Over it, Codex **truncates descriptions and omits skills entirely**, reporting the loss only in telemetry (`omitted_skills`, `truncated_skill_descriptions`, `truncated_description_chars_per_skill`) — the session shows no error. Verified in `codex-cli` 0.147.0.
+> **Codex budgets its skills listing — unlike pi and Claude Code.** It renders a model-visible list of installed skills with their descriptions (that listing is how agents discover skills), and that list has a budget. Measured on `codex-cli` 0.150.1 against a real catalogue:
 >
-> Practical consequences: keep the installed catalogue tight rather than copying every skill you might one day want, front-load the discriminating words in each description, and if a skill seems to be ignored on Codex, suspect the budget before the files. `doctor`'s discovery check compares what actually loaded against what's on disk; Codex also exposes `skills.list` for an on-demand answer.
+> | Entries | Section bytes | A 583-char description renders as |
+> |---|---|---|
+> | 7 | 3,512 | 583 — full |
+> | 58 | 21,309 | **387 — truncated** |
+> | 307 | 21,487 | 47 — a fragment |
+>
+> The cap is on **bytes (~21.5 KB)**, not on skill count, and **nothing was omitted** even at 307 entries — every skill stayed listed. So the failure mode is not a missing skill; it is *every* description degrading at once, which is worse, because the description is the entire discovery mechanism. Telemetry reports it (`omitted_skills`, `truncated_skill_descriptions`, `truncated_description_chars_per_skill`); the session shows no error.
+>
+> Practical consequences: this catalogue plus a consumer's own local skills already lands near the cap, so keep descriptions tight and front-load the discriminating words. If a skill seems ignored on Codex, suspect the budget before the files. `codex debug prompt-input` renders the model-visible prompt with no API call — the direct way to see what the model actually got.
 
-**User-level (recommended — no vendoring into the repo):**
+**Install it as a plugin (recommended).** Codex reads `.claude-plugin/marketplace.json` directly — no `.codex-plugin/` needed, and no vendoring:
 
 ```sh
-git clone --depth 1 -b v0.13.0 https://github.com/pixeloven/crew /tmp/hc
-mkdir -p ~/.agents/skills && cp -R /tmp/hc/skills/. ~/.agents/skills/
+codex plugin marketplace add pixeloven/crew --ref v0.26.0
+codex plugin add crew@crew
 ```
 
-**Repo-level (teams that want skills pinned + committed):** copy into `<repo>/.agents/skills/` instead and commit. This vendors the catalog — pin the tag and re-run the copy to update, or the vendored copy drifts from the foundation.
+The `--ref` is a **marketplace** flag, not a `plugin add` flag; that is where the pin lives, and it is persisted in `config.toml`. Update by re-running `marketplace add` at a newer tag.
+
+**Vendoring (teams that want the files committed):** copy `skills/` into `<repo>/.agents/skills/` and commit. This drifts from the foundation unless you re-copy, which is why the plugin path is preferred.
 
 Your project's own local skills (the `expects-local` slot fillings) go in the repo's `.agents/skills/` either way; on a name collision the repo-level copy is the one closest to your working directory.
 
@@ -55,5 +65,5 @@ Available to the model: `spawn_agent`, `wait_agent`, `send_message`, `list_agent
 
 ## What Codex doesn't get
 
-- **Auto-updates** — there is no plugin/package manager in the path; updating = re-running the step-2 copy at a newer tag.
+- **Unattended updates** — `codex plugin marketplace add --ref` pins a tag, so updating is deliberate: re-run it at a newer tag. (This page previously said Codex has no plugin manager at all. That was true when written and is not now — `codex plugin marketplace` ships in 0.150.1, and it reads our existing `.claude-plugin/marketplace.json`.)
 - **Cloud tasks are not a dispatch primitive.** Codex's parallel *cloud tasks* are independent agents the product runs for a human; every documented entry point is human-initiated. Don't build orchestration on them — `spawn_agent` is the agent-invocable path.
