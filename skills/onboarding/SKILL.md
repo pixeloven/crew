@@ -31,6 +31,13 @@ The foundation publishes to **four harnesses** (Claude Code, pi.dev, OpenAI Code
 - Start from `templates/AGENTS.md`.
 - Fill what you can **infer** from the repo: verification commands (`package.json` / `pyproject.toml` / `Makefile`), the remote URL (`git remote`), the stack. Leave the judgment slots (ask-list, tripwires, local-skills map) marked for the operator **with concrete suggestions**, not blanks.
 - **Do not write a skills index.** The harness lists every installed skill with its description before the first turn — that listing is how agents discover skills, and a hand-written catalogue in `AGENTS.md` only adds a copy that goes stale. Write the concern → local-skill mapping instead: which local skill owns topology, conventions, seams, access. That encodes a judgement the descriptions can't make.
+- **Decide scope before installing anything.** A capability applied to THE WORK
+  (agent methodology, a memory substrate, a design language) goes to USER scope —
+  it is wanted in every repo and knows nothing about any of them. Knowledge about a
+  SPECIFIC ARTIFACT FORMAT goes to the project. A project settings file should name
+  only what is specific to that project; restating a universal is how one stale
+  version ends up registered three times. Do not declare the same plugin at both.
+
 - **Lay every local skill out once, in `.agents/skills/<name>/SKILL.md`.** pi and Codex read that natively; Claude Code needs `ln -s ../../.agents/skills/<name> .claude/skills/<name>`, and requires the **directory** form — a flat `.claude/skills/<name>.md` is invisible to it with no error. Confirm by starting the harness (`claude -p` in a separate process; `codex debug prompt-input`), never by looking at the tree: the tree looks right in exactly the case that fails.
 - **Let the doctor's profile shape what you recommend, not what you index.** For a `portable` project don't propose capability skills whose tools the probe couldn't reach — that's an instruction the agent can't follow. If a probe fails, confirm the capability is genuinely ungranted rather than transiently down, and re-run onboarding when a new one is granted.
 - Add a one-line `CLAUDE.md` (`@AGENTS.md`) if this is a Claude Code project (pi reads `AGENTS.md` directly).
@@ -38,6 +45,14 @@ The foundation publishes to **four harnesses** (Claude Code, pi.dev, OpenAI Code
 ### 2b. Existing entry files → audit + refactor
 Walk every section of `AGENTS.md` (and `CLAUDE.md`) and classify it:
 - **Behavior** (delegation, posture, planning, memory, the bridge, tripwires, fallback) → keep; add any of these that are missing, from the scaffold.
+- **Audit every behaviour-bearing file, not just the entry file.** `CONTRIBUTING.md`,
+  `README.md` and per-directory guides carry rules agents and humans both follow, and
+  nothing reconciles them against the entry file or the skills. A fact stated in two
+  places has two sources of truth and will diverge — this foundation's own README once
+  stated the correct skill-layout rule while four other files stated the opposite, and
+  every syntactic gate passed. Where such a file restates a skill-owned fact, replace
+  the copy with a pointer.
+
 - **Facts / conventions** (infra tables, IPs, domains, credential paths, command catalogs, service/app inventories, named conventions) → **propose moving each into a local skill** — a new `.agents/skills/<name>/SKILL.md`, or an existing one — leaving only a behavioral *pointer* in the entry file. When a fact fills one of the declared local-skill **slots** (per the doctor's slot check), start from the matching stub in `templates/local-skills/`.
 - **Accretion** (changelogs, "recent changes", duplicated conventions) → propose removal; git history is the record.
 - **Landmines** → for every convention that fails *silently* when violated, ensure (a) a Tripwire line in `AGENTS.md`, and (b) the owning skill's `description` names the trap + its consequence imperatively, so the skill loads reliably.

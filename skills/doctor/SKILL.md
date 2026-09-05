@@ -22,6 +22,30 @@ Run the checks below in order, then produce the report. Absence of a platform is
 
 **3. Capability probe.** The foundation's own skills need only `external:github` — check `gh auth status`. Beyond that, probe whatever **the project's local skills** declare they need: if the overlay ships knowledge-base, gateway, or cluster skills, confirm the corresponding tools are actually in this session's tool list and say which are reachable. Present = granted; absent = not granted, which is a fact to report rather than an error.
 
+**3b. Plugin install state — three registries that disagree.** Claude Code keeps the
+answer in three places and only one is what a session loads:
+
+    known_marketplaces.json   what the marketplace last served
+    settings.json             what is ENABLED
+    installed_plugins.json    what a session ACTUALLY loads
+
+`marketplace update` refreshes the first and leaves the third pointing at the old
+version — so `plugin details` reports the new one while sessions get the old one.
+Report all three, and flag any disagreement. Note the record reconciles only on
+the NEXT session start: mid-reinstall a session reports zero skills, which looks
+like a break and is not.
+
+**3c. Scope.** A capability applied to THE WORK belongs at user scope; knowledge
+about a SPECIFIC ARTIFACT FORMAT belongs to the project. Flag anything registered
+at both — duplicate registration is how one stale version gets three entries — and
+anything universal declared in a project file.
+
+**3d. Description budget.** Descriptions are always-on; bodies are not. Report the
+total description bytes, because Codex caps its listing (~21.5 KB) and past that
+truncates EVERY description rather than dropping a skill — the discovery mechanism
+degrades catalogue-wide while everything still appears present. `claude --plugin-dir
+<path> plugin details <name>` gives real per-component token cost.
+
 **4. Local slots.** For each slot the installed skills declare in `expects-local:` (`platform-conventions`, `topology`, `protected-seams`, `litellm-access-map`, `secret-paths`, `vault-ops`, `agent-runtime`): does the project's overlay (`.agents/skills/`, `.claude/skills/`) or its `AGENTS.md` local-skills map name a skill filling it? Only flag slots that matter for the project's profile — a portable-profile repo doesn't need `topology`. Starter stubs: the foundation's `templates/local-skills/`.
 
 **5. Intake prerequisites** (only if the project routes work through Triage): `gh label list` shows the `domain:*` labels (and `agent:queued` / `triage:needs-clarification` if used). Missing labels mean Triage's routing silently no-ops.
@@ -33,6 +57,12 @@ Run the checks below in order, then produce the report. Absence of a platform is
 Agents find skills because the harness lists them, with their descriptions, before the first turn. That listing is the discovery mechanism — so a skill the runtime didn't load is invisible no matter how correctly it sits on disk, and nothing errors.
 
 - **What you see.** Your own context already holds the list — the skills available to you, each with its description. That is the authoritative side of this comparison; read it from what you were given, not from a file. On Codex, `skills.list` returns the same set on demand.
+**Verify by running a session, never by reading a registry.** Every registry above
+lied at some point in a real diagnosis: the marketplace said 0.29.0, the record said
+0.25.0, the settings said enabled, and the session loaded nothing. `claude -p` in a
+separate process is the only answer that counts — skills load at session start, so a
+session cannot observe its own change.
+
 - **Use the harnesses' own tools first** — they are maintained alongside the
   runtimes that read these files, and they see things no external check can:
 
