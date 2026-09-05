@@ -33,12 +33,23 @@ Run the checks below in order, then produce the report. Absence of a platform is
 Agents find skills because the harness lists them, with their descriptions, before the first turn. That listing is the discovery mechanism — so a skill the runtime didn't load is invisible no matter how correctly it sits on disk, and nothing errors.
 
 - **What you see.** Your own context already holds the list — the skills available to you, each with its description. That is the authoritative side of this comparison; read it from what you were given, not from a file. On Codex, `skills.list` returns the same set on demand.
-- **Run the layout check first.** `scripts/check_skill_layout.py <repo-root>`
-  from this foundation answers the mechanical half — flat files, dangling
-  symlinks, a `name:` disagreeing with its directory, and whether the catalogue
-  fits Codex's listing budget. It takes a path, so it runs against a consumer
-  repo, and `--selftest` proves it can still fail. Do that before reading trees
-  by hand; what follows is for what it cannot see.
+- **Use the harnesses' own tools first** — they are maintained alongside the
+  runtimes that read these files, and they see things no external check can:
+
+      claude plugin validate <path> --strict          manifests, frontmatter, and
+                                                      the rule that plugin
+                                                      components are read WITHOUT
+                                                      following symlinks
+      claude --plugin-dir <path> plugin details <n>   component inventory and
+                                                      projected token cost
+      codex debug prompt-input "hi"                   the model-visible skill
+                                                      listing, no API call
+
+  Then `scripts/check_skill_layout.py <repo-root>` for what they miss: verified
+  that `plugin validate --strict` PASSES both a flat `skills/<name>.md` and a
+  `name:` disagreeing with its directory — the two faults that actually shipped.
+  It takes a path, and `--selftest` proves it can still fail. Only then read
+  trees by hand.
 - **What's on disk.** Enumerate the overlay directories — `.agents/skills/*/SKILL.md` (pi and Codex) and `.claude/skills/*/SKILL.md` (Claude Code, usually symlinks into the former) — plus the installed foundation catalogue. A flat `.claude/skills/*.md` is a **finding, not a layout**: report every one.
 - **Report the difference in both directions.** On disk but not loaded is the serious one: name each and give the likely cause — wrong layout — **every harness wants `<name>/SKILL.md` directories**, and a flat `.claude/skills/<name>.md` is invisible to Claude Code with no error — or unparseable YAML frontmatter, a dangling symlink, or a `name:` that disagrees with the directory name. Loaded but not on disk means it came from a different install path — say which.
 - **Codex only:** its skills listing is **budgeted**. Over budget, it truncates descriptions and omits skills entirely, and it counts what it dropped (`omitted_skills`, `truncated_skill_descriptions`). If skills are missing from your listing on Codex, suspect the budget before suspecting the files, and report catalogue size as the cause — the fix is fewer or tighter skills, not a bigger index.
