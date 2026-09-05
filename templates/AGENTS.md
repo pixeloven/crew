@@ -89,6 +89,31 @@ Pick the class by *who the primary caller is* and *whose credentials the capabil
 
 > **▸ Fill for your project:** a table mapping each kind of project-specific concern → the local skill that holds it. (Harmony's, for reference: infrastructure/access → `homelab-topology`; platform conventions → `harmony-platform-conventions`; secrets → the project's secret-paths local skill.)
 
+## Work quality
+
+Four rules, always on. They are here rather than in a skill because a skill has to
+be *triggered*, and these are true of every change — a trigger that matches
+everything discriminates nothing.
+
+- **Surface assumptions; don't hide confusion.** If multiple readings exist, name
+  them rather than picking silently. If a simpler approach exists, say so. If
+  something is unclear, stop and ask — a wrong assumption carried forward costs more
+  than the question.
+- **Smallest change that solves it.** No features beyond what was asked, no
+  abstraction for single-use code, no error handling for impossible states. If it
+  could be half the size, rewrite it.
+- **Surgical edits.** Touch only what the request requires. Don't reformat, refactor
+  or "improve" adjacent code; match the existing style even where you'd differ.
+  Remove orphans *your* change created — not pre-existing dead code. **Every changed
+  line should trace to the request.**
+- **Verify, don't assert.** State the success criterion before starting, then check
+  it. "Tests pass" means you ran them; "it loads" means you loaded it. Report what
+  the check actually returned, including when it failed.
+
+Derived from [Karpathy's observations](https://x.com/karpathy/status/2015883857489522876)
+on where LLM coding agents go wrong, plus one added from this foundation's own
+failures — the fourth. Bias toward caution over speed; use judgement on trivial tasks.
+
 ## Tripwires — load the skill before the action
 
 Most conventions are reference detail — load them as soon as the task touches their domain, per *Autonomy & posture*. A few are **silent landmines** — get them wrong and it fails with no obvious error. For these, load the named skill *before* the action, every time. The skill carries the detail; this is just the trigger.
