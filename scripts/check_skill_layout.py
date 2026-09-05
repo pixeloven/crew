@@ -7,10 +7,25 @@ consumer followed that and ran 26 local skills invisible to every Claude Code
 session for months, with no error anywhere. Frontmatter validation would not
 have caught it -- the frontmatter was fine. The *layout* was wrong.
 
-Deliberately separate from check_skills.py, which enforces this foundation's
-CATALOGUE schema (tier, requires, expects-local). That schema is ours and a
-consumer's local skills are not obliged to it. Layout is universal: it is
-whether the harness can see the file at all.
+Deliberately narrow. Reach for the harness's own tooling first -- it is
+maintained alongside the runtime that has to read these files:
+
+    claude plugin validate <path> --strict     manifests, frontmatter, and the
+                                               rule that plugin components are
+                                               read WITHOUT following symlinks
+    claude --plugin-dir <path> plugin details <name>
+                                               component inventory and projected
+                                               token cost, per component
+    codex debug prompt-input "hi"              the model-visible skill listing,
+                                               rendered with no API call
+
+This covers only what those do not. Verified against `claude plugin validate
+--strict`, which PASSES a plugin containing both a flat `skills/<name>.md` and a
+`name:` disagreeing with its directory -- the two faults that actually shipped.
+
+Also separate from check_skills.py, which enforces this foundation's CATALOGUE
+schema (tier, requires, expects-local). That schema is ours; a consumer's local
+skills are not obliged to it.
 
     check_skill_layout.py [ROOT]        # default: cwd
     check_skill_layout.py --selftest    # prove the checks can fail
@@ -32,18 +47,12 @@ import tempfile
 # the harness that reads it -- silently, which is the whole problem.
 SKILL_DIRS = (".agents/skills", ".claude/skills", "skills")
 
-# Codex renders one model-visible listing of every skill and its description,
-# and caps that listing by BYTES. Past the cap it truncates EVERY description
-# rather than dropping a skill, so the discovery mechanism degrades catalogue
-# wide. Measured at ~21.5 KB on codex-cli 0.150.1.
-LISTING_BUDGET = 21_500
 NAME_RE = re.compile(r"^name:\s*(\S+)\s*$", re.M)
 DESC_RE = re.compile(r"^description:\s*(.+)$", re.M)
 
 
 def check(root: pathlib.Path) -> list[str]:
     errors: list[str] = []
-    seen: list[tuple[str, int]] = []
 
     for rel in SKILL_DIRS:
         base = root / rel
@@ -86,21 +95,9 @@ def check(root: pathlib.Path) -> list[str]:
                     f"so the skill loads under a name nothing routes to"
                 )
 
-            d = DESC_RE.search(text)
-            if d:
-                seen.append((entry.name, len(d.group(1))))
+            if not DESC_RE.search(text):
+                errors.append(f"{rel}/{entry.name}/SKILL.md: no `description:` — it is the entire load path")
 
-    # Report the budget rather than failing on it: how much headroom a repo
-    # needs depends on what else the consumer installs, which we cannot see.
-    if seen:
-        total = sum(n for _, n in seen) + sum(len(s) + 6 for s, _ in seen)
-        if total > LISTING_BUDGET:
-            worst = ", ".join(f"{s} ({n})" for s, n in sorted(seen, key=lambda x: -x[1])[:3])
-            errors.append(
-                f"descriptions total ~{total} B against a ~{LISTING_BUDGET} B Codex "
-                f"listing budget. Past it Codex truncates EVERY description, not just "
-                f"the long ones. Longest: {worst}"
-            )
     return errors
 
 
@@ -123,6 +120,12 @@ def selftest() -> int:
         (flat / "gone").symlink_to(root / ".agents/skills/missing")
         cases.append(("a dangling symlink is rejected", any("dangling" in e for e in check(root))))
         (flat / "gone").unlink()
+
+        nodesc = root / ".agents/skills/nodesc"
+        nodesc.mkdir(parents=True)
+        (nodesc / "SKILL.md").write_text("---\nname: nodesc\n---\n")
+        cases.append(("a missing description is rejected", any("no `description:`" in e for e in check(root))))
+        (nodesc / "SKILL.md").unlink(); nodesc.rmdir()
 
         bad = root / ".agents/skills/misnamed"
         bad.mkdir(parents=True)
