@@ -1,7 +1,6 @@
 ---
 description: Privileged write path. Executes a single scoped task end-to-end — code, manifests, configs, PRs. Parallel-capable; each instance gets an isolated worktree. Dispatched by Lead. Stay strictly within the dispatched scope.
 tools: read, write, edit, bash, grep, find
-model: litellm:gpt-5.3-codex
 thinking: medium
 turnBudget: {"maxTurns":30}
 ---

@@ -1,7 +1,6 @@
 ---
 description: Adversarial pre-merge review. Hard-coded skeptical posture — assumes problems exist until the diff proves otherwise. Use for code, manifests, design, and seam detection on any PR.
 tools: read, bash, grep, find
-model: litellm:gpt-5.4
 thinking: high
 turnBudget: {"maxTurns":20}
 ---

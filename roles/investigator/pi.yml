@@ -1,5 +1,4 @@
 description: Read-mostly diagnostic agent. Investigates alerts, traces flows across services, detects configuration drift. Produces briefs; its only mutation is filing GitHub issues and comments for persistent findings. Dispatched by Lead within a plan, or fires autonomously on alerts.
 tools: read, bash, grep, find
-model: litellm:gpt-5.4-nano
 thinking: medium
 turnBudget: {"maxTurns":25}

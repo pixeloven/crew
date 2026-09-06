@@ -1,7 +1,6 @@
 ---
 description: Intake and routing agent. Filters signal from noise, structures incoming requests, applies domain labels, routes to the right handler. Long-running listener or per-event.
 tools: read, bash, grep, find
-model: litellm:gpt-5.4-nano
 thinking: low
 turnBudget: {"maxTurns":10}
 ---

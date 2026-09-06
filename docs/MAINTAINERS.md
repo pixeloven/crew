@@ -27,6 +27,7 @@ crew/
 ## Editing rules
 
 - **Roles:** edit `roles/<role>/` (shared `body.md`, per-runtime `claude.yml`/`pi.yml`, optional `{{RUNTIME_CONTEXT}}` appendix), run `scripts/render_roles.py`, commit source + rendered output together. CI fails on drift.
+- **No model pinning.** Roles carry `tools`, `thinking`, and `turnBudget` — never a `model`. A foundation that ships model ids forces every consumer onto one vendor's naming and one operator's cost tier, and goes stale on every model release. Model selection belongs to the consumer's own runtime config or harness session; `render_roles.py` does not require the field, and adding one back to `roles/<role>/` re-imposes that choice on everyone downstream.
 - **Skills:** schema-v2 frontmatter (`name`, `description` ≥110 chars with trigger language, `tier`, `requires`, optional `expects-local`). No project-specific values — the dividing test is **"no project context baked in"**, not width: a single-language convention skill is fine if any project benefits; anything binding to one deployment's vault, gateway, cluster, secret paths, or domains belongs in that consumer's overlay (deferral goes through an `expects-local` slot).
 - **Generated artifacts:** after any frontmatter change, run `scripts/gen_catalog.py` and commit `docs/CATALOG.md`.
 - **Discovery is the harness's job, not ours — and that is a dependency, so it gets verified and dated.** Each supported harness lists installed skills, with their descriptions, to the model itself. Verified 2026-08-15:
