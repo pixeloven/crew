@@ -1,6 +1,6 @@
 {
   "name": "@ductiletoaster/harmony-crew",
-  "version": "0.33.0",
+  "version": "0.33.1",
   "description": "Portable cross-project agent foundation: a methodology skill catalogue and an onboarding scaffold/skill for Claude Code, pi.dev and OpenAI Codex, plus 7 role agents for the two harnesses whose plugin format can carry them (Claude Code, pi.dev).",
   "keywords": [
     "pi-package",

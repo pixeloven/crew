@@ -31,6 +31,8 @@ codex plugin marketplace add pixeloven/crew --ref v0.33.0
 codex plugin add crew@crew
 ```
 
+> **Why `plugin.json` names its skills path explicitly.** On Codex's legacy manifest path — the one this repo is on, having no `$schema` key — `skills` has **no default**: omit it and the plugin installs zero skills, with no error. Claude Code resolves `./skills` either way (verified: `claude --plugin-dir . plugin details crew` reports the same 26 skills with the key present or absent), so the key is free there and load-bearing here. Don't remove it.
+
 The `--ref` is a **marketplace** flag, not a `plugin add` flag; that is where the pin lives, and it is persisted in `config.toml`. Update by re-running `marketplace add` at a newer tag.
 
 **Vendoring (teams that want the files committed):** copy `skills/` into `<repo>/.agents/skills/` and commit. This drifts from the foundation unless you re-copy, which is why the plugin path is preferred.
