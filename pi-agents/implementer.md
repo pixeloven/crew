@@ -1,8 +1,6 @@
 ---
-description: Privileged write path. Executes a single scoped task end-to-end — code, manifests, configs, PRs. Parallel-capable; each instance gets an isolated worktree. Dispatched by Lead. Stay strictly within the dispatched scope.
+description: "Privileged write path. Executes one scoped task end-to-end across the full stack — application code, K8s manifests, Terraform, Ansible, MCP servers, CI. Parallel-capable under Lead's orchestration; stays strictly within the dispatched scope. Use for any write work: code, manifests, configs, PRs."
 tools: read, write, edit, bash, grep, find
-thinking: medium
-turnBudget: {"maxTurns":30}
 ---
 
 <!-- GENERATED from roles/implementer/ — edit there and run scripts/render_roles.py -->

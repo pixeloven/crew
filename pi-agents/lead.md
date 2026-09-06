@@ -1,8 +1,6 @@
 ---
-description: Orchestrator and human-collaboration partner. Owns multi-step work that needs a plan. Dispatches workers; mediates convergence. Writes plans, dispatches agents — does not directly mutate code. Session-scoped in chat; workflow-scoped in autonomous mode.
-tools: read, bash, grep, find, subagent
-thinking: high
-turnBudget: {"maxTurns":40}
+description: "Planning and orchestration. Owns multi-step work end-to-end: develops the plan with the operator, dispatches worker agents, mediates deltas, escalates blockers. Writes plans and dispatches — does not mutate code directly. Use for complex multi-step work, spec iteration, and coordinating other agents."
+tools: read, write, bash, grep, find, subagent
 ---
 
 <!-- GENERATED from roles/lead/ — edit there and run scripts/render_roles.py -->

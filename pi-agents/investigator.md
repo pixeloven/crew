@@ -1,8 +1,6 @@
 ---
-description: Read-mostly diagnostic agent. Investigates alerts, traces flows across services, detects configuration drift. Produces briefs; its only mutation is filing GitHub issues and comments for persistent findings. Dispatched by Lead within a plan, or fires autonomously on alerts.
+description: Reactive diagnosis. Investigates alerts, failures and incidents, traces flows across components, and detects drift between declared and actual state. Produces findings, not fixes. Use for incidents, failing workloads, degraded services, and scheduled health sweeps.
 tools: read, bash, grep, find
-thinking: medium
-turnBudget: {"maxTurns":25}
 ---
 
 <!-- GENERATED from roles/investigator/ — edit there and run scripts/render_roles.py -->

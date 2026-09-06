@@ -18,7 +18,7 @@ Every role is one or the other. Say which in your routing table, because they ne
 | **Interactive dispatch** | the agent you're talking to | nothing — the routing table is enough | planning, implementation, review |
 | **Autonomous trigger** | an event or a schedule, with no human in the loop | infrastructure you deploy | intake, diagnosis, curation, drafting |
 
-A routing table that lists both without distinguishing them implies every role is one dispatch away. Four of them aren't, and that gap is why they stay dormant.
+A routing table that lists both without distinguishing them implies every role is one dispatch away. The triggered ones aren't, and that gap is why they stay dormant.
 
 ## The trigger interface
 

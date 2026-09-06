@@ -6,11 +6,11 @@ How the foundation itself is built, versioned, and kept honest. Consumers don't 
 
 ```
 crew/
-├── roles/<role>/                   # SINGLE SOURCE for the 7 role agents (body + per-runtime frontmatter)
+├── roles/<role>/                   # SINGLE SOURCE for the 7 role agents (role.yml + body + optional runtime context)
 │   └── expected-local-skills.txt   # backtick-token allowlist: local-skill names agent bodies may cite as examples
 ├── skills/<name>/SKILL.md          # one tree → all three harnesses read it (schema-v2 frontmatter)
 ├── agents/*.md                     # RENDERED Claude subagent files (do not edit)
-├── pi-agents/role-*.md             # RENDERED pi-subagents files (do not edit)
+├── pi-agents/*.md                  # RENDERED pi-subagents files (do not edit) — same names as agents/
 ├── docs/CATALOG.md                 # GENERATED skill inventory
 ├── templates/AGENTS.md             # the onboarding scaffold (behavioral spine + ▸ Fill blocks)
 ├── templates/local-skills/         # the 7 consumer-local slot definitions + starter stubs
@@ -26,8 +26,8 @@ crew/
 
 ## Editing rules
 
-- **Roles:** edit `roles/<role>/` (shared `body.md`, per-runtime `claude.yml`/`pi.yml`, optional `{{RUNTIME_CONTEXT}}` appendix), run `scripts/render_roles.py`, commit source + rendered output together. CI fails on drift.
-- **No model pinning.** Roles carry `tools`, `thinking`, and `turnBudget` — never a `model`. A foundation that ships model ids forces every consumer onto one vendor's naming and one operator's cost tier, and goes stale on every model release. Model selection belongs to the consumer's own runtime config or harness session; `render_roles.py` does not require the field, and adding one back to `roles/<role>/` re-imposes that choice on everyone downstream.
+- **Roles:** edit `roles/<role>/` — one harness-neutral `role.yml` (`name`, `description`, `writes`, optional `dispatch`) plus a shared `body.md` and an optional `{{RUNTIME_CONTEXT}}` appendix. Run `scripts/render_roles.py`, commit source + rendered output together. CI fails on drift. **There is no per-harness frontmatter file.** Both trees get the same name, description, and capability posture; `render_roles.py` alone translates that into each harness's dialect (Claude Code denies via `disallowedTools`, pi allows via `tools`), so the two cannot drift apart by editing.
+- **No runtime knobs in a role.** A role declares who it is and what it may touch — never which model, how hard to think, or how many turns it gets. All three harnesses support those (Claude Code: `model` / `effort` / `maxTurns`; pi: `model` / `thinking` / `turnBudget`; Codex: `model` / `model_reasoning_effort`) and all three inherit sensible values from the dispatching session when they are omitted. Shipping them from a foundation imposes one operator's cost tier and one vendor's model naming on every consumer, and goes stale on every model release. On Codex it is worse than stale: a role file's `model` is applied *after* the spawn arguments, so it silently overrides the orchestrator's explicit choice. `render_roles.py` rejects `model`, `thinking`, `effort`, `model_reasoning_effort`, `turnBudget` and `maxTurns` in `role.yml` by name — a consumer that wants to pin one sets it in its own overlay or harness config, where it belongs.
 - **Skills:** schema-v2 frontmatter (`name`, `description` ≥110 chars with trigger language, `tier`, `requires`, optional `expects-local`). No project-specific values — the dividing test is **"no project context baked in"**, not width: a single-language convention skill is fine if any project benefits; anything binding to one deployment's vault, gateway, cluster, secret paths, or domains belongs in that consumer's overlay (deferral goes through an `expects-local` slot).
 - **Generated artifacts:** after any frontmatter change, run `scripts/gen_catalog.py` and commit `docs/CATALOG.md`.
 - **Discovery is the harness's job, not ours — and that is a dependency, so it gets verified and dated.** Each supported harness lists installed skills, with their descriptions, to the model itself. Verified 2026-08-15:

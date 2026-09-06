@@ -46,7 +46,7 @@ Two vocabularies use *crew* for different things, and both appear in this fleet'
 
 | Vocabulary | "crew" means | The human is | A worker is |
 |---|---|---|---|
-| **this foundation** (harmony-crew) | the **set of agent roles** — lead, implementer, reviewer, researcher, triage, investigator, librarian, responder | **the operator** | a dispatched **role**, e.g. "a reviewer" |
+| **this foundation** (harmony-crew) | the **set of agent roles** — lead, implementer, reviewer, researcher, triage, investigator, responder | **the operator** | a dispatched **role**, e.g. "a reviewer" |
 | **firstmate lineage** (`kunchenguid/firstmate` and its forks, e.g. `pixeloven/operator`) | the **fleet of dispatched worker agents** in a running session | **the captain** | a **crewmate** (or a **secondmate** — a persistent worker with its own isolated home) |
 
 Rules:

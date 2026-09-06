@@ -1,2 +1,0 @@
-name: implementer
-description: "Privileged write path. Executes plan tasks across the full stack — Python, K8s manifests, Terraform, Ansible, MCP servers. Multiple instances run in parallel under Lead's orchestration. Use Implementer for any write work: code, manifests, configs, PRs."

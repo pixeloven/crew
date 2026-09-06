@@ -6,9 +6,9 @@ A cross-project **agent foundation** for the projects I own — one shared skill
 |---------|-------------|----------|-----|
 | **Claude Code** | operator/dev sessions + subagents | the **full** foundation (7 role agents + all skills) | plugin (this repo's marketplace) |
 | **pi.dev** | autonomous workers | the **full** foundation (7 role agents + all skills) | pi package (`pi-subagents` ≥ 0.29.0) |
-| **OpenAI Codex** | dev sessions (CLI / IDE / cloud) + subagents | `AGENTS.md` natively + the full skill catalogue; **dispatches subagents** | skills copied into `.agents/skills/` (pinned tag) |
+| **OpenAI Codex** | dev sessions (CLI / IDE / cloud) + subagents | `AGENTS.md` natively + all skills; **no crew roles** — it dispatches its built-in subagents | plugin (`codex plugin marketplace`, pinned tag) or skills vendored into `.agents/skills/` |
 
-The same `skills/<name>/SKILL.md` tree feeds all three. Claude Code and pi.dev run the **7 crew roles** with a per-runtime agent variant; **Codex** reads the same `AGENTS.md` and skills and dispatches subagents when the routing table instructs it to.
+The same `skills/<name>/SKILL.md` tree feeds all three, and the same `AGENTS.md` drives all three. Claude Code and pi.dev additionally run the **7 crew roles**, rendered from one shared source so both get the same names, descriptions, and capability posture. **Codex cannot receive them**: its plugin format has no slot for agent roles, so there it reads the same `AGENTS.md` and skills and delegates to its own built-in subagents. That asymmetry is a property of the harness, not a gap in this repo — see [the Codex quickstart](docs/quickstart-codex.md#5-delegation--how-the-routing-table-works-here).
 
 > **Scope.** This foundation is **agent methodology** — how agents plan, review, implement, delegate, and handle protected seams, plus stack conventions and the onboarding/doctor tooling. It is deliberately **portable**: its skills need nothing but a repo (a few use GitHub). Skills for *using* a platform's capabilities, or for *running* a platform, belong in that consumer's own overlay — see [`templates/local-skills/`](templates/local-skills/) for the slots the foundation defers to, and [`ductiletoaster/harmony`](https://github.com/ductiletoaster/harmony) for a filled example.
 
@@ -22,7 +22,7 @@ Three frontmatter fields. Agents don't read this metadata — every supported ha
 
 ## What's in the box
 
-**7 role agents**, single-sourced in `roles/<role>/` (shared `body.md` + per-runtime frontmatter + optional runtime-context appendix) and rendered by `scripts/render_roles.py` into `agents/*.md` (Claude format) and `pi-agents/role-*.md` (pi format): `lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`. Edit `roles/`, never the rendered trees — CI fails on drift.
+**7 role agents**, single-sourced in `roles/<role>/` (one harness-neutral `role.yml` + shared `body.md` + optional runtime-context appendix) and rendered by `scripts/render_roles.py` into `agents/*.md` (Claude Code) and `pi-agents/*.md` (pi): `lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`. Same names, same descriptions, same capability posture on both — only the frontmatter dialect differs, and the renderer owns that translation. A role declares **who it is and what it may touch**; it never pins a model, a reasoning level, or a turn budget — those are the dispatching session's to choose. Edit `roles/`, never the rendered trees — CI fails on drift.
 
 **26 skills** (`skills/<name>/SKILL.md`), each carrying `tier`, `requires`, and optional `expects-local` frontmatter, with the full inventory generated into [`docs/CATALOG.md`](docs/CATALOG.md). Deployment-specific skills — node IPs, one cluster's topology, a gateway's access map — belong in the consumer's **local** overlay, never here.
 
@@ -50,22 +50,21 @@ No `ref` ⇒ tracks the latest release on `main` (`autoUpdate` pulls it on start
 In `.pi/settings.json` — pin the tag for reproducible builds:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.26.0"] }
+{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.33.0"] }
 ```
 
 The project adds its own `.pi/skills/` + `.pi/agents/` overlay; pi walks it from cwd to git root before the package.
 
 ### OpenAI Codex
 
-Codex reads `AGENTS.md` natively — install is skills + MCP only. Copy the catalog into `~/.agents/skills/` (user-level; or the repo's `.agents/skills/` to vendor it) at a pinned tag, and point `~/.codex/config.toml` at the LiteLLM gateway with the surface's own VK:
+Codex reads `AGENTS.md` natively and reads this repo's `.claude-plugin/marketplace.json` directly — no `.codex-plugin/` needed:
 
-```toml
-[mcp_servers.litellm]
-url = "https://<your-litellm-host>/mcp"
-bearer_token_env_var = "LITELLM_API_KEY"
+```sh
+codex plugin marketplace add pixeloven/crew --ref v0.33.0
+codex plugin add crew@crew
 ```
 
-Full walkthrough (copy snippet, VK guidance, what Codex doesn't get): [docs/quickstart-codex.md](docs/quickstart-codex.md).
+Skills only — Codex plugins have no slot for agent roles. Vendoring the catalog into `.agents/skills/` at a pinned tag remains a supported alternative. Full walkthrough (what Codex does and doesn't get, the description-budget landmine): [docs/quickstart-codex.md](docs/quickstart-codex.md).
 
 ## Versioning & maintenance
 

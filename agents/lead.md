@@ -1,6 +1,7 @@
 ---
 name: lead
-description: Chat-mode collaboration partner and autonomous orchestrator. Owns plans end-to-end. Use Lead to plan complex work, iterate on specs, dispatch and coordinate worker agents, and mediate deltas.
+description: "Planning and orchestration. Owns multi-step work end-to-end: develops the plan with the operator, dispatches worker agents, mediates deltas, escalates blockers. Writes plans and dispatches — does not mutate code directly. Use for complex multi-step work, spec iteration, and coordinating other agents."
+disallowedTools: Edit, NotebookEdit
 ---
 
 <!-- GENERATED from roles/lead/ — edit there and run scripts/render_roles.py -->

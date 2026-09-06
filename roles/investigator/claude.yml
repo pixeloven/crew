@@ -1,3 +1,0 @@
-name: investigator
-description: Reactive cluster diagnosis. Runs scheduled health sweeps and on-demand investigations. Use Investigator for cluster incidents, pod failures, ArgoCD degradations, node issues, and drift detection.
-disallowedTools: Write, Edit, NotebookEdit

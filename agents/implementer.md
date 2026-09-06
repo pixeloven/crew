@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: "Privileged write path. Executes plan tasks across the full stack — Python, K8s manifests, Terraform, Ansible, MCP servers. Multiple instances run in parallel under Lead's orchestration. Use Implementer for any write work: code, manifests, configs, PRs."
+description: "Privileged write path. Executes one scoped task end-to-end across the full stack — application code, K8s manifests, Terraform, Ansible, MCP servers, CI. Parallel-capable under Lead's orchestration; stays strictly within the dispatched scope. Use for any write work: code, manifests, configs, PRs."
 ---
 
 <!-- GENERATED from roles/implementer/ — edit there and run scripts/render_roles.py -->

@@ -27,7 +27,7 @@ Codex loads portable `SKILL.md` skills from `.agents/skills/` (repo-level, scann
 **Install it as a plugin (recommended).** Codex reads `.claude-plugin/marketplace.json` directly — no `.codex-plugin/` needed, and no vendoring:
 
 ```sh
-codex plugin marketplace add pixeloven/crew --ref v0.26.0
+codex plugin marketplace add pixeloven/crew --ref v0.33.0
 codex plugin add crew@crew
 ```
 
@@ -59,7 +59,13 @@ Codex delegates **when you ask directly, or when applicable `AGENTS.md` or skill
 
 Available to the model: `spawn_agent`, `wait_agent`, `send_message`, `list_agents`, `followup_task`, `interrupt_agent` — the last two give mid-run steer and stop, which not every harness offers. `/agent` inspects and switches between running agent threads.
 
-**Named roles** live in project-scoped `.codex/agents/*.toml` (`name`, `description`, `developer_instructions`; optional `model`, `model_reasoning_effort`, `sandbox_mode`, `mcp_servers`, `skills.config`), alongside built-in `default` / `worker` / `explorer`. Generating the foundation's 8 crew roles into this format from the same `roles/<role>/` source is tracked in the foundation's tracker; until it ships, Codex delegates to its built-ins guided by your routing table and the loaded skills.
+**Named roles** live in `.codex/agents/*.toml` — project-scoped (`<project>/.codex/agents/`), user-scoped (`~/.codex/agents/`), or system-scoped — alongside built-in `default` / `worker` / `explorer`. Required keys are `name` (the **filename is not** the role name), `description`, and `developer_instructions`; the file also accepts the whole `config.toml` schema, but only a bounded allowlist is actually applied to the child session: `model`, `model_reasoning_effort`, `model_reasoning_summary`, `model_verbosity`, `personality`, `service_tier`, `[features]` and `skills.config` (the last two **only to disable** things). `sandbox_mode` and `mcp_servers` parse without error and are **silently ignored** — a role may reduce the parent session's authority, never replace it. (An earlier version of this page listed those two as working options. They don't.)
+
+> **A plugin cannot ship Codex roles — this is a hard limit, not a backlog item.** Codex's plugin manifest has exactly four component slots: skills, MCP servers, apps, and hooks. Plugins are not a config layer, so nothing a plugin installs is ever scanned for an `agents/` directory. The seven crew roles therefore reach Claude Code and pi through the package and reach Codex not at all; on Codex the routing table in your `AGENTS.md` plus the loaded skills is the delegation mechanism, and `spawn_agent` targets the built-ins. If you want the named roles here, the consumer's own repo or `$CODEX_HOME` has to own the TOMLs — generating them from `roles/<role>/` into a consumer repo is a job for the `onboarding` skill, not for the plugin.
+
+> **If you do write role TOMLs, leave `model` out.** Codex applies a role file's `model` and `model_reasoning_effort` *after* the `spawn_agent` arguments, so a pinned model in a role silently overrides the orchestrator's explicit choice — the opposite of every other harness, where the dispatcher wins. Omit both and the subagent inherits the parent session's model and effort.
+
+*Verified against `openai/codex` source at commit `52e12e0` (2026-09-06), not against prose docs — `developers.openai.com` was unreachable from the verifying session. Re-check on a major Codex release; the applied-override allowlist has been tightened over time.*
 
 > Use parallel agents for read-heavy work (exploration, tests, triage, summarization). Be careful with parallel *write*-heavy workflows — concurrent editors create conflicts and coordination overhead. Subagent workflows also consume more tokens than a single-agent run, since each subagent does its own model and tool work.
 
