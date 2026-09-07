@@ -431,28 +431,61 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                     str(installed_path),
                     manifest_source,
                 )
-    installed_records.extend(by_root.values())
+    installed_records.extend(sorted(by_root.values(), key=lambda item: item["root"]))
+    for installed_record in installed_records:
+        installed_record["registration_versions"] = sorted(
+            set(installed_record["registration_versions"])
+        )
     result["installed_versions"] = installed_records
     runtime_paths = _runtime_paths(runtime)
-    selected_installed = next(
-        (
+    runtime_matches = [
+        record
+        for record in installed_records
+        if any(_path_within(path, pathlib.Path(record["root"])) for path in runtime_paths)
+    ]
+    selected_installed = runtime_matches[0] if len(runtime_matches) == 1 else None
+    if selected_installed is None and result["served_version"]:
+        marketplace_matches = [
             record
             for record in installed_records
-            if any(_path_within(path, pathlib.Path(record["root"])) for path in runtime_paths)
-        ),
-        None,
-    )
-    if selected_installed is None and result["served_version"]:
-        selected_installed = next(
-            (record for record in installed_records if pathlib.Path(record["root"]) == location),
-            None,
-        )
-    if selected_installed is None and installed_records:
+            if pathlib.Path(record["root"]).resolve(strict=False)
+            == location.resolve(strict=False)
+        ]
+        if len(marketplace_matches) == 1:
+            selected_installed = marketplace_matches[0]
+    if selected_installed is None:
+        project_roots = {
+            pathlib.Path(registration["installPath"]).resolve(strict=False)
+            for registration in result["registrations"]
+            if isinstance(registration, dict)
+            and registration.get("scope") == "project"
+            and isinstance(registration.get("projectPath"), str)
+            and pathlib.Path(registration["projectPath"]).resolve(strict=False)
+            == project.resolve(strict=False)
+            and isinstance(registration.get("installPath"), str)
+            and pathlib.Path(registration["installPath"]) in by_root
+        }
+        if len(project_roots) == 1:
+            selected_root = next(iter(project_roots))
+            selected_installed = next(
+                record
+                for record in installed_records
+                if pathlib.Path(record["root"]).resolve(strict=False) == selected_root
+            )
+    if selected_installed is None and len(installed_records) == 1:
         selected_installed = installed_records[0]
     result["installed_version"] = selected_installed["version"] if selected_installed else None
     result["installed_version_source"] = selected_installed["source"] if selected_installed else ""
-    if selected_installed:
-        result["installation"] = {"state": "present", "source": selected_installed["root"]}
+    if installed_records:
+        installation_sources = (
+            [selected_installed["root"]]
+            if selected_installed
+            else [record["root"] for record in installed_records]
+        )
+        result["installation"] = {
+            "state": "present",
+            "source": "; ".join(installation_sources),
+        }
     result["package_roots"] = [record["root"] for record in installed_records]
     if result.get("served_version") and location not in by_root:
         result["package_roots"].append(str(location))
@@ -473,6 +506,15 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             result,
             f"installed_plugins.json contains {len(result['registrations'])} Crew scope registrations",
             str(installed_path),
+        )
+    if len(installed_records) > 1:
+        result["status"] = "DEGRADED"
+        selection = selected_installed["root"] if selected_installed else "ambiguous"
+        _add_finding(
+            result,
+            f"Claude has {len(installed_records)} validated installed roots; selection is {selection}",
+            str(installed_path),
+            *(record["source"] for record in installed_records),
         )
     registration_versions = {
         _clean_version(str(registration.get("version"))) or str(registration.get("version"))

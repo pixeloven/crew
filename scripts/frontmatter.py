@@ -259,7 +259,11 @@ def _scalar(value: str) -> Any:
         raise ScalarParseError("unmatched flow-collection delimiter")
     if re.search(r":(?:[ \t]|$)", value):
         raise ScalarParseError("mapping separator in plain scalar")
-    if value.startswith(("- ", "? ", ": ", "%", "@", "`")):
+    if (
+        value in {"-", "?", ":"}
+        or value[0] in {",", ">", "|"}
+        or value.startswith(("- ", "? ", ": ", "%", "@", "`"))
+    ):
         raise ScalarParseError("invalid plain-scalar indicator")
     if value.lower() in {"null", "~"}:
         return None

@@ -508,6 +508,85 @@ class InstallationTruthTests(unittest.TestCase):
                 {item["source"] for item in mismatch["evidence"]},
             )
 
+    def test_claude_duplicate_roots_are_order_independent_and_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                home / ".claude/settings.json",
+                {"enabledPlugins": {"crew@crew": True}},
+            )
+            roots = []
+            for version in ("0.35.0", "0.36.0"):
+                root = home / f".claude/plugins/cache/crew/crew/{version}"
+                write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": version})
+                roots.append(root)
+            codex_root = home / ".codex/plugins/cache/crew/crew/0.35.0"
+            write_json(
+                codex_root / ".claude-plugin/plugin.json",
+                {"name": "crew", "version": "0.35.0"},
+            )
+            (codex_root / "skills").mkdir()
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nref = 'v0.35.0'\n"
+                "[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            installed_path = home / ".claude/plugins/installed_plugins.json"
+            registrations = [
+                {"scope": "user", "installPath": str(root), "version": root.name}
+                for root in roots
+            ]
+
+            def inspect_with(records: list[dict[str, str]]) -> dict[str, object]:
+                write_json(installed_path, {"plugins": {"crew@crew": records}})
+                return inspect_installations(project, home)
+
+            forward_report = inspect_with(registrations)
+            reverse_report = inspect_with(list(reversed(registrations)))
+            forward = forward_report["harnesses"]["claude"]
+            reverse = reverse_report["harnesses"]["claude"]
+            for result in (forward, reverse):
+                self.assertIsNone(result["installed_version"])
+                self.assertEqual("", result["installed_version_source"])
+                duplicate = next(
+                    finding
+                    for finding in result["findings"]
+                    if "validated installed roots" in finding["claim"]
+                )
+                self.assertIn("selection is ambiguous", duplicate["claim"])
+                self.assertEqual(
+                    {
+                        str(installed_path),
+                        *(str(root / ".claude-plugin/plugin.json") for root in roots),
+                    },
+                    {item["source"] for item in duplicate["evidence"]},
+                )
+            for report in (forward_report, reverse_report):
+                self.assertFalse(
+                    any(row["check"] == "cross-harness.version-skew" for row in report["checks"])
+                )
+            self.assertEqual(forward["installed_versions"], reverse["installed_versions"])
+            self.assertEqual(forward["installation"], reverse["installation"])
+
+            project_registration = [
+                registrations[0],
+                {
+                    **registrations[1],
+                    "scope": "project",
+                    "projectPath": str(project),
+                },
+            ]
+            selected = inspect_with(project_registration)["harnesses"]["claude"]
+            self.assertEqual("0.36.0", selected["installed_version"])
+            self.assertEqual(
+                str(roots[1] / ".claude-plugin/plugin.json"),
+                selected["installed_version_source"],
+            )
+
     def test_findings_retain_only_claim_supporting_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, home = self.make_install_tree(pathlib.Path(tmp), "v0.34.0")
