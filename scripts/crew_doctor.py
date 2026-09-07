@@ -27,6 +27,15 @@ CREW_REPO = "pixeloven/crew"
 FIRST_PI_ROLE_DISCOVERY_VERSION = (0, 35, 0)
 RECOMMENDED_LOCAL_VOCABULARY = ("litellm-access-map", "vault-ops")
 PROFILE_TAXONOMY = ("portable", "platform", "personas")
+EXPECTED_ROLE_NAMES = (
+    "implementer",
+    "investigator",
+    "lead",
+    "researcher",
+    "responder",
+    "reviewer",
+    "triage",
+)
 
 
 def _read_json(path: pathlib.Path, default: Any) -> Any:
@@ -732,7 +741,11 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, list[str]]:
         frontmatter, error = read_frontmatter(path)
         if error or not frontmatter:
             continue
-        slots = parse_inline_list(frontmatter.get("expects-local", ""))
+        raw_slots = frontmatter.get("expects-local", "")
+        if isinstance(raw_slots, list):
+            slots = [slot for slot in raw_slots if isinstance(slot, str)]
+        else:
+            slots = parse_inline_list(raw_slots) if isinstance(raw_slots, str) else []
         if slots:
             declared.update(slots)
             sources.append(str(path))
@@ -766,6 +779,28 @@ def inspect_role_postures(package_root: pathlib.Path) -> list[dict[str, Any]]:
             posture = effective_posture(str(role.get("writes")), harness)
             rows.append({"name": role.get("name"), **posture, "source": str(path)})
     return rows
+
+
+def _complete_role_posture(posture: dict[str, Any], harness: str, name: str) -> bool:
+    try:
+        from .role_contract import effective_posture
+    except ImportError:
+        from role_contract import effective_posture
+
+    writes = posture.get("writes")
+    if not isinstance(writes, str):
+        return False
+    try:
+        expected = effective_posture(writes, harness)
+    except ValueError:
+        return False
+    return (
+        posture.get("name") == name
+        and posture.get("harness") == harness
+        and all(posture.get(key) == value for key, value in expected.items())
+        and isinstance(posture.get("source"), str)
+        and bool(posture["source"])
+    )
 
 
 def compose_doctor_report(
@@ -827,39 +862,64 @@ def compose_doctor_report(
 
     for capability in capability_checks:
         state = capability["state"]
-        status = "OK" if state == "working" else "N/A" if state == "not tested" else "DEGRADED"
+        state_contract = {
+            "present": ("OK", "configuration or grant evidence is present", ""),
+            "working": ("OK", "probe evidence supports working", ""),
+            "unavailable": ("DEGRADED", "probe evidence supports unavailable", "resolve"),
+            "not tested": ("N/A", "", ""),
+        }
+        if state not in state_contract:
+            raise ValueError(f"unsupported capability state: {state}")
+        status, inference, action = state_contract[state]
         fact = f"capability {capability['name']} is {state}"
         checks.append(
             {
                 "check": f"capability.{capability['name']}",
                 "status": status,
                 "fact": fact,
-                "inference": "" if status == "N/A" else f"probe evidence supports {state}",
-                "recommendation": "" if status in {"OK", "N/A"} else f"Resolve {fact}",
+                "inference": inference,
+                "recommendation": f"Resolve {fact}" if action else "",
                 "untested": fact if status == "N/A" else "",
                 "evidence": [{"claim": fact, "source": capability.get("source", "")}],
             }
         )
 
+    posture_index: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for posture in role_postures:
-        name = str(posture.get("name") or "unknown")
-        harness = str(posture.get("harness") or "unknown")
-        ready = name != "unknown" and harness in {"claude", "pi"}
-        fact = (
-            f"{harness} role {name}: {posture.get('write_effect', 'posture unavailable')}; "
-            f"{posture.get('caveat', 'shell caveat unavailable')}"
-        )
-        checks.append(
-            {
-                "check": f"role.{harness}.{name}",
-                "status": "OK" if ready else "DEGRADED",
-                "fact": fact,
-                "inference": "effective tool posture is reportable" if ready else "role readiness is incomplete",
-                "recommendation": "" if ready else f"Resolve {harness} role {name}",
-                "untested": "",
-                "evidence": [{"claim": fact, "source": posture.get("source", "")}],
-            }
-        )
+        key = (str(posture.get("harness") or ""), str(posture.get("name") or ""))
+        posture_index.setdefault(key, []).append(posture)
+    for harness in ("claude", "pi"):
+        for name in EXPECTED_ROLE_NAMES:
+            matches = posture_index.get((harness, name), [])
+            ready = len(matches) == 1 and _complete_role_posture(matches[0], harness, name)
+            if ready:
+                posture = matches[0]
+                fact = f"{harness} role {name}: {posture['write_effect']}; {posture['caveat']}"
+                inference = "effective tool posture matches the rendered role contract"
+            elif not matches:
+                fact = f"{harness} role {name} is missing"
+                inference = "the expected seven-role fleet is incomplete"
+            else:
+                fact = f"{harness} role {name} posture evidence is incomplete or duplicated"
+                inference = "role readiness cannot be established"
+            sources = [
+                str(posture.get("source", ""))
+                for posture in matches
+                if posture.get("source")
+            ]
+            checks.append(
+                {
+                    "check": f"role.{harness}.{name}",
+                    "status": "OK" if ready else "DEGRADED",
+                    "fact": fact,
+                    "inference": inference,
+                    "recommendation": "" if ready else f"Resolve {harness} role {name}",
+                    "untested": "",
+                    "evidence": [
+                        {"claim": fact, "source": source} for source in dict.fromkeys(sources)
+                    ] or [{"claim": fact, "source": ""}],
+                }
+            )
 
     working = [item["name"] for item in capability_checks if item["state"] == "working"]
     report["profile"] = profile_for(working, persona_evidence)

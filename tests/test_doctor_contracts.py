@@ -443,6 +443,20 @@ class DerivedContractTests(unittest.TestCase):
         self.assertIn("litellm-access-map", contract["recommended_vocabulary"])
         self.assertIn("vault-ops", contract["recommended_vocabulary"])
 
+    def test_block_sequence_local_slots_are_derived(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            skill = root / "skills/example/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: example\ndescription: Example.\nexpects-local:\n"
+                "  - topology\n  - protected-seams\n---\n",
+                encoding="utf-8",
+            )
+            contract = declared_local_slots(root)
+            self.assertEqual(["protected-seams", "topology"], contract["declared"])
+            self.assertEqual([str(skill)], contract["sources"])
+
     def test_m7_profile_taxonomy_has_deterministic_persona_precedence(self) -> None:
         self.assertEqual("portable", profile_for([], persona_evidence=[]))
         self.assertEqual("platform", profile_for(["github"], persona_evidence=[]))
@@ -492,6 +506,63 @@ class DerivedContractTests(unittest.TestCase):
             rendered = render_doctor_report(report)
             self.assertEqual(1, rendered.count("Profile: personas"))
             self.assertEqual(1, rendered.count("Top action:"))
+
+    def test_capability_states_have_distinct_report_meanings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            report = compose_doctor_report(
+                inspect_installations(base / "project", base / "home"),
+                runtime_comparisons=[],
+                local_slots=declared_local_slots(ROOT),
+                capability_checks=[
+                    {"name": "configured", "state": "present", "source": "config"},
+                    {"name": "proven", "state": "working", "source": "free probe"},
+                    {"name": "failed", "state": "unavailable", "source": "free probe"},
+                    {"name": "skipped", "state": "not tested", "source": "approval boundary"},
+                ],
+                role_postures=inspect_role_postures(ROOT),
+                persona_evidence=[],
+            )
+            rows = {
+                row["check"].removeprefix("capability."): row
+                for row in report["checks"]
+                if row["check"].startswith("capability.")
+            }
+            self.assertEqual(("OK", ""), (rows["configured"]["status"], rows["configured"]["recommendation"]))
+            self.assertEqual(("OK", ""), (rows["proven"]["status"], rows["proven"]["recommendation"]))
+            self.assertEqual("DEGRADED", rows["failed"]["status"])
+            self.assertTrue(rows["failed"]["recommendation"])
+            self.assertEqual(("N/A", rows["skipped"]["fact"]), (rows["skipped"]["status"], rows["skipped"]["untested"]))
+            self.assertEqual("platform", report["profile"])
+
+    def test_role_readiness_requires_complete_expected_fleets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+
+            def role_rows(postures: list[dict[str, object]]) -> list[dict[str, object]]:
+                report = compose_doctor_report(
+                    inspect_installations(base / "project", base / "home"),
+                    runtime_comparisons=[],
+                    local_slots=declared_local_slots(ROOT),
+                    capability_checks=[],
+                    role_postures=postures,
+                    persona_evidence=[],
+                )
+                return [row for row in report["checks"] if row["check"].startswith("role.")]
+
+            complete = role_rows(inspect_role_postures(ROOT))
+            self.assertEqual(14, len(complete))
+            self.assertEqual({"OK"}, {row["status"] for row in complete})
+
+            missing = role_rows([])
+            self.assertEqual(14, len(missing))
+            self.assertEqual({"DEGRADED"}, {row["status"] for row in missing})
+            self.assertTrue(all("missing" in row["fact"] for row in missing))
+
+            incomplete = role_rows([{"name": "lead", "harness": "claude"}])
+            lead = next(row for row in incomplete if row["check"] == "role.claude.lead")
+            self.assertEqual("DEGRADED", lead["status"])
+            self.assertIn("incomplete", lead["fact"])
 
     def test_m8_validator_command_uses_package_root_not_consumer_scripts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

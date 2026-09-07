@@ -61,8 +61,14 @@ class LayoutContractTests(unittest.TestCase):
             ("yes", "Valid description."),
             ("42", "Valid description."),
             ("3.14", "Valid description."),
+            ("12:34", "Valid description."),
+            ("2026-09-07", "Valid description."),
+            ("2026-09-07T12:30:00Z", "Valid description."),
+            ("[librarian]", "Valid description."),
+            ("{role: librarian}", "Valid description."),
             ("!role librarian", "Valid description."),
             ("librarian", "false"),
+            ("librarian", "2026-09-07"),
         )
         for name, description in cases:
             with self.subTest(name=name, description=description), tempfile.TemporaryDirectory() as tmp:

@@ -21,6 +21,10 @@ FLOAT = re.compile(
     r"^[+-]?(?:(?:[0-9][0-9_]*)?\.[0-9_]+|[0-9][0-9_]*(?:\.[0-9_]*)?[eE][+-]?[0-9]+|\.inf|\.nan)$",
     re.IGNORECASE,
 )
+TIMESTAMP = re.compile(
+    r"^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?)?$"
+)
+SEXAGESIMAL = re.compile(r"^[+-]?[0-9][0-9_]*(?::[0-5]?[0-9])+$")
 
 
 def _scalar(value: str) -> Any:
@@ -51,13 +55,23 @@ def _scalar(value: str) -> Any:
         except (SyntaxError, ValueError):
             return value[1:-1]
         return parsed if isinstance(parsed, str) else value
+    if value.startswith("[") and value.endswith("]"):
+        return [_scalar(item.strip()) for item in value[1:-1].split(",") if item.strip()]
+    if value.startswith("{") and value.endswith("}"):
+        return {}
     if value.lower() in {"null", "~"}:
         return None
     if value.lower() in {"true", "false", "yes", "no", "on", "off"}:
         return value.lower() in {"true", "yes", "on"}
-    if INTEGER.fullmatch(value) or FLOAT.fullmatch(value):
+    if (
+        INTEGER.fullmatch(value)
+        or FLOAT.fullmatch(value)
+        or SEXAGESIMAL.fullmatch(value)
+        or re.fullmatch(r"[+-]?0[0-7_]+", value)
+        or TIMESTAMP.fullmatch(value)
+    ):
         return 0
-    if value.startswith("!"):
+    if value.startswith(("!", "&", "*")):
         return None
     return value
 
@@ -83,6 +97,21 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
             separator = " " if raw.startswith(">") else "\n"
             values[key] = separator.join(part for part in continuation if part)
             continue
+        if not raw:
+            sequence: list[Any] = []
+            cursor = index + 1
+            while cursor < len(lines) and (not lines[cursor] or lines[cursor][0].isspace()):
+                stripped = lines[cursor].strip()
+                if stripped:
+                    if not stripped.startswith("- "):
+                        sequence = []
+                        break
+                    sequence.append(_scalar(stripped[2:]))
+                cursor += 1
+            if sequence:
+                values[key] = sequence
+                index = cursor
+                continue
         values[key] = _scalar(raw)
         index += 1
     return values
@@ -102,11 +131,7 @@ def read_frontmatter(path: pathlib.Path) -> tuple[dict[str, Any] | None, str | N
 
 def parse_inline_list(value: str) -> list[str]:
     """Parse Crew's schema-v2 inline list form (`[one, two]`)."""
-    value = value.strip()
-    if not (value.startswith("[") and value.endswith("]")):
+    parsed = _scalar(value)
+    if not isinstance(parsed, list):
         return []
-    return [
-        parsed
-        for item in value[1:-1].split(",")
-        if item.strip() and isinstance((parsed := _scalar(item.strip())), str)
-    ]
+    return [item for item in parsed if isinstance(item, str)]
