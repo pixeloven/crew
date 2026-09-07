@@ -5,7 +5,7 @@
 In `.pi/settings.json` — pin the tag for reproducible builds:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.26.0"] }
+{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.33.0"] }
 ```
 
 Bump the pin to update; the release tag list is the changelog.
@@ -32,6 +32,6 @@ The project's own additions live in `.pi/skills/` and `.pi/agents/` — pi walks
 
 ## Notes for autonomous workers
 
-- Workers run with the pi frontmatter's `tools:` restrictions (e.g. Reviewer/Investigator are read-mostly by construction).
-- The Implementer variant assumes a workflow-managed push (it does not run `git push`/`gh pr create` itself) — if your runtime differs, shadow `role-implementer.md` in `.pi/agents/` with an adjusted operating-context section.
+- Workers run with the pi frontmatter's `tools:` allowlist, which mirrors the Claude Code denylist rendered from the same `role.yml`. Read-only roles get no `write`/`edit` — but they do get `bash`, so the allowlist makes writing *inconvenient*, not impossible. The prose in the role body is the real constraint; enforce the rest with pi's permission system if your runtime needs a hard boundary.
+- Implementer ships assuming the **interactive** case: it creates branches, commits, pushes and opens PRs itself. If you dispatch it from an autonomous runtime that prepares the workspace and pushes on its behalf, shadow `implementer.md` in `.pi/agents/` with your runtime's operating context — that contract is a property of your deployment, so the foundation no longer guesses at it.
 - Capability availability (KB, search, image gen, …) is granted by the worker's LiteLLM virtual key, not by installing skills — see the project's gateway-routing local skill. The `doctor` skill reports what a session can actually reach.

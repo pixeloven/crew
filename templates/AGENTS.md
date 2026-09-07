@@ -26,14 +26,14 @@ This file drives **how agents behave** on this project: autonomy, delegation, ro
 
 ## Autonomy & posture
 
-Tool use is pre-approved (`defaultMode: dontAsk` in `.claude/settings.json` — a deliberate choice made during onboarding; see the Claude Code quickstart). **Act, then report** — never pause to ask before:
+Tool use is pre-approved. **Act, then report** — never pause to ask before:
 
 - **Loading skills and slash commands.** Load a skill proactively the moment the task touches its domain — a skill read is cheap; re-deriving conventions costs review cycles.
 - **Calling MCP tools** — the platform's federated surface and connected services.
 - **Running pre-approved CLIs**, including compound commands (pipes, `&&`, `;`, command substitution, env-var prefixes).
 - **Dispatching subagents** per the routing rules below. Delegation is the default for multi-step work, not an escalation.
 
-> **▸ Fill for your project:** your *ask list* — the genuinely destructive operations that should still prompt (e.g. `terraform destroy`, namespace deletion, force-push). Everything not on it: act, then report.
+> **▸ Fill for your project:** where that pre-approval is configured on each harness you run, and your *ask list* — the genuinely destructive operations that should still prompt (e.g. `terraform destroy`, namespace deletion, force-push). Everything not on it: act, then report. This posture is a deliberate choice, and it has to be set somewhere real or it fights the harness's own prompting: on Claude Code that is `permissions.defaultMode` in `.claude/settings.json` (see its quickstart); other harnesses have their own permission surface. Naming yours here is what keeps the section honest.
 
 ## Subagent delegation & routing
 
@@ -51,7 +51,7 @@ Delegate by work domain, without asking first. Reach for delegation by default o
 | Reactive diagnosis, health sweeps, incidents | `investigator` | **trigger** |
 | Fast read + draft (answer a question / draft a reply) | `responder` | **trigger** |
 
-**dispatch** = you invoke it from this session. **trigger** = it should run on an event or schedule with no human in the loop, which needs infrastructure you deploy — see `activation-contracts` and `templates/activation/`. A trigger-model role you haven't wired only runs when someone remembers it exists, and its work ends up absorbed into this session at a much higher cost.
+**dispatch** = you invoke it from this session. **trigger** = it should run on an event or schedule with no human in the loop, which needs infrastructure you deploy — see `activation-contracts` and `templates/activation/`. A trigger-model role you haven't wired only runs when someone remembers it exists, and its work ends up absorbed into this session — which costs you the context isolation you would have got from dispatching it.
 
 ### Quality gate (implementation work)
 
@@ -63,7 +63,9 @@ Delegate by work domain, without asking first. Reach for delegation by default o
 
 ### Isolation
 
-Subagents write directly to the current working tree. Do **not** use `isolation: "worktree"` for in-repo implementation work — only for genuinely parallel independent branches.
+By default a dispatched worker writes directly to the current working tree, which is what you want for in-repo work: the changes are there when it returns. Reach for your harness's isolation primitive only for genuinely parallel, independent branches — and read `orchestration-patterns` first, because each harness spells it differently and at least one defaults its branch base somewhere surprising.
+
+> **▸ Fill for your project:** the isolation primitive your harness offers and when your project uses it, if it differs from the above.
 
 ## Planning model
 
@@ -134,7 +136,7 @@ Every role keeps its core value on a bare repo — `reviewer` reviews the diff, 
 
 ## Skills — how agents find them
 
-Your harness lists every installed skill, with its description, before the first turn — foundation skills and this repo's own, together. **That listing is the discovery mechanism**, so there is no index to write or maintain here: put a skill where the harness looks and agents can find it. Load one the moment the work touches its domain; loading is cheap, re-deriving conventions is not. Where a local skill shares a name with a foundation one, the local copy wins.
+Your harness lists every installed skill, with its description, before the first turn — foundation skills and this repo's own, together. **That listing is the discovery mechanism**, so there is no index to write or maintain here: put a skill where the harness looks and agents can find it. Load one the moment the work touches its domain; loading is cheap, re-deriving conventions is not. Where a local skill shares a name with a foundation one, what happens depends on the harness: in a flat namespace (pi) the local copy shadows the foundation's outright; Claude Code namespaces the plugin copy as `plugin:skill`, so both stay visible and you pick. Don't rely on shadowing to disable a foundation skill.
 
 The concern → local skill mapping under *Applying platform skills to local specifics* above is the only routing worth writing down, because it encodes a judgement the descriptions can't make for you. Don't restate the catalogue here — it goes stale the day someone adds a skill.
 

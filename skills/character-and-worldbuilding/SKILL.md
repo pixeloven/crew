@@ -112,7 +112,7 @@ First-pass drafts often reach for abstracted essence-language — "she is a deep
 
 Adding rigid voice rules to the system prompt (lowercase only, no em-dashes, casual register, etc.) can backfire on specific finetunes — a ~24B local model interpreted strict rules as cold/probing, and the agent ended up telling a user *"you're deflecting"*. The fix wasn't more rules; it was removing them and letting the model's natural shaping find the register.
 
-**Don't fight the base model with prompt stacks. Pick the right model, accept the model, or work with what the model does naturally.**
+**Don't fight the base model with prompt stacks.** Where the deployment lets an operator choose, this is a model-selection problem before it is a prompt problem — raise it as one rather than stacking more rules. Where it doesn't, work with what the model does naturally and drop the rules that fight it.
 
 ### Premature deep-trust register
 

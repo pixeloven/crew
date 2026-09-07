@@ -16,9 +16,7 @@ TOKEN = re.compile(r"`([a-z0-9]+(?:-[a-z0-9]+)+)`")
 # Backticked kebab-case tokens that are not skill references (CLI names,
 # workflow step names, etc.). Extend deliberately — every entry here is a
 # token the checker will never flag again.
-NON_SKILL = {
-    "report-failure",  # Argo Workflow step name in the pi Implementer context
-}
+NON_SKILL = set()
 
 skills = {p.name for p in (ROOT / "skills").iterdir() if p.is_dir()}
 expected_local = {

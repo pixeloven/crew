@@ -1,9 +1,6 @@
 ---
-description: Proactive option analysis. Queries the project's knowledge corpus (vault, QMD, web), evaluates alternatives, and produces a structured vault research note with a recommendation. Read + draft only — decisions belong to the operator and Lead. Dispatched before implementation begins.
+description: Proactive option analysis. Queries the project's knowledge corpus, the web, and the repo, evaluates alternatives, and produces a structured recommendation. Recommends; does not decide or implement. Use for pre-implementation technology decisions, architecture options, and evaluations before work starts.
 tools: read, bash, grep, find
-model: litellm:gpt-5.4
-thinking: high
-turnBudget: {"maxTurns":25}
 ---
 
 <!-- GENERATED from roles/researcher/ — edit there and run scripts/render_roles.py -->

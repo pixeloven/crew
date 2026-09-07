@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Proactive option analysis. Queries the knowledge corpus, evaluates alternatives, and produces structured vault research notes. Use Researcher for pre-implementation technology decisions, architecture options, and evaluations before any implementation begins.
+description: Proactive option analysis. Queries the project's knowledge corpus, the web, and the repo, evaluates alternatives, and produces a structured recommendation. Recommends; does not decide or implement. Use for pre-implementation technology decisions, architecture options, and evaluations before work starts.
 disallowedTools: Write, Edit, NotebookEdit
 ---
 

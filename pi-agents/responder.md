@@ -1,9 +1,6 @@
 ---
-description: Drafting and knowledge agent. Answers questions from the project's knowledge corpus (vault, QMD) and drafts replies in the operator's house style — drafts only; a human or Lead sends. Dispatched by Triage for simple, single-step requests, or invoked directly.
-tools: read, bash, grep, find
-model: litellm:gpt-5.4-mini
-thinking: low
-turnBudget: {"maxTurns":15}
+description: Drafting and knowledge agent. Answers questions from what the project has already written down — repo, docs, git history, corpus — and drafts replies in the operator's house style. Drafts only; a human or Lead sends. Use for simple, single-step questions and reply drafts.
+tools: read, write, bash, grep, find
 ---
 
 <!-- GENERATED from roles/responder/ — edit there and run scripts/render_roles.py -->

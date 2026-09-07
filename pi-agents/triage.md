@@ -1,9 +1,6 @@
 ---
-description: Intake and routing agent. Filters signal from noise, structures incoming requests, applies domain labels, routes to the right handler. Long-running listener or per-event.
+description: Lightweight intake filter. Classifies incoming issues and PRs by domain and work type, applies labels, and routes to the right handler. Makes no execution decisions. Use to process incoming work without engaging Lead or more expensive roles.
 tools: read, bash, grep, find
-model: litellm:gpt-5.4-nano
-thinking: low
-turnBudget: {"maxTurns":10}
 ---
 
 <!-- GENERATED from roles/triage/ — edit there and run scripts/render_roles.py -->

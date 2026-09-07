@@ -1,6 +1,6 @@
 ---
 name: triage
-description: Lightweight intake filter. Classifies new GitHub issues and PRs by domain and work type, applies labels, and routes to the right agent. Use Triage to process incoming work without engaging Lead or expensive agents.
+description: Lightweight intake filter. Classifies incoming issues and PRs by domain and work type, applies labels, and routes to the right handler. Makes no execution decisions. Use to process incoming work without engaging Lead or more expensive roles.
 disallowedTools: Write, Edit, NotebookEdit
 ---
 
