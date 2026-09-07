@@ -902,6 +902,49 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("unavailable", pi["enablement"]["state"])
             self.assertEqual("DEGRADED", pi["status"])
 
+    def test_pi_packages_requires_a_string_sequence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            settings = project / ".pi/settings.json"
+            write_json(
+                settings,
+                {"packages": {"git:github.com/pixeloven/crew@v0.36.0": False}},
+            )
+            root = home / ".pi/agent/git/github.com/pixeloven/crew"
+            write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+            self.assertEqual("unavailable", pi["enablement"]["state"])
+            self.assertEqual("DEGRADED", pi["status"])
+            read = next(item for item in pi["configuration_reads"] if item["source"] == str(settings))
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("packages must be a string sequence", read["detail"])
+
+    def test_claude_duplicate_enablement_scopes_use_project_precedence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            write_json(
+                project / ".claude/settings.json",
+                {"enabledPlugins": {"crew@crew": True}},
+            )
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual("project", claude["enabled_scope"])
+            self.assertEqual(str(project / ".claude/settings.json"), claude["enablement"]["source"])
+            self.assertEqual(["project", "user"], [row["scope"] for row in claude["enabled_scopes"]])
+            duplicate = next(
+                item for item in claude["findings"] if "multiple Claude settings scopes" in item["claim"]
+            )
+            self.assertEqual(
+                {str(project / ".claude/settings.json"), str(home / ".claude/settings.json")},
+                {item["source"] for item in duplicate["evidence"]},
+            )
+
     def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -1190,6 +1233,32 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertNotIn("pi", result)
         self.assertEqual("DEGRADED", result["status"])
 
+    def test_generic_foundation_source_does_not_establish_crew_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            runtime = {
+                "codex": {
+                    "harness": "codex",
+                    "source": "captured catalogue",
+                    "skills": [
+                        {
+                            "name": "other:doctor",
+                            "source": "foundation",
+                            "description": "Another foundation's doctor.",
+                            "path": "/unrelated/foundation/skills/doctor/SKILL.md",
+                        }
+                    ],
+                }
+            }
+
+            codex = inspect_installations(
+                base / "project",
+                base / "home",
+                runtime,
+            )["harnesses"]["codex"]
+
+            self.assertEqual("omitted", codex["runtime"]["state"])
+
     def test_raw_codex_prompt_parser_reproduces_description_truncation(self) -> None:
         fixture = parse_codex_prompt_capture(FIXTURES / "runtime/codex-prompt-raw.json")
         result = compare_runtime_catalog(self.disk[:-1], fixture)
@@ -1477,6 +1546,61 @@ class DerivedContractTests(unittest.TestCase):
         self.assertTrue(lead["denied_tools"])
         self.assertIn("create and overwrite", lead["write_effect"])
         self.assertTrue(all("shell access" in row["caveat"] for row in rows))
+
+    def test_role_readiness_rejects_missing_and_corrupt_rendered_roles(self) -> None:
+        import shutil
+
+        with tempfile.TemporaryDirectory() as tmp:
+            package = pathlib.Path(tmp) / "package"
+            shutil.copytree(ROOT / "agents", package / "agents")
+            shutil.copytree(ROOT / "pi-agents", package / "pi-agents")
+            (package / "agents/reviewer.md").unlink()
+            (package / "pi-agents/reviewer.md").write_text(
+                "---\nname: wrong\ndescription: Corrupt fixture.\nmodel: fixed\ntools: read\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(package)
+            claude = next(
+                row for row in rows if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+            pi = next(row for row in rows if row["name"] == "reviewer" and row["harness"] == "pi")
+            self.assertFalse(claude["role_valid"])
+            self.assertIn("unreadable", " ".join(claude["validation_errors"]))
+            self.assertFalse(pi["role_valid"])
+            self.assertIn("forbidden runtime keys", " ".join(pi["validation_errors"]))
+
+            report = compose_doctor_report(
+                inspect_installations(package, pathlib.Path(tmp) / "home"),
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=rows,
+                persona_evidence=[],
+            )
+            role_checks = {
+                row["check"]: row for row in report["checks"] if row["check"].startswith("role.")
+            }
+            self.assertEqual("DEGRADED", role_checks["role.claude.reviewer"]["status"])
+            self.assertEqual("DEGRADED", role_checks["role.pi.reviewer"]["status"])
+
+    def test_consumer_role_overlay_is_the_resolved_posture_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".claude/agents/reviewer.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: reviewer\ndescription: Consumer override.\nmodel: fixed\n"
+                "disallowedTools: Write, Edit, NotebookEdit\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row for row in rows if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+            self.assertEqual(str(overlay), reviewer["source"])
+            self.assertFalse(reviewer["role_valid"])
+            self.assertIn("forbidden runtime keys", " ".join(reviewer["validation_errors"]))
 
     def test_validator_assets_are_in_the_dry_run_npm_tarball(self) -> None:
         import subprocess

@@ -151,7 +151,11 @@ def _add_finding(result: dict[str, Any], claim: str, *sources: str) -> None:
     )
 
 
-def _record_runtime(result: dict[str, Any], runtime: dict[str, Any] | None) -> None:
+def _record_runtime(
+    result: dict[str, Any],
+    runtime: dict[str, Any] | None,
+    validated_roots: list[pathlib.Path],
+) -> None:
     """Record only evidence supplied by this harness's capture."""
     if runtime is None or runtime.get("tested") is False:
         return
@@ -174,8 +178,12 @@ def _record_runtime(result: dict[str, Any], runtime: dict[str, Any] | None) -> N
                 and (
                     str(entry.get("name", "")).startswith("crew:")
                     or entry.get("namespace") == "crew"
-                    or entry.get("source") == "foundation"
-                    or re.search(r"(?:pixeloven/crew|/crew/crew/)", str(entry.get("path", "")))
+                    or entry.get("source") in {"crew", "pixeloven/crew"}
+                    or any(
+                        _path_within(pathlib.Path(str(entry.get("path", ""))), root)
+                        for root in validated_roots
+                        if entry.get("path")
+                    )
                 )
             ]
             if not crew_entries:
@@ -446,15 +454,23 @@ def _has_config_read_failure(result: dict[str, Any], label_prefix: str = "") -> 
 
 def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
-    _record_runtime(result, runtime)
     settings_paths = [project / ".pi/settings.json", home / ".pi/settings.json"]
     settings_paths.extend(sorted((home / ".pi").glob("*/settings.json")))
     registrations: list[dict[str, str | None]] = []
     for settings_path in dict.fromkeys(settings_paths):
         settings = _record_config_read(result, "Pi settings configuration", _read_json(settings_path, {}))
-        packages = settings.get("packages", []) if isinstance(settings, dict) else []
+        if not isinstance(settings, dict):
+            _mark_config_malformed(result, settings_path, "settings must be a mapping")
+            settings = {}
+        packages = settings.get("packages", [])
+        if not isinstance(packages, list):
+            _mark_config_malformed(result, settings_path, "packages must be a string sequence")
+            packages = []
         for item in packages:
-            if isinstance(item, str) and PI_CREW_PACKAGE.fullmatch(item):
+            if not isinstance(item, str):
+                _mark_config_malformed(result, settings_path, "packages entries must be strings")
+                continue
+            if PI_CREW_PACKAGE.fullmatch(item):
                 registrations.append(
                     {"settings": str(settings_path), "package": item, "version": _clean_version(item)}
                 )
@@ -465,6 +481,11 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         version = _record_manifest_read(result, _manifest_version(checkout))
         if version:
             resolved.append({"root": str(checkout), "version": version})
+    _record_runtime(
+        result,
+        runtime,
+        [pathlib.Path(item["root"]) for item in resolved],
+    )
     result["resolved_installations"] = resolved
     primary = next(
         (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
@@ -565,8 +586,8 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
 
 def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
-    _record_runtime(result, runtime)
     settings_records: list[dict[str, str]] = []
+    enabled_records: list[dict[str, str]] = []
     for scope, settings_path in (
         ("project", project / ".claude/settings.json"),
         ("user", home / ".claude/settings.json"),
@@ -594,9 +615,19 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         if "crew" in marketplaces or "crew@crew" in enabled:
             settings_records.append({"scope": scope, "path": str(settings_path)})
         if enabled.get("crew@crew") is True:
-            result["enablement"] = {"state": "present", "source": str(settings_path)}
-            result["enabled_scope"] = scope
+            enabled_records.append({"scope": scope, "path": str(settings_path)})
     result["settings_records"] = settings_records
+    result["enabled_scopes"] = enabled_records
+    if enabled_records:
+        selected_enablement = next(
+            (record for record in enabled_records if record["scope"] == "project"),
+            enabled_records[0],
+        )
+        result["enablement"] = {
+            "state": "present",
+            "source": selected_enablement["path"],
+        }
+        result["enabled_scope"] = selected_enablement["scope"]
 
     registry_path = home / ".claude/plugins/known_marketplaces.json"
     registry = _record_config_read(
@@ -689,6 +720,10 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             set(installed_record["registration_versions"])
         )
     result["installed_versions"] = installed_records
+    validated_roots = [pathlib.Path(record["root"]) for record in installed_records]
+    if result["served_version"]:
+        validated_roots.append(location)
+    _record_runtime(result, runtime, validated_roots)
     runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
     runtime_matches = [
         record
@@ -745,6 +780,13 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if result["installation"]["state"] != "present":
         return result
     result["status"] = "OK" if result["enablement"]["state"] == "present" else "DEGRADED"
+    if len(enabled_records) > 1:
+        result["status"] = "DEGRADED"
+        _add_finding(
+            result,
+            "Crew is enabled in multiple Claude settings scopes; project precedence selected",
+            *(record["path"] for record in enabled_records),
+        )
     if (
         result["enablement"]["state"] != "present"
         and not _has_config_read_failure(result, "Claude project settings")
@@ -834,7 +876,6 @@ def _path_within(path: pathlib.Path, root: pathlib.Path) -> bool:
 
 def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
-    _record_runtime(result, runtime)
     config_path = home / ".codex/config.toml"
     config = _record_config_read(result, "Codex plugin configuration", _read_toml(config_path))
     marketplaces = config.get("marketplaces", {}) if isinstance(config, dict) else {}
@@ -853,6 +894,12 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     valid_cache_roots = [
         root for root in cache_roots if manifest_versions[root] and (root / "skills").is_dir()
     ]
+    vendored_catalogues = [
+        catalogue
+        for catalogue in (project / ".agents/skills", home / ".agents/skills")
+        if _is_complete_crew_catalogue(catalogue)
+    ]
+    _record_runtime(result, runtime, [*valid_cache_roots, *vendored_catalogues])
     runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
     resolved_root = next(
         (root for root in valid_cache_roots if any(_path_within(path, root) for path in runtime_paths)),
@@ -886,11 +933,12 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
                 "state": "present",
                 "source": "; ".join(str(root / "skills") for root in valid_cache_roots),
             }
-        for catalogue in (project / ".agents/skills", home / ".agents/skills"):
-            if _is_complete_crew_catalogue(catalogue):
-                result["installation"] = {"state": "present", "source": str(catalogue)}
-                result["package_roots"].append(str(catalogue))
-                break
+        if vendored_catalogues:
+            result["installation"] = {
+                "state": "present",
+                "source": str(vendored_catalogues[0]),
+            }
+            result["package_roots"].append(str(vendored_catalogues[0]))
     if isinstance(crew_plugin, dict) and crew_plugin.get("enabled") is True:
         result["enablement"] = {"state": "present", "source": str(config_path)}
     if runtime is not None and runtime.get("tested") is not False:
@@ -1275,19 +1323,97 @@ def profile_for(working_capabilities: list[str], persona_evidence: list[str]) ->
     return "portable"
 
 
-def inspect_role_postures(package_root: pathlib.Path) -> list[dict[str, Any]]:
-    """Return rendered posture evidence for every neutral Crew role."""
-    try:
-        from .role_contract import effective_posture
-    except ImportError:  # Direct script execution.
-        from role_contract import effective_posture
+def _role_string_list(value: Any) -> list[str] | None:
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return value
+    return None
 
+
+def inspect_role_postures(
+    package_root: pathlib.Path,
+    consumer_root: pathlib.Path | None = None,
+) -> list[dict[str, Any]]:
+    """Return effective posture evidence from resolved harness role files."""
+    try:
+        from .role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES, effective_posture
+    except ImportError:
+        from role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES, effective_posture
+
+    package_root = pathlib.Path(package_root)
+    consumer_root = pathlib.Path(consumer_root) if consumer_root else package_root
     rows: list[dict[str, Any]] = []
-    for path in sorted(pathlib.Path(package_root).glob("roles/*/role.yml")):
-        role = parse_simple_mapping(path.read_text(encoding="utf-8"))
-        for harness in ("claude", "pi"):
-            posture = effective_posture(str(role.get("writes")), harness)
-            rows.append({"name": role.get("name"), **posture, "source": str(path)})
+    for name in EXPECTED_ROLE_NAMES:
+        for harness, distributed, overlay in (
+            ("claude", package_root / "agents", consumer_root / ".claude/agents"),
+            ("pi", package_root / "pi-agents", consumer_root / ".pi/agents"),
+        ):
+            overlay_path = overlay / f"{name}.md"
+            path = overlay_path if overlay_path.is_file() else distributed / f"{name}.md"
+            errors: list[str] = []
+            try:
+                metadata, error = read_frontmatter(path)
+            except (OSError, UnicodeDecodeError) as exception:
+                metadata, error = None, f"role file is unreadable: {exception}"
+            if error:
+                errors.append(error)
+            if not isinstance(metadata, dict):
+                metadata = {}
+            if metadata.get("name") != name:
+                errors.append(f"name must be {name}")
+            if not isinstance(metadata.get("description"), str) or not metadata["description"].strip():
+                errors.append("description must be a non-empty string")
+            forbidden = sorted(key for key in metadata if key in FORBIDDEN_RUNTIME_KEYS)
+            if forbidden:
+                errors.append(f"forbidden runtime keys: {', '.join(forbidden)}")
+
+            writes: str | None = None
+            if harness == "claude":
+                denied = _role_string_list(metadata.get("disallowedTools", ""))
+                if denied is None:
+                    errors.append("disallowedTools must be a string sequence")
+                else:
+                    matches = [
+                        mode
+                        for mode, contract in WRITE_POSTURES.items()
+                        if set(denied) == set(contract["claude"]["denied"])
+                    ]
+                    writes = matches[0] if len(matches) == 1 else None
+            else:
+                allowed = _role_string_list(metadata.get("tools"))
+                if allowed is None:
+                    errors.append("tools must be a string sequence")
+                else:
+                    effective_allowed = set(allowed) - {"subagent"}
+                    matches = [
+                        mode
+                        for mode, contract in WRITE_POSTURES.items()
+                        if effective_allowed == set(contract["pi"]["allowed"])
+                    ]
+                    writes = matches[0] if len(matches) == 1 else None
+            if writes is None and not any("string sequence" in item for item in errors):
+                errors.append("tool posture does not match a supported write posture")
+
+            if errors:
+                rows.append(
+                    {
+                        "name": name,
+                        "harness": harness,
+                        "source": str(path),
+                        "role_valid": False,
+                        "validation_errors": errors,
+                    }
+                )
+            else:
+                rows.append(
+                    {
+                        "name": name,
+                        **effective_posture(writes, harness),
+                        "source": str(path),
+                        "role_valid": True,
+                    }
+                )
     return rows
 
 
@@ -1305,7 +1431,8 @@ def _complete_role_posture(posture: dict[str, Any], harness: str, name: str) -> 
     except ValueError:
         return False
     return (
-        posture.get("name") == name
+        posture.get("role_valid") is True
+        and posture.get("name") == name
         and posture.get("harness") == harness
         and all(posture.get(key) == value for key, value in expected.items())
         and isinstance(posture.get("source"), str)
