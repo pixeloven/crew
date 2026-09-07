@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """Render agents/ and pi-agents/ from the single-source roles/ tree.
 
-Each roles/<role>/ contains:
+Each roles/<role>/ contains exactly two files:
   role.yml            ONE harness-neutral definition (name, description, writes, dispatch)
-  body.md             shared body; may contain one '{{RUNTIME_CONTEXT}}' marker line
-  claude-context.md   optional per-runtime replacement for the marker
-  pi-context.md       optional per-runtime replacement for the marker
+  body.md             ONE shared body — the same prose reaches every harness
 
-Both harnesses get the same name, the same description, and the same capability
-posture. The only thing that differs is dialect: Claude Code expresses capability
-as a denylist (`disallowedTools`), pi as an allowlist (`tools`). That translation
-lives HERE and nowhere else, so the two trees cannot drift apart by editing.
+Both harnesses get the same name, description, body and capability posture. The
+only thing that differs is dialect: Claude Code expresses capability as a denylist
+(`disallowedTools`), pi as an allowlist (`tools`). That translation lives HERE and
+nowhere else, so the two trees cannot drift apart by editing. A consumer whose
+runtime needs a role to behave differently shadows the rendered agent in its own
+overlay — per-harness prose does not belong in this repo, because the differences
+that actually matter are per-DEPLOYMENT, not per-harness.
 
 Deliberately absent: model, reasoning/thinking level, and turn budget. Both
 harnesses support all three (Claude: `model` / `effort` / `maxTurns`; pi: `model`
@@ -26,11 +27,9 @@ Usage:
 """
 
 import pathlib
-import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-MARKER = "{{RUNTIME_CONTEXT}}"
 NOTICE = "<!-- GENERATED from roles/{role}/ — edit there and run scripts/render_roles.py -->"
 
 # What a role may declare. Anything else is a typo or a smuggled runtime knob.
@@ -93,6 +92,12 @@ def load_role(role_dir):
         sys.exit(f"{origin}: 'name' must equal the role directory name '{role_dir.name}'")
     if not data.get("description"):
         sys.exit(f"{origin}: missing 'description' — it is the whole discovery interface")
+    extra = sorted(p.name for p in role_dir.iterdir() if p.name not in {"role.yml", "body.md"})
+    if extra:
+        sys.exit(
+            f"roles/{role_dir.name}: unexpected file(s) {', '.join(extra)} — a role is role.yml + body.md.\n"
+            f"  Per-harness or per-runtime prose belongs in the consumer's overlay, not here."
+        )
     if data.get("writes") not in WRITES:
         sys.exit(f"{origin}: 'writes' must be one of {', '.join(WRITES)}")
     return data
@@ -119,16 +124,8 @@ def frontmatter(role, harness):
     return "\n".join(lines)
 
 
-def render(role_dir, role, harness, ctx_file):
+def render(role_dir, role, harness):
     body = (role_dir / "body.md").read_text().strip("\n")
-    ctx_path = role_dir / ctx_file
-    if MARKER in body:
-        if ctx_path.exists():
-            body = body.replace(MARKER, ctx_path.read_text().strip("\n"))
-        else:
-            body = re.sub(r"\n*" + re.escape(MARKER) + r"\n*", "\n\n", body).strip("\n")
-    elif ctx_path.exists():
-        sys.exit(f"roles/{role_dir.name}: {ctx_file} exists but body.md has no {MARKER} marker")
     notice = NOTICE.format(role=role_dir.name)
     return f"---\n{frontmatter(role, harness)}\n---\n\n{notice}\n\n{body}\n"
 
@@ -142,8 +139,8 @@ def main():
     for role_dir in roles:
         role = load_role(role_dir)
         outputs = {
-            ROOT / "agents" / f"{role_dir.name}.md": render(role_dir, role, "claude", "claude-context.md"),
-            ROOT / "pi-agents" / f"{role_dir.name}.md": render(role_dir, role, "pi", "pi-context.md"),
+            ROOT / "agents" / f"{role_dir.name}.md": render(role_dir, role, "claude"),
+            ROOT / "pi-agents" / f"{role_dir.name}.md": render(role_dir, role, "pi"),
         }
         for path, content in outputs.items():
             current = path.read_text() if path.exists() else None

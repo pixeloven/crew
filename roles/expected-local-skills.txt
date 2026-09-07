@@ -1,8 +1,16 @@
-# Local-skill slots the foundation's role agents reference as examples.
-# These do NOT ship in the foundation — a consumer supplies its own
-# equivalents in its overlay (.claude/skills/ or .pi/skills/). Role bodies
-# reference them hedged: "the project's X local skill, if it defines one".
-harmony-platform-conventions
-homelab-topology
-harmony-protected-seams
-
+# Local-skill SLOTS the foundation's role agents may reference.
+#
+# These do NOT ship here — a consumer supplies its own equivalents in its
+# overlay (.claude/skills/, .pi/skills/, .agents/skills/). Role bodies cite
+# them hedged: "the project's X local skill, if it defines one".
+#
+# List slot names only, matching templates/local-skills/. Never a specific
+# consumer's skill name: naming one deployment's skills here is how a
+# portable foundation quietly acquires a favourite consumer.
+platform-conventions
+topology
+protected-seams
+secret-paths
+agent-runtime
+vault-ops
+litellm-access-map

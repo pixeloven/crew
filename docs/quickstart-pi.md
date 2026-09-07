@@ -33,5 +33,5 @@ The project's own additions live in `.pi/skills/` and `.pi/agents/` — pi walks
 ## Notes for autonomous workers
 
 - Workers run with the pi frontmatter's `tools:` allowlist, which mirrors the Claude Code denylist rendered from the same `role.yml`. Read-only roles get no `write`/`edit` — but they do get `bash`, so the allowlist makes writing *inconvenient*, not impossible. The prose in the role body is the real constraint; enforce the rest with pi's permission system if your runtime needs a hard boundary.
-- The Implementer variant assumes a workflow-managed push (it does not run `git push`/`gh pr create` itself) — if your runtime differs, shadow `implementer.md` in `.pi/agents/` with an adjusted operating-context section.
+- Implementer ships assuming the **interactive** case: it creates branches, commits, pushes and opens PRs itself. If you dispatch it from an autonomous runtime that prepares the workspace and pushes on its behalf, shadow `implementer.md` in `.pi/agents/` with your runtime's operating context — that contract is a property of your deployment, so the foundation no longer guesses at it.
 - Capability availability (KB, search, image gen, …) is granted by the worker's LiteLLM virtual key, not by installing skills — see the project's gateway-routing local skill. The `doctor` skill reports what a session can actually reach.

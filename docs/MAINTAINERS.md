@@ -6,8 +6,8 @@ How the foundation itself is built, versioned, and kept honest. Consumers don't 
 
 ```
 crew/
-├── roles/<role>/                   # SINGLE SOURCE for the 7 role agents (role.yml + body + optional runtime context)
-│   └── expected-local-skills.txt   # backtick-token allowlist: local-skill names agent bodies may cite as examples
+├── roles/<role>/                   # SINGLE SOURCE for the 7 role agents — exactly role.yml + body.md
+│   └── expected-local-skills.txt   # backtick-token allowlist: local-skill SLOT names agent bodies may cite
 ├── skills/<name>/SKILL.md          # one tree → all three harnesses read it (schema-v2 frontmatter)
 ├── agents/*.md                     # RENDERED Claude subagent files (do not edit)
 ├── pi-agents/*.md                  # RENDERED pi-subagents files (do not edit) — same names as agents/
@@ -26,7 +26,8 @@ crew/
 
 ## Editing rules
 
-- **Roles:** edit `roles/<role>/` — one harness-neutral `role.yml` (`name`, `description`, `writes`, optional `dispatch`) plus a shared `body.md` and an optional `{{RUNTIME_CONTEXT}}` appendix. Run `scripts/render_roles.py`, commit source + rendered output together. CI fails on drift. **There is no per-harness frontmatter file.** Both trees get the same name, description, and capability posture; `render_roles.py` alone translates that into each harness's dialect (Claude Code denies via `disallowedTools`, pi allows via `tools`), so the two cannot drift apart by editing.
+- **Roles:** a role is exactly two files — a harness-neutral `role.yml` (`name`, `description`, `writes`, optional `dispatch`) and one shared `body.md`. Anything else in the directory is a build error. Run `scripts/render_roles.py`, commit source + rendered output together; CI fails on drift. `agents/` and `pi-agents/` are byte-identical below the frontmatter, and `render_roles.py` alone translates the posture into each harness's dialect (Claude Code denies via `disallowedTools`, pi allows via `tools`), so the two cannot drift apart by editing.
+- **Per-harness prose is a smell; per-deployment prose is a bug.** Roles used to carry `claude-context.md` / `pi-context.md` appendices. What they actually encoded was not a harness difference but a *runtime* one — an interactive working tree versus a workflow-managed pod — and the pi copy had accumulated one consumer's Argo paths, branch naming and exit contract. The portable default is now the interactive case, in the shared body; a deployment whose runtime differs shadows the rendered agent in **its own overlay**. If you find yourself wanting a per-harness paragraph, check first whether the real axis is the deployment.
 - **No runtime knobs in a role.** A role declares who it is and what it may touch — never which model, how hard to think, or how many turns it gets. All three harnesses support those (Claude Code: `model` / `effort` / `maxTurns`; pi: `model` / `thinking` / `turnBudget`; Codex: `model` / `model_reasoning_effort`) and all three inherit sensible values from the dispatching session when they are omitted. Shipping them from a foundation imposes one operator's cost tier and one vendor's model naming on every consumer, and goes stale on every model release. On Codex it is worse than stale: a role file's `model` is applied *after* the spawn arguments, so it silently overrides the orchestrator's explicit choice. `render_roles.py` rejects `model`, `thinking`, `effort`, `model_reasoning_effort`, `turnBudget` and `maxTurns` in `role.yml` by name — a consumer that wants to pin one sets it in its own overlay or harness config, where it belongs.
 - **Skills:** schema-v2 frontmatter (`name`, `description` ≥110 chars with trigger language, `tier`, `requires`, optional `expects-local`). No project-specific values — the dividing test is **"no project context baked in"**, not width: a single-language convention skill is fine if any project benefits; anything binding to one deployment's vault, gateway, cluster, secret paths, or domains belongs in that consumer's overlay (deferral goes through an `expects-local` slot).
 - **Generated artifacts:** after any frontmatter change, run `scripts/gen_catalog.py` and commit `docs/CATALOG.md`.

@@ -10,7 +10,11 @@ Execute a scoped task end-to-end across the full stack:
 
 Multiple instances run in parallel under Lead's orchestration when plans express parallelizable phases. Each instance works an assigned task; Lead mediates convergence.
 
-{{RUNTIME_CONTEXT}}
+## Operating context
+
+Assume you run in the operator's working tree (or a worktree Lead assigns): you create branches, commit, push, and open PRs yourself with `git` and `gh`, following the project's `AGENTS.md` conventions.
+
+A project that dispatches you from an **autonomous runtime** — a workflow that hands you a prepared workspace and pushes on your behalf — overrides this section by shadowing this agent in its own overlay, because how the workspace is prepared and who pushes are facts about that deployment, not about this role. If your workspace already exists on a branch you didn't create, you are in that case: follow the runtime's contract for exit status and let its steps do the pushing.
 
 ## Scope discipline — the most important rule
 

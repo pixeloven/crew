@@ -1,11 +1,11 @@
 ---
 name: activation-contracts
-description: How an agent role gets woken — the trigger interface (event → dispatch → output), which roles are dispatched interactively versus triggered autonomously, and reference wiring for issue events and scheduled sweeps. Load when a role should run without someone asking it to, when wiring CI or a scheduler to an agent, or when deciding whether work belongs to a cheap triggered role instead of the session you are in.
+description: How an agent role gets woken — the trigger interface (event → dispatch → output), which roles are dispatched interactively versus triggered autonomously, and reference wiring for issue events and scheduled sweeps. Load when a role should run without someone asking it to, when wiring CI or a scheduler to an agent, or when deciding whether work belongs to a triggered role instead of the session you are in.
 tier: concept
 requires: [external:github]
 ---
 
-Roles describe autonomy readily — "runs on a schedule", "fires on alerts", "routes incoming work" — and then wait to be asked, because nothing wires the event to the dispatch. A role with no trigger is a role that only runs when a human remembers it exists, which in practice means the expensive session absorbs its work.
+Roles describe autonomy readily — "runs on a schedule", "fires on alerts", "routes incoming work" — and then wait to be asked, because nothing wires the event to the dispatch. A role with no trigger is a role that only runs when a human remembers it exists, which in practice means whichever session notices absorbs its work.
 
 This skill is the contract that makes a trigger portable, and reference wiring for the two shapes that cover most cases.
 
@@ -37,7 +37,9 @@ Trigger a role when its work is **recurring, bounded, and cheap to be wrong abou
 
 Don't trigger work that needs judgment about scope, touches protected seams, or writes to anything durable without review. Those want a human deciding to start them.
 
-**The economics matter more than they look.** The triggered roles are usually the cheap ones. Left untriggered, their work doesn't vanish — it gets absorbed into whichever expensive session notices, at a much higher cost per unit. That's the argument for wiring them, and it's also why *not* delegating to them mid-session is a real cost rather than a stylistic preference.
+**Why wiring them pays.** Left untriggered, a role's work doesn't vanish — it gets absorbed into whichever session happens to notice, which is the one already carrying a plan's worth of context. What you lose there is isolation: intake classification and health sweeps land in a working context that has to keep holding everything else, and the session blocks on work nobody needed it to do. That is the argument for wiring them, and it is also why *not* delegating to them mid-session is a real cost rather than a stylistic preference.
+
+The cost argument on top of it is **the consumer's to make true, not this foundation's**. Roles ship with no model pinned — they inherit whatever the dispatching session or trigger runs — so a triggered role is only cheaper if you route it that way. If cheap-tier triggers are the point, set the model where your harness selects it (a trigger's own config, a gateway key, a subagent-model default); don't assume the roles arrived that way.
 
 ## Reference wiring
 

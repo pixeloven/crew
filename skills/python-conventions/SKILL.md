@@ -61,7 +61,9 @@ Tool descriptions must be precise — agents use them for tool selection. Phrasi
 
 ## Pydantic AI
 
-Agent orchestration uses Pydantic AI (`AnthropicModel` or `OpenAIModel` via LiteLLM passthrough). Structured output via Pydantic models. Exit codes: 0 success, 75 transient, 1 structural.
+Agent orchestration uses Pydantic AI. Structured output via Pydantic models. Exit codes: 0 success, 75 transient, 1 structural.
+
+Which model class you construct — and whether it points at a provider directly or at a gateway — is the project's call, not this skill's. Take it from the project's own gateway/routing local skill; a convention skill that names a vendor picks the project's provider for it.
 
 ```python
 from pydantic_ai import Agent
