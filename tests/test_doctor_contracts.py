@@ -514,11 +514,15 @@ class InstallationTruthTests(unittest.TestCase):
             check = codex["capability_checks"][0]
             self.assertEqual("working", check["state"])
             self.assertEqual(
-                {"captured grant", "free successful probe"},
+                {
+                    str(root / "skills/capability-fixture/SKILL.md"),
+                    "captured grant",
+                    "free successful probe",
+                },
                 {item["source"] for item in check["evidence"]},
             )
             self.assertEqual(
-                {"grant is present", "probe is working"},
+                {"is declared", "grant is present", "probe is working"},
                 {item["claim"].rsplit(" capability external:github ", 1)[1] for item in check["evidence"]},
             )
 
@@ -605,6 +609,35 @@ class InstallationTruthTests(unittest.TestCase):
             )
             self.assertEqual(str(manifest), failure["evidence"][0]["source"])
 
+    def test_manifest_version_must_be_a_semver_string(self) -> None:
+        for version in (None, [], "release", "v0.36.0"):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                home = base / "home"
+                root = home / ".codex/plugins/cache/crew/crew/0.36.0"
+                manifest = root / ".claude-plugin/plugin.json"
+                payload = {} if version is None else {"version": version}
+                write_json(manifest, payload)
+                (root / "skills").mkdir()
+                config = home / ".codex/config.toml"
+                config.parent.mkdir(parents=True, exist_ok=True)
+                config.write_text(
+                    "[plugins.\"crew@crew\"]\nenabled = true\n",
+                    encoding="utf-8",
+                )
+
+                codex = inspect_installations(base / "project", home)["harnesses"]["codex"]
+
+                self.assertEqual("unavailable", codex["installation"]["state"])
+                self.assertEqual("DEGRADED", codex["status"])
+                self.assertEqual("malformed", codex["manifest_reads"][0]["state"])
+                failure = next(
+                    finding
+                    for finding in codex["findings"]
+                    if "manifest is malformed" in finding["claim"]
+                )
+                self.assertEqual(str(manifest), failure["evidence"][0]["source"])
+
     def test_non_utf8_configuration_is_reported_without_aborting_doctor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -631,6 +664,84 @@ class InstallationTruthTests(unittest.TestCase):
                     if finding["evidence"][0]["source"] == str(source)
                 )
                 self.assertIn("unreadable", failure["claim"])
+
+    def test_consumer_overlay_requirements_participate_in_capability_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            local_skill = project / ".agents/skills/local-platform/SKILL.md"
+            local_skill.parent.mkdir(parents=True)
+            local_skill.write_text(
+                "---\nname: local-platform\ndescription: Declares local platform access.\n"
+                "requires: [external:local-platform]\n---\n",
+                encoding="utf-8",
+            )
+            installation = inspect_installations(
+                project,
+                base / "home",
+                capability_evidence={
+                    "codex": [
+                        {
+                            "name": "external:local-platform",
+                            "kind": "probe",
+                            "state": "working",
+                            "source": "free local platform probe",
+                        }
+                    ]
+                },
+            )
+            check = next(
+                item
+                for item in installation["harnesses"]["codex"]["capability_checks"]
+                if item["name"] == "external:local-platform"
+            )
+            self.assertEqual("working", check["state"])
+            self.assertEqual(
+                {str(local_skill), "free local platform probe"},
+                {item["source"] for item in check["evidence"]},
+            )
+
+            report = compose_doctor_report(
+                installation,
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=[],
+                persona_evidence=[],
+            )
+            self.assertEqual("platform", report["profile"])
+
+    def test_pi_registration_requires_exact_supported_repository_identity(self) -> None:
+        supported = (
+            "pixeloven/crew",
+            "pixeloven/crew@v0.36.0",
+            "github.com/pixeloven/crew@v0.36.0",
+            "github:pixeloven/crew@v0.36.0",
+            "git:github.com/pixeloven/crew@v0.36.0",
+        )
+        for package in supported:
+            with self.subTest(package=package), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project = base / "project"
+                home = base / "home"
+                write_json(project / ".pi/settings.json", {"packages": [package]})
+                root = home / ".pi/agent/git/github.com/pixeloven/crew"
+                write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+                pi = inspect_installations(project, home)["harnesses"]["pi"]
+                self.assertEqual("present", pi["enablement"]["state"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/evilpixeloven/crew@v0.36.0"]},
+            )
+            root = home / ".pi/agent/git/github.com/pixeloven/crew"
+            write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+            self.assertEqual("unavailable", pi["enablement"]["state"])
+            self.assertEqual("DEGRADED", pi["status"])
 
     def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

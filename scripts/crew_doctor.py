@@ -38,6 +38,15 @@ EXPECTED_ROLE_NAMES = (
     "triage",
 )
 LOADED_RUNTIME_STATES = {"present", "working", "loaded-but-undiscoverable", "truncated"}
+SEMVER = re.compile(
+    r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-(?:(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+PI_CREW_PACKAGE = re.compile(
+    r"^(?:(?:git:)?github\.com/|github:)?pixeloven/crew(?:@[^@/\s]+)?$"
+)
 
 
 @dataclass(frozen=True)
@@ -77,8 +86,17 @@ def _read_toml(path: pathlib.Path) -> ReadResult:
 def _manifest_version(root: pathlib.Path) -> ReadResult:
     read = _read_json(root / ".claude-plugin/plugin.json", {})
     version = read.value.get("version") if isinstance(read.value, dict) else None
+    if read.state == "present" and (
+        not isinstance(version, str) or not SEMVER.fullmatch(version)
+    ):
+        return ReadResult(
+            None,
+            "malformed",
+            read.source,
+            "manifest version must be a valid SemVer string",
+        )
     return ReadResult(
-        str(version) if version is not None else None,
+        version,
         read.state,
         read.source,
         read.detail,
@@ -214,8 +232,11 @@ def _record_capabilities(
     result: dict[str, Any],
     harness: str,
     supplied: list[dict[str, str]],
+    consumer_skill_root: pathlib.Path,
 ) -> None:
-    declared = _declared_capabilities([pathlib.Path(root) for root in result["package_roots"]])
+    declared = _declared_capabilities(
+        [pathlib.Path(root) for root in result["package_roots"]] + [consumer_skill_root]
+    )
     observations: dict[str, dict[str, dict[str, str]]] = {}
     for observation in supplied:
         name = observation.get("name")
@@ -241,7 +262,13 @@ def _record_capabilities(
         probe = capability_observations.get("probe")
         grant = capability_observations.get("grant")
         state = probe["state"] if probe else grant["state"] if grant else "not tested"
-        observation_evidence = []
+        observation_evidence = [
+            {
+                "claim": f"{harness} capability {name} is declared",
+                "source": source,
+            }
+            for source in dict.fromkeys(declaration_sources)
+        ]
         if grant:
             observation_evidence.append(
                 {
@@ -256,14 +283,6 @@ def _record_capabilities(
                     "source": probe["source"],
                 }
             )
-        if not observation_evidence:
-            observation_evidence = [
-                {
-                    "claim": f"{harness} capability {name} is declared but not tested",
-                    "source": source,
-                }
-                for source in dict.fromkeys(declaration_sources)
-            ]
         checks.append(
             {
                 "harness": harness,
@@ -345,7 +364,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         settings = _record_config_read(result, "Pi settings configuration", _read_json(settings_path, {}))
         packages = settings.get("packages", []) if isinstance(settings, dict) else []
         for item in packages:
-            if isinstance(item, str) and re.search(r"(?:github\.com/|github:)?pixeloven/crew(?:@|$)", item):
+            if isinstance(item, str) and PI_CREW_PACKAGE.fullmatch(item):
                 registrations.append(
                     {"settings": str(settings_path), "package": item, "version": _clean_version(item)}
                 )
@@ -817,7 +836,12 @@ def inspect_installations(
     }
     for harness, result in harnesses.items():
         _degrade_for_read_failures(result)
-        _record_capabilities(result, harness, capability_evidence.get(harness, []))
+        _record_capabilities(
+            result,
+            harness,
+            capability_evidence.get(harness, []),
+            project_root / ".agents/skills",
+        )
     evidence: list[dict[str, str]] = []
     checks: list[dict[str, Any]] = []
     for harness, result in harnesses.items():
