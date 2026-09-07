@@ -27,6 +27,16 @@ def write_json(path: pathlib.Path, value: object) -> None:
     path.write_text(json.dumps(value), encoding="utf-8")
 
 
+def write_capability_skill(root: pathlib.Path, requirements: list[str]) -> None:
+    skill = root / "skills/capability-fixture/SKILL.md"
+    skill.parent.mkdir(parents=True, exist_ok=True)
+    skill.write_text(
+        "---\nname: capability-fixture\ndescription: Declares fixture capabilities.\n"
+        f"requires: [{', '.join(requirements)}]\n---\n",
+        encoding="utf-8",
+    )
+
+
 class InstallationTruthTests(unittest.TestCase):
     def make_install_tree(self, base: pathlib.Path, pi_pin: str = "v0.34.0") -> tuple[pathlib.Path, pathlib.Path]:
         project = base / "project"
@@ -151,8 +161,87 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("present", codex["enablement"]["state"])
             self.assertEqual("0.29.0", codex["resolved_version"])
             self.assertIn(".codex/plugins/cache/crew/crew/0.29.0", codex["installation"]["source"])
-            self.assertEqual("unavailable", codex["capabilities"]["state"])
+            self.assertEqual("not tested", codex["capabilities"]["state"])
             self.assertEqual("OK", codex["status"])
+
+    def test_capabilities_come_only_from_declared_requirements_and_supplied_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            root = home / ".codex/plugins/cache/crew/crew/0.29.0"
+            write_capability_skill(root, ["external:github", "cli:gh"])
+
+            untested = inspect_installations(project, home)["harnesses"]["codex"]
+            self.assertEqual("not tested", untested["capabilities"]["state"])
+            self.assertEqual(
+                {"external:github", "cli:gh"},
+                {item["name"] for item in untested["capability_checks"]},
+            )
+
+            evidence = {
+                "codex": [
+                    {
+                        "name": "external:github",
+                        "kind": "probe",
+                        "state": "working",
+                        "source": "free GitHub probe",
+                    },
+                    {
+                        "name": "cli:gh",
+                        "kind": "grant",
+                        "state": "present",
+                        "source": "captured tool grant",
+                    },
+                    {
+                        "name": "consumer:litellm",
+                        "kind": "grant",
+                        "state": "present",
+                        "source": "unrelated config",
+                    },
+                ]
+            }
+            capable = inspect_installations(project, home, capability_evidence=evidence)["harnesses"]["codex"]
+            self.assertEqual("present", capable["capabilities"]["state"])
+            self.assertNotIn(
+                "consumer:litellm", {item["name"] for item in capable["capability_checks"]}
+            )
+
+            config = home / ".codex/config.toml"
+            config.write_text(
+                config.read_text(encoding="utf-8")
+                + "\n[mcp_servers.litellm]\nurl = 'https://example.invalid'\n"
+                "bearer_token_env_var = 'UNGRANTED_TOKEN'\n",
+                encoding="utf-8",
+            )
+            configured_only = inspect_installations(project, home)["harnesses"]["codex"]
+            self.assertEqual("not tested", configured_only["capabilities"]["state"])
+
+            with self.assertRaisesRegex(ValueError, "source-bearing"):
+                inspect_installations(
+                    project,
+                    home,
+                    capability_evidence={
+                        "codex": [
+                            {
+                                "name": "external:github",
+                                "kind": "grant",
+                                "state": "present",
+                            }
+                        ]
+                    },
+                )
+
+            evidence["codex"][1] = {
+                "name": "cli:gh",
+                "kind": "probe",
+                "state": "unavailable",
+                "source": "free gh failure",
+            }
+            unavailable = inspect_installations(
+                project, home, capability_evidence=evidence
+            )["harnesses"]["codex"]
+            self.assertEqual("unavailable", unavailable["capabilities"]["state"])
+            self.assertEqual("DEGRADED", unavailable["status"])
 
     def test_installed_but_disabled_codex_is_degraded_not_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -248,6 +337,48 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("DEGRADED", codex["status"])
             self.assertTrue(any("no matching resolved root" in item["claim"] for item in codex["findings"]))
 
+    def test_pi_resolution_prefers_runtime_root_then_configured_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.36.0"]},
+            )
+            roots = {}
+            for agent, version in (("a", "0.35.0"), ("b", "0.36.0")):
+                root = home / f".pi/{agent}/git/github.com/pixeloven/crew"
+                roots[agent] = root
+                write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": version})
+            runtime = {
+                "pi": {
+                    "state": "working",
+                    "source": "captured Pi catalogue",
+                    "skills": [{"path": str(roots["b"] / "skills/doctor/SKILL.md")}],
+                }
+            }
+            pi = inspect_installations(project, home, runtime)["harnesses"]["pi"]
+            self.assertEqual("0.36.0", pi["resolved_version"])
+            self.assertEqual(str(roots["b"]), pi["installation"]["source"])
+            self.assertEqual([str(roots["a"])], [item["root"] for item in pi["stale_resolved_installations"]])
+            self.assertFalse(any("differs from resolved" in item["claim"] for item in pi["findings"]))
+
+    def test_version_skew_sources_follow_selected_version_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
+            report = inspect_installations(
+                project,
+                home,
+                {"codex": {"state": "omitted", "source": "omitted runtime capture"}},
+            )
+            skew = next(row for row in report["checks"] if row["check"] == "cross-harness.version-skew")
+            codex_evidence = next(
+                item for item in skew["evidence"] if item["claim"].startswith("codex ")
+            )
+            self.assertNotIn("omitted runtime capture", codex_evidence["source"])
+            self.assertIn(".codex/plugins/cache/crew/crew/0.29.0", codex_evidence["source"])
+
     def test_findings_retain_only_claim_supporting_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, home = self.make_install_tree(pathlib.Path(tmp), "v0.34.0")
@@ -300,7 +431,6 @@ class InstallationTruthTests(unittest.TestCase):
                 report,
                 runtime_comparisons=[],
                 local_slots=declared_local_slots(ROOT),
-                capability_checks=[],
                 role_postures=[],
                 persona_evidence=[],
             )
@@ -465,7 +595,23 @@ class DerivedContractTests(unittest.TestCase):
     def test_composed_report_covers_all_inputs_with_one_profile_and_action(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
-            installation = inspect_installations(base / "project", base / "home")
+            root = base / "home/.codex/plugins/cache/crew/crew/0.36.0"
+            write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": "0.36.0"})
+            write_capability_skill(root, ["external:github"])
+            installation = inspect_installations(
+                base / "project",
+                base / "home",
+                capability_evidence={
+                    "codex": [
+                        {
+                            "name": "external:github",
+                            "kind": "probe",
+                            "state": "working",
+                            "source": "free probe",
+                        }
+                    ]
+                },
+            )
             disk = [
                 {
                     "name": "doctor",
@@ -493,7 +639,6 @@ class DerivedContractTests(unittest.TestCase):
                 installation,
                 runtime_comparisons=[runtime],
                 local_slots=declared_local_slots(ROOT),
-                capability_checks=[{"name": "github", "state": "working", "source": "free probe"}],
                 role_postures=inspect_role_postures(ROOT)[:1],
                 persona_evidence=["consumer persona manifest"],
             )
@@ -510,23 +655,31 @@ class DerivedContractTests(unittest.TestCase):
     def test_capability_states_have_distinct_report_meanings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
+            root = base / "home/.codex/plugins/cache/crew/crew/0.36.0"
+            write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": "0.36.0"})
+            write_capability_skill(root, ["configured", "proven", "failed", "skipped"])
+            installation = inspect_installations(
+                base / "project",
+                base / "home",
+                capability_evidence={
+                    "codex": [
+                        {"name": "configured", "kind": "grant", "state": "present", "source": "config"},
+                        {"name": "proven", "kind": "probe", "state": "working", "source": "free probe"},
+                        {"name": "failed", "kind": "probe", "state": "unavailable", "source": "free probe"},
+                    ]
+                },
+            )
             report = compose_doctor_report(
-                inspect_installations(base / "project", base / "home"),
+                installation,
                 runtime_comparisons=[],
                 local_slots=declared_local_slots(ROOT),
-                capability_checks=[
-                    {"name": "configured", "state": "present", "source": "config"},
-                    {"name": "proven", "state": "working", "source": "free probe"},
-                    {"name": "failed", "state": "unavailable", "source": "free probe"},
-                    {"name": "skipped", "state": "not tested", "source": "approval boundary"},
-                ],
                 role_postures=inspect_role_postures(ROOT),
                 persona_evidence=[],
             )
             rows = {
-                row["check"].removeprefix("capability."): row
+                row["check"].removeprefix("capability.codex."): row
                 for row in report["checks"]
-                if row["check"].startswith("capability.")
+                if row["check"].startswith("capability.codex.")
             }
             self.assertEqual(("OK", ""), (rows["configured"]["status"], rows["configured"]["recommendation"]))
             self.assertEqual(("OK", ""), (rows["proven"]["status"], rows["proven"]["recommendation"]))
@@ -544,7 +697,6 @@ class DerivedContractTests(unittest.TestCase):
                     inspect_installations(base / "project", base / "home"),
                     runtime_comparisons=[],
                     local_slots=declared_local_slots(ROOT),
-                    capability_checks=[],
                     role_postures=postures,
                     persona_evidence=[],
                 )

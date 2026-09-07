@@ -63,7 +63,7 @@ except ImportError:  # Direct script execution.
 # Where each harness looks. A flat `<name>.md` in any of these is invisible to
 # the harness that reads it -- silently, which is the whole problem.
 SKILL_DIRS = (".agents/skills", ".claude/skills", "skills")
-AGENT_DIRS = ("agents", ".claude/agents", ".pi/agents")
+AGENT_DIRS = ("agents", ".claude/agents", ".pi/agents", "pi-agents")
 
 
 def frontmatter(path: pathlib.Path) -> tuple[dict[str, object] | None, str | None]:
@@ -134,7 +134,11 @@ def check(root: pathlib.Path) -> list[str]:
                 continue
             name = metadata.get("name")
             if not isinstance(name, str) or not name:
-                consequence = " — missing identity causes a silent Pi drop" if rel == ".pi/agents" else ""
+                consequence = (
+                    " — missing identity causes a silent Pi drop"
+                    if rel in {".pi/agents", "pi-agents"}
+                    else ""
+                )
                 errors.append(f"{display}: no `name:` in frontmatter{consequence}")
                 if path.stem.startswith("role-"):
                     errors.append(

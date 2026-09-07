@@ -81,6 +81,8 @@ def _base_harness() -> dict[str, Any]:
         "enablement": {"state": "unavailable", "source": ""},
         "runtime": {"state": "not tested", "source": ""},
         "capabilities": {"state": "not tested", "source": ""},
+        "capability_checks": [],
+        "package_roots": [],
         "findings": [],
     }
 
@@ -146,9 +148,95 @@ def _degrade_for_runtime(result: dict[str, Any]) -> None:
         )
 
 
+def _declared_capabilities(roots: list[pathlib.Path]) -> dict[str, list[str]]:
+    declared: dict[str, list[str]] = {}
+    for root in dict.fromkeys(roots):
+        catalogue = root if root.name == "skills" else root / "skills"
+        for skill in sorted(catalogue.glob("*/SKILL.md")):
+            metadata, error = read_frontmatter(skill)
+            if error or not metadata:
+                continue
+            requirements = metadata.get("requires", [])
+            if isinstance(requirements, str):
+                requirements = parse_inline_list(requirements)
+            if not isinstance(requirements, list):
+                continue
+            for requirement in requirements:
+                if isinstance(requirement, str) and requirement:
+                    declared.setdefault(requirement, []).append(str(skill))
+    return declared
+
+
+def _record_capabilities(
+    result: dict[str, Any],
+    harness: str,
+    supplied: list[dict[str, str]],
+) -> None:
+    declared = _declared_capabilities([pathlib.Path(root) for root in result["package_roots"]])
+    observations: dict[str, dict[str, str]] = {}
+    for observation in supplied:
+        name = observation.get("name")
+        kind = observation.get("kind")
+        state = observation.get("state")
+        source = observation.get("source")
+        if not all(isinstance(value, str) and value for value in (name, kind, state, source)):
+            raise ValueError(f"{harness} capability evidence must be source-bearing")
+        if kind == "grant" and state != "present":
+            raise ValueError("grant evidence can only establish present")
+        if kind == "probe" and state not in {"working", "unavailable"}:
+            raise ValueError("probe evidence must establish working or unavailable")
+        if kind not in {"grant", "probe"}:
+            raise ValueError(f"unsupported capability evidence kind: {kind}")
+        if name in observations:
+            raise ValueError(f"duplicate {harness} capability evidence: {name}")
+        observations[name] = observation
+
+    checks: list[dict[str, Any]] = []
+    for name, declaration_sources in sorted(declared.items()):
+        observation = observations.get(name)
+        state = observation["state"] if observation else "not tested"
+        sources = [observation["source"]] if observation else declaration_sources
+        checks.append(
+            {
+                "harness": harness,
+                "name": name,
+                "state": state,
+                "evidence": [
+                    {
+                        "claim": f"{harness} capability {name} is {state}",
+                        "source": source,
+                    }
+                    for source in dict.fromkeys(sources)
+                ],
+            }
+        )
+    result["capability_checks"] = checks
+    states = {check["state"] for check in checks}
+    if "unavailable" in states:
+        aggregate = "unavailable"
+    elif not checks or "not tested" in states:
+        aggregate = "not tested"
+    elif states == {"working"}:
+        aggregate = "working"
+    else:
+        aggregate = "present"
+    sources = [item["source"] for check in checks for item in check["evidence"]]
+    result["capabilities"] = {
+        "state": aggregate,
+        "source": "; ".join(dict.fromkeys(sources)),
+    }
+    if aggregate == "unavailable" and result["status"] != "MISSING":
+        result["status"] = "DEGRADED"
+
+
 def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
     _record_runtime(result, runtime)
+    if runtime is not None and runtime.get("tested") is not False:
+        result["loaded_version"] = runtime.get("version")
+        result["loaded_version_source"] = (
+            result["runtime"].get("source", "") if result["loaded_version"] else ""
+        )
     settings_paths = [project / ".pi/settings.json", home / ".pi/settings.json"]
     settings_paths.extend(sorted((home / ".pi").glob("*/settings.json")))
     registrations: list[dict[str, str | None]] = []
@@ -168,14 +256,37 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         if _manifest_version(checkout)
     ]
     result["resolved_installations"] = resolved
-    result["resolved_version"] = resolved[0]["version"] if resolved else None
-    if resolved:
-        result["installation"] = {"state": "present", "source": str(resolved[0]["root"])}
-
     primary = next(
         (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
         registrations[0] if registrations else None,
     )
+    runtime_paths = _runtime_paths(runtime)
+    selected = next(
+        (
+            item for item in resolved
+            if any(_path_within(path, pathlib.Path(item["root"])) for path in runtime_paths)
+        ),
+        None,
+    )
+    if selected is None and primary and primary["version"]:
+        selected = next(
+            (item for item in resolved if item["version"] == primary["version"]),
+            None,
+        )
+    if selected is None and len(resolved) == 1:
+        selected = resolved[0]
+    result["resolved_version"] = selected["version"] if selected else None
+    result["resolved_version_source"] = (
+        str(pathlib.Path(selected["root"]) / ".claude-plugin/plugin.json") if selected else ""
+    )
+    result["stale_resolved_installations"] = [item for item in resolved if item != selected]
+    result["package_roots"] = (
+        [selected["root"]] if selected else [item["root"] for item in resolved]
+    )
+    if resolved:
+        source = selected["root"] if selected else "; ".join(item["root"] for item in resolved)
+        result["installation"] = {"state": "present", "source": source}
+
     if primary:
         result["enablement"] = {"state": "present", "source": str(primary["settings"])}
     result["configured_version"] = primary["version"] if primary else None
@@ -187,6 +298,13 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
             "Crew is installed for Pi but not enabled in an inspected settings scope",
             str(resolved[0]["root"]),
             *(str(path) for path in settings_paths),
+        )
+    if len(resolved) > 1:
+        result["status"] = "DEGRADED"
+        _add_finding(
+            result,
+            f"Pi has {len(resolved)} Crew checkouts; non-selected roots are stale or duplicate",
+            *(item["root"] for item in resolved),
         )
     if not registrations:
         _degrade_for_runtime(result)
@@ -204,8 +322,9 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
             "the Pi role fleet is silently invisible below v0.35.0",
             str(stale_pins[0]["settings"]),
         )
-    elif result["resolved_version"] and result["status"] != "DEGRADED":
-        result["status"] = "OK"
+    elif result["resolved_version"]:
+        if result["status"] != "DEGRADED":
+            result["status"] = "OK"
     else:
         result["status"] = "DEGRADED"
         _add_finding(
@@ -227,7 +346,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
             result,
             f"configured Pi version {result['configured_version']} differs from resolved {result['resolved_version']}",
             str(primary["settings"]),
-            str(resolved[0]["root"]),
+            str(selected["root"]),
         )
     _degrade_for_runtime(result)
     return result
@@ -260,6 +379,9 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     ] if record else []
     location = pathlib.Path(record.get("installLocation", "")) if isinstance(record, dict) else pathlib.Path()
     result["served_version"] = _manifest_version(location) if str(location) not in {"", "."} else None
+    result["served_version_source"] = (
+        str(location / ".claude-plugin/plugin.json") if result["served_version"] else ""
+    )
     if result["served_version"]:
         result["installation"] = {"state": "present", "source": str(location)}
 
@@ -276,10 +398,17 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     installed_roots = [root for root in installed_roots if _manifest_version(root)]
     if installed_roots:
         result["installation"] = {"state": "present", "source": str(installed_roots[0])}
+    result["package_roots"] = [str(root) for root in dict.fromkeys(installed_roots)]
+    if result.get("served_version") and location not in installed_roots:
+        result["package_roots"].append(str(location))
     if runtime is not None and runtime.get("tested") is not False:
         result["loaded_version"] = runtime.get("version")
+        result["loaded_version_source"] = (
+            result["runtime"].get("source", "") if result["loaded_version"] else ""
+        )
     else:
         result["loaded_version"] = None
+        result["loaded_version_source"] = ""
 
     if result["installation"]["state"] != "present":
         return result
@@ -390,11 +519,16 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         resolved_root = valid_cache_roots[0]
     result["cache_roots"] = [str(path) for path in cache_roots]
     result["stale_cache_roots"] = [str(path) for path in valid_cache_roots if path != resolved_root]
+    result["package_roots"] = (
+        [str(resolved_root)] if resolved_root else [str(path) for path in valid_cache_roots]
+    )
     if resolved_root:
         result["installation"] = {"state": "present", "source": str(resolved_root / "skills")}
         result["resolved_version"] = _manifest_version(resolved_root) or _clean_version(resolved_root.name)
+        result["resolved_version_source"] = str(resolved_root / ".claude-plugin/plugin.json")
     else:
         result["resolved_version"] = None
+        result["resolved_version_source"] = ""
         if valid_cache_roots:
             result["installation"] = {
                 "state": "present",
@@ -403,19 +537,16 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         for catalogue in (project / ".agents/skills", home / ".agents/skills"):
             if _is_complete_crew_catalogue(catalogue):
                 result["installation"] = {"state": "present", "source": str(catalogue)}
+                result["package_roots"].append(str(catalogue))
                 break
     if isinstance(crew_plugin, dict) and crew_plugin.get("enabled") is True:
         result["enablement"] = {"state": "present", "source": str(config_path)}
     if runtime is not None and runtime.get("tested") is not False:
         result["loaded_version"] = runtime.get("version")
+        result["loaded_version_source"] = (
+            result["runtime"].get("source", "") if result["loaded_version"] else ""
+        )
         result["runtime_skill_roots"] = list(runtime.get("skill_roots", []))
-
-    mcp = config.get("mcp_servers", {}) if isinstance(config, dict) else {}
-    litellm = mcp.get("litellm", {}) if isinstance(mcp, dict) else {}
-    if isinstance(litellm, dict) and litellm.get("url") and litellm.get("bearer_token_env_var"):
-        result["capabilities"] = {"state": "present", "source": str(config_path)}
-    else:
-        result["capabilities"] = {"state": "unavailable", "source": str(config_path)}
 
     if result["installation"]["state"] == "present":
         if result["enablement"]["state"] == "present":
@@ -464,16 +595,20 @@ def inspect_installations(
     project_root: pathlib.Path,
     home: pathlib.Path,
     runtime_fixtures: dict[str, dict[str, Any]] | None = None,
+    capability_evidence: dict[str, list[dict[str, str]]] | None = None,
 ) -> dict[str, Any]:
     """Reconcile configured, installed, enabled, runtime, and grant state."""
     project_root = pathlib.Path(project_root)
     home = pathlib.Path(home)
     runtime_fixtures = runtime_fixtures or {}
+    capability_evidence = capability_evidence or {}
     harnesses = {
         "pi": _inspect_pi(project_root, home, runtime_fixtures.get("pi")),
         "claude": _inspect_claude(project_root, home, runtime_fixtures.get("claude")),
         "codex": _inspect_codex(project_root, home, runtime_fixtures.get("codex")),
     }
+    for harness, result in harnesses.items():
+        _record_capabilities(result, harness, capability_evidence.get(harness, []))
     evidence: list[dict[str, str]] = []
     checks: list[dict[str, Any]] = []
     for harness, result in harnesses.items():
@@ -518,22 +653,37 @@ def inspect_installations(
                     "evidence": deepcopy(finding["evidence"]),
                 }
             )
-    versions = {
-        name: result.get("loaded_version")
-        or result.get("resolved_version")
-        or result.get("served_version")
-        for name, result in harnesses.items()
-    }
+    version_evidence: dict[str, tuple[str | None, str]] = {}
+    for name, result in harnesses.items():
+        if result.get("loaded_version"):
+            selected_version = result["loaded_version"]
+            selected_source = result.get("loaded_version_source", "")
+        elif result.get("resolved_version"):
+            selected_version = result["resolved_version"]
+            selected_source = result.get("resolved_version_source", "")
+        else:
+            selected_version = result.get("served_version")
+            selected_source = result.get("served_version_source", "") if selected_version else ""
+        version_evidence[name] = (selected_version, selected_source)
+    versions = {name: value for name, (value, _) in version_evidence.items()}
     observed_versions = {value for value in versions.values() if value}
     if len(observed_versions) > 1:
         fact = "cross-harness Crew version skew: " + ", ".join(
             f"{name}={value or 'unknown'}" for name, value in versions.items()
         )
-        sources = [
-            result["runtime"].get("source") or result["installation"].get("source", "")
-            for result in harnesses.values()
+        version_sources = [
+            {
+                "claim": f"{name} selected Crew version is {value}",
+                "source": source,
+            }
+            for name, (value, source) in version_evidence.items()
+            if value
         ]
-        item = _evidence("observed", fact, "; ".join(source for source in sources if source))
+        item = _evidence(
+            "observed",
+            fact,
+            "; ".join(entry["source"] for entry in version_sources if entry["source"]),
+        )
         evidence.append(item)
         checks.append(
             {
@@ -543,7 +693,7 @@ def inspect_installations(
                 "inference": "the harnesses do not resolve one Crew version",
                 "recommendation": "Align resolved Crew versions across harnesses",
                 "untested": "",
-                "evidence": [{"claim": item["claim"], "source": item["source"]}],
+                "evidence": version_sources,
             }
         )
     missing = [name for name, result in harnesses.items() if result["installation"]["state"] != "present"]
@@ -808,7 +958,6 @@ def compose_doctor_report(
     *,
     runtime_comparisons: list[dict[str, Any]],
     local_slots: dict[str, list[str]],
-    capability_checks: list[dict[str, str]],
     role_postures: list[dict[str, Any]],
     persona_evidence: list[str],
 ) -> dict[str, Any]:
@@ -860,10 +1009,15 @@ def compose_doctor_report(
         }
     )
 
+    capability_checks = [
+        capability
+        for harness in ("pi", "claude", "codex")
+        for capability in report["harnesses"][harness].get("capability_checks", [])
+    ]
     for capability in capability_checks:
         state = capability["state"]
         state_contract = {
-            "present": ("OK", "configuration or grant evidence is present", ""),
+            "present": ("OK", "grant evidence is present", ""),
             "working": ("OK", "probe evidence supports working", ""),
             "unavailable": ("DEGRADED", "probe evidence supports unavailable", "resolve"),
             "not tested": ("N/A", "", ""),
@@ -871,16 +1025,17 @@ def compose_doctor_report(
         if state not in state_contract:
             raise ValueError(f"unsupported capability state: {state}")
         status, inference, action = state_contract[state]
-        fact = f"capability {capability['name']} is {state}"
+        harness = capability["harness"]
+        fact = f"{harness} capability {capability['name']} is {state}"
         checks.append(
             {
-                "check": f"capability.{capability['name']}",
+                "check": f"capability.{harness}.{capability['name']}",
                 "status": status,
                 "fact": fact,
                 "inference": inference,
                 "recommendation": f"Resolve {fact}" if action else "",
                 "untested": fact if status == "N/A" else "",
-                "evidence": [{"claim": fact, "source": capability.get("source", "")}],
+                "evidence": deepcopy(capability["evidence"]),
             }
         )
 
@@ -928,7 +1083,10 @@ def compose_doctor_report(
         profile_sources = persona_evidence
     else:
         profile_sources = [
-            item.get("source", "") for item in capability_checks if item["state"] == "working"
+            evidence["source"]
+            for item in capability_checks
+            if item["state"] == "working"
+            for evidence in item["evidence"]
         ]
     checks.append(
         {

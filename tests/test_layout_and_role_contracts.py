@@ -88,6 +88,44 @@ class LayoutContractTests(unittest.TestCase):
                 )
                 self.assertNotEqual(0, completed.returncode)
 
+    def test_invalid_double_quoted_yaml_escape_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            agent = root / ".pi/agents/librarian.md"
+            agent.parent.mkdir(parents=True)
+            agent.write_text(
+                '---\nname: librarian\ndescription: "bad\\q"\n---\n',
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("invalid YAML frontmatter", completed.stdout + completed.stderr)
+
+    def test_distributed_pi_agents_require_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            agent = root / "pi-agents/reviewer.md"
+            agent.parent.mkdir(parents=True)
+            agent.write_text(
+                "---\ndescription: Reviews changes.\n---\n",
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("silent Pi drop", completed.stdout + completed.stderr)
+
 
 class RolePostureTests(unittest.TestCase):
     def test_m10_drafts_posture_reports_overwrite_and_shell_caveat(self) -> None:

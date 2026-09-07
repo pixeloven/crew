@@ -8,7 +8,6 @@ metadata so a body line can never masquerade as discovery metadata.
 
 from __future__ import annotations
 
-import ast
 import pathlib
 import re
 from typing import Any
@@ -25,6 +24,61 @@ TIMESTAMP = re.compile(
     r"^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?)?$"
 )
 SEXAGESIMAL = re.compile(r"^[+-]?[0-9][0-9_]*(?::[0-5]?[0-9])+$")
+
+
+class ScalarParseError(ValueError):
+    """Raised when a supported scalar contains invalid YAML syntax."""
+
+
+def _double_quoted(value: str) -> str:
+    escapes = {
+        "0": "\0",
+        "a": "\a",
+        "b": "\b",
+        "t": "\t",
+        "n": "\n",
+        "v": "\v",
+        "f": "\f",
+        "r": "\r",
+        "e": "\x1b",
+        " ": " ",
+        '"': '"',
+        "/": "/",
+        "\\": "\\",
+        "N": "\x85",
+        "_": "\xa0",
+        "L": "\u2028",
+        "P": "\u2029",
+    }
+    result: list[str] = []
+    index = 0
+    while index < len(value):
+        character = value[index]
+        if character != "\\":
+            result.append(character)
+            index += 1
+            continue
+        index += 1
+        if index >= len(value):
+            raise ScalarParseError("unterminated escape in double-quoted scalar")
+        escape = value[index]
+        if escape in escapes:
+            result.append(escapes[escape])
+            index += 1
+            continue
+        widths = {"x": 2, "u": 4, "U": 8}
+        if escape not in widths:
+            raise ScalarParseError(f"unknown escape \\{escape} in double-quoted scalar")
+        width = widths[escape]
+        digits = value[index + 1:index + 1 + width]
+        if len(digits) != width or not re.fullmatch(r"[0-9a-fA-F]+", digits):
+            raise ScalarParseError(f"invalid \\{escape} escape in double-quoted scalar")
+        codepoint = int(digits, 16)
+        if codepoint > 0x10FFFF or 0xD800 <= codepoint <= 0xDFFF:
+            raise ScalarParseError(f"invalid Unicode scalar in \\{escape} escape")
+        result.append(chr(codepoint))
+        index += width + 1
+    return "".join(result)
 
 
 def _scalar(value: str) -> Any:
@@ -47,14 +101,14 @@ def _scalar(value: str) -> Any:
             value = value[:index].rstrip()
             break
         escaped = False
-    if len(value) >= 2 and value[0] == value[-1] == "'":
+    if value.startswith("'"):
+        if len(value) < 2 or not value.endswith("'"):
+            raise ScalarParseError("unterminated single-quoted scalar")
         return value[1:-1].replace("''", "'")
-    if len(value) >= 2 and value[0] == value[-1] == '"':
-        try:
-            parsed = ast.literal_eval(value)
-        except (SyntaxError, ValueError):
-            return value[1:-1]
-        return parsed if isinstance(parsed, str) else value
+    if value.startswith('"'):
+        if len(value) < 2 or not value.endswith('"'):
+            raise ScalarParseError("unterminated double-quoted scalar")
+        return _double_quoted(value[1:-1])
     if value.startswith("[") and value.endswith("]"):
         return [_scalar(item.strip()) for item in value[1:-1].split(",") if item.strip()]
     if value.startswith("{") and value.endswith("}"):
@@ -126,7 +180,10 @@ def read_frontmatter(path: pathlib.Path) -> tuple[dict[str, Any] | None, str | N
         end = lines.index("---", 1)
     except ValueError:
         return None, "unterminated YAML frontmatter"
-    return parse_simple_mapping("\n".join(lines[1:end])), None
+    try:
+        return parse_simple_mapping("\n".join(lines[1:end])), None
+    except ScalarParseError as error:
+        return None, f"invalid YAML frontmatter: {error}"
 
 
 def parse_inline_list(value: str) -> list[str]:
