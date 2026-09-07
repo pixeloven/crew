@@ -319,14 +319,23 @@ class DerivedContractTests(unittest.TestCase):
         self.assertIn("create and overwrite", lead["write_effect"])
         self.assertTrue(all("shell access" in row["caveat"] for row in rows))
 
-    def test_validator_assets_are_declared_in_the_npm_package_root(self) -> None:
-        manifest = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-        self.assertIn("scripts", manifest["files"])
-        npm_ignore = (ROOT / ".npmignore").read_text(encoding="utf-8")
-        self.assertIn("__pycache__/", npm_ignore)
-        self.assertIn("*.py[cod]", npm_ignore)
-        script_ignore = (ROOT / "scripts/.npmignore").read_text(encoding="utf-8")
-        self.assertIn("__pycache__/", script_ignore)
+    def test_validator_assets_are_in_the_dry_run_npm_tarball(self) -> None:
+        import subprocess
+
+        completed = subprocess.run(
+            ["npm", "pack", "--dry-run", "--json"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        packed = json.loads(completed.stdout)[0]
+        paths = {entry["path"] for entry in packed["files"]}
+        self.assertIn("scripts/check_skill_layout.py", paths)
+        self.assertIn("scripts/crew_doctor.py", paths)
+        self.assertFalse(any("__pycache__" in path or path.endswith(".pyc") for path in paths))
+        self.assertFalse(any(path.startswith("tests/") for path in paths))
 
 
 if __name__ == "__main__":
