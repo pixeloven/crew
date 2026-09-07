@@ -107,6 +107,34 @@ class LayoutContractTests(unittest.TestCase):
             self.assertNotEqual(0, completed.returncode)
             self.assertIn("invalid YAML frontmatter", completed.stdout + completed.stderr)
 
+    def test_malformed_yaml_cannot_pass_role_validation(self) -> None:
+        cases = (
+            "description: Valid: bad",
+            "description: [broken",
+            "description: {broken}",
+            'description: "broken',
+            "description:\n  nested: bad",
+            "description: Valid description.\n  - unexpected",
+        )
+        for malformed in cases:
+            with self.subTest(frontmatter=malformed), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".pi/agents/librarian.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    f"---\nname: librarian\n{malformed}\n---\n",
+                    encoding="utf-8",
+                )
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(0, completed.returncode)
+                self.assertIn("invalid YAML frontmatter", completed.stdout + completed.stderr)
+
     def test_distributed_pi_agents_require_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

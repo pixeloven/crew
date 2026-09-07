@@ -379,6 +379,135 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertNotIn("omitted runtime capture", codex_evidence["source"])
             self.assertIn(".codex/plugins/cache/crew/crew/0.29.0", codex_evidence["source"])
 
+    def test_non_loading_runtime_states_cannot_establish_loaded_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
+            for state in ("omitted", "unavailable", "not-tested"):
+                with self.subTest(state=state):
+                    report = inspect_installations(
+                        project,
+                        home,
+                        {
+                            "pi": {
+                                "state": state,
+                                "version": "9.9.0",
+                                "source": f"{state} capture",
+                            },
+                            "claude": {
+                                "state": state,
+                                "version": "9.9.0",
+                                "source": f"{state} capture",
+                            },
+                            "codex": {
+                                "state": state,
+                                "version": "9.9.0",
+                                "source": f"{state} capture",
+                            },
+                        },
+                    )
+                    self.assertTrue(
+                        all(
+                            harness["loaded_version"] is None
+                            for harness in report["harnesses"].values()
+                        )
+                    )
+                    facts = " ".join(row["fact"] for row in report["checks"])
+                    self.assertNotIn("9.9.0", facts)
+
+    def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.35.0"]},
+            )
+            pi_root = home / ".pi/agent/git/github.com/pixeloven/crew"
+            write_json(pi_root / ".claude-plugin/plugin.json", {"name": "crew", "version": "0.35.0"})
+            codex_root = home / ".codex/plugins/cache/crew/crew/0.35.0"
+            write_json(
+                codex_root / ".claude-plugin/plugin.json",
+                {"name": "crew", "version": "0.35.0"},
+            )
+            (codex_root / "skills").mkdir()
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nref = 'v0.35.0'\n"
+                "[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            write_json(
+                home / ".claude/settings.json",
+                {"enabledPlugins": {"crew@crew": True}},
+            )
+            claude_root = home / ".claude/plugins/cache/crew/crew/0.36.0"
+            manifest = claude_root / ".claude-plugin/plugin.json"
+            write_json(manifest, {"name": "crew", "version": "0.36.0"})
+            write_json(
+                home / ".claude/plugins/installed_plugins.json",
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {
+                                "scope": "user",
+                                "installPath": str(claude_root),
+                                "version": "0.36.0",
+                            }
+                        ]
+                    }
+                },
+            )
+
+            report = inspect_installations(project, home)
+            claude = report["harnesses"]["claude"]
+            self.assertIsNone(claude["served_version"])
+            self.assertIsNone(claude["loaded_version"])
+            self.assertEqual("0.36.0", claude["installed_version"])
+            self.assertEqual(str(manifest), claude["installed_version_source"])
+            self.assertEqual(
+                [{
+                    "root": str(claude_root),
+                    "version": "0.36.0",
+                    "source": str(manifest),
+                    "registration_versions": ["0.36.0"],
+                }],
+                claude["installed_versions"],
+            )
+            skew = next(row for row in report["checks"] if row["check"] == "cross-harness.version-skew")
+            claude_evidence = next(
+                item for item in skew["evidence"] if item["claim"].startswith("claude ")
+            )
+            self.assertEqual("claude selected Crew version is 0.36.0", claude_evidence["claim"])
+            self.assertEqual(str(manifest), claude_evidence["source"])
+
+    def test_claude_registration_version_is_reconciled_with_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            root = base / "home/.claude/plugins/cache/crew/crew/0.36.0"
+            manifest = root / ".claude-plugin/plugin.json"
+            write_json(manifest, {"name": "crew", "version": "0.36.0"})
+            installed_path = base / "home/.claude/plugins/installed_plugins.json"
+            write_json(
+                installed_path,
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {"installPath": str(root), "version": "0.35.0", "scope": "user"}
+                        ]
+                    }
+                },
+            )
+            claude = inspect_installations(base / "project", base / "home")["harnesses"]["claude"]
+            mismatch = next(
+                finding for finding in claude["findings"] if "differs from installed manifest" in finding["claim"]
+            )
+            self.assertEqual(
+                {str(installed_path), str(manifest)},
+                {item["source"] for item in mismatch["evidence"]},
+            )
+
     def test_findings_retain_only_claim_supporting_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, home = self.make_install_tree(pathlib.Path(tmp), "v0.34.0")
@@ -405,6 +534,7 @@ class InstallationTruthTests(unittest.TestCase):
             runtime = {
                 "claude": {
                     "harness": "claude",
+                    "state": "present",
                     "version": "0.30.0",
                     "skills": [],
                     "agents": [],

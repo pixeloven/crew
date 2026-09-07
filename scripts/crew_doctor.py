@@ -36,6 +36,7 @@ EXPECTED_ROLE_NAMES = (
     "reviewer",
     "triage",
 )
+LOADED_RUNTIME_STATES = {"present", "working", "loaded-but-undiscoverable", "truncated"}
 
 
 def _read_json(path: pathlib.Path, default: Any) -> Any:
@@ -80,6 +81,8 @@ def _base_harness() -> dict[str, Any]:
         "installation": {"state": "unavailable", "source": ""},
         "enablement": {"state": "unavailable", "source": ""},
         "runtime": {"state": "not tested", "source": ""},
+        "loaded_version": None,
+        "loaded_version_source": "",
         "capabilities": {"state": "not tested", "source": ""},
         "capability_checks": [],
         "package_roots": [],
@@ -102,6 +105,12 @@ def _record_runtime(result: dict[str, Any], runtime: dict[str, Any] | None) -> N
     if runtime is None or runtime.get("tested") is False:
         return
     state = runtime.get("state")
+    if state in {"not-tested", "not tested"}:
+        result["runtime"] = {
+            "state": "not tested",
+            "source": runtime.get("source", "captured runtime"),
+        }
+        return
     if state is None:
         skills = runtime.get("skills")
         if not isinstance(skills, list):
@@ -134,6 +143,9 @@ def _record_runtime(result: dict[str, Any], runtime: dict[str, Any] | None) -> N
     }:
         raise ValueError(f"unsupported runtime state: {state}")
     result["runtime"] = {"state": state, "source": runtime.get("source", "captured runtime")}
+    if state in LOADED_RUNTIME_STATES and runtime.get("version"):
+        result["loaded_version"] = runtime["version"]
+        result["loaded_version_source"] = result["runtime"]["source"]
 
 
 def _degrade_for_runtime(result: dict[str, Any]) -> None:
@@ -232,11 +244,6 @@ def _record_capabilities(
 def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
     _record_runtime(result, runtime)
-    if runtime is not None and runtime.get("tested") is not False:
-        result["loaded_version"] = runtime.get("version")
-        result["loaded_version_source"] = (
-            result["runtime"].get("source", "") if result["loaded_version"] else ""
-        )
     settings_paths = [project / ".pi/settings.json", home / ".pi/settings.json"]
     settings_paths.extend(sorted((home / ".pi").glob("*/settings.json")))
     registrations: list[dict[str, str | None]] = []
@@ -390,25 +397,65 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     plugins = installed.get("plugins", {}) if isinstance(installed, dict) else {}
     registrations = plugins.get("crew@crew", []) if isinstance(plugins, dict) else []
     result["registrations"] = registrations if isinstance(registrations, list) else []
-    installed_roots = [
-        pathlib.Path(item["installPath"])
-        for item in result["registrations"]
-        if isinstance(item, dict) and isinstance(item.get("installPath"), str)
-    ]
-    installed_roots = [root for root in installed_roots if _manifest_version(root)]
-    if installed_roots:
-        result["installation"] = {"state": "present", "source": str(installed_roots[0])}
-    result["package_roots"] = [str(root) for root in dict.fromkeys(installed_roots)]
-    if result.get("served_version") and location not in installed_roots:
-        result["package_roots"].append(str(location))
-    if runtime is not None and runtime.get("tested") is not False:
-        result["loaded_version"] = runtime.get("version")
-        result["loaded_version_source"] = (
-            result["runtime"].get("source", "") if result["loaded_version"] else ""
+    installed_records: list[dict[str, Any]] = []
+    by_root: dict[pathlib.Path, dict[str, Any]] = {}
+    for registration in result["registrations"]:
+        if not isinstance(registration, dict) or not isinstance(registration.get("installPath"), str):
+            continue
+        root = pathlib.Path(registration["installPath"])
+        manifest_version = _manifest_version(root)
+        if not manifest_version:
+            continue
+        manifest_source = str(root / ".claude-plugin/plugin.json")
+        record = by_root.setdefault(
+            root,
+            {
+                "root": str(root),
+                "version": manifest_version,
+                "source": manifest_source,
+                "registration_versions": [],
+            },
         )
-    else:
-        result["loaded_version"] = None
-        result["loaded_version_source"] = ""
+        raw_registration_version = registration.get("version")
+        if raw_registration_version:
+            registration_version = (
+                _clean_version(str(raw_registration_version)) or str(raw_registration_version)
+            )
+            record["registration_versions"].append(registration_version)
+            if registration_version != manifest_version:
+                result["status"] = "DEGRADED"
+                _add_finding(
+                    result,
+                    f"Claude registration version {registration_version} differs from installed manifest "
+                    f"{manifest_version} at {root}",
+                    str(installed_path),
+                    manifest_source,
+                )
+    installed_records.extend(by_root.values())
+    result["installed_versions"] = installed_records
+    runtime_paths = _runtime_paths(runtime)
+    selected_installed = next(
+        (
+            record
+            for record in installed_records
+            if any(_path_within(path, pathlib.Path(record["root"])) for path in runtime_paths)
+        ),
+        None,
+    )
+    if selected_installed is None and result["served_version"]:
+        selected_installed = next(
+            (record for record in installed_records if pathlib.Path(record["root"]) == location),
+            None,
+        )
+    if selected_installed is None and installed_records:
+        selected_installed = installed_records[0]
+    result["installed_version"] = selected_installed["version"] if selected_installed else None
+    result["installed_version_source"] = selected_installed["source"] if selected_installed else ""
+    if selected_installed:
+        result["installation"] = {"state": "present", "source": selected_installed["root"]}
+    result["package_roots"] = [record["root"] for record in installed_records]
+    if result.get("served_version") and location not in by_root:
+        result["package_roots"].append(str(location))
 
     if result["installation"]["state"] != "present":
         return result
@@ -427,12 +474,13 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             f"installed_plugins.json contains {len(result['registrations'])} Crew scope registrations",
             str(installed_path),
         )
-    installed_versions = {
-        str(record.get("version"))
-        for record in result["registrations"]
-        if isinstance(record, dict) and record.get("version")
+    registration_versions = {
+        _clean_version(str(registration.get("version"))) or str(registration.get("version"))
+        for registration in result["registrations"]
+        if isinstance(registration, dict) and registration.get("version")
     }
-    compared_versions = installed_versions | {
+    manifest_versions = {record["version"] for record in installed_records}
+    compared_versions = registration_versions | manifest_versions | {
         value for value in (result.get("served_version"), result.get("loaded_version")) if value
     }
     if len(compared_versions) > 1:
@@ -441,6 +489,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             result,
             f"Claude served/installed/loaded versions disagree: {', '.join(sorted(compared_versions))}",
             str(installed_path),
+            *(record["source"] for record in installed_records),
             str(location) if result.get("served_version") else "",
             result["runtime"].get("source", "") if result.get("loaded_version") else "",
         )
@@ -542,10 +591,6 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     if isinstance(crew_plugin, dict) and crew_plugin.get("enabled") is True:
         result["enablement"] = {"state": "present", "source": str(config_path)}
     if runtime is not None and runtime.get("tested") is not False:
-        result["loaded_version"] = runtime.get("version")
-        result["loaded_version_source"] = (
-            result["runtime"].get("source", "") if result["loaded_version"] else ""
-        )
         result["runtime_skill_roots"] = list(runtime.get("skill_roots", []))
 
     if result["installation"]["state"] == "present":
@@ -662,8 +707,12 @@ def inspect_installations(
             selected_version = result["resolved_version"]
             selected_source = result.get("resolved_version_source", "")
         else:
-            selected_version = result.get("served_version")
-            selected_source = result.get("served_version_source", "") if selected_version else ""
+            selected_version = result.get("served_version") or result.get("installed_version")
+            selected_source = (
+                result.get("served_version_source", "")
+                if result.get("served_version")
+                else result.get("installed_version_source", "")
+            )
         version_evidence[name] = (selected_version, selected_source)
     versions = {name: value for name, (value, _) in version_evidence.items()}
     observed_versions = {value for value in versions.values() if value}
