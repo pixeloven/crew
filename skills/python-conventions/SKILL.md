@@ -1,6 +1,6 @@
 ---
 name: python-conventions
-description: Python conventions — stack, tooling, uv-workspace project structure, and patterns for CLI (Typer), MCP servers (FastMCP), Pydantic AI, testing (pytest), and packaging (uv). Load for any Python work.
+description: Use when doing any Python work. Defines Python version, uv workspace and packaging conventions, Ruff and pytest gates, plus Typer CLI, FastMCP server, and Pydantic AI patterns.
 tier: subject
 requires: []
 ---
@@ -14,7 +14,7 @@ requires: []
 
 ## Project structure
 
-Example uv-workspace layout (e.g. Harmony splits into `harmony-core` / `harmony-cli` / `harmony-mcp`). Names vary per project; the shape — one shared core library, thin surface packages depending on it — is the convention:
+Example uv-workspace layout. Names vary per project; the shape — one shared core library, thin surface packages depending on it — is the convention:
 
 ```
 src/
@@ -25,7 +25,7 @@ src/
 
 ## CLI (Typer + Rich)
 
-If the project ships a CLI (e.g. Harmony's `hmy`), it is built with Typer. New commands follow the existing command-group pattern:
+If the project ships a CLI, build it with Typer. New commands follow the existing command-group pattern:
 
 ```python
 import typer
@@ -106,7 +106,7 @@ The CLI entrypoint is defined in the CLI package's `pyproject.toml`. The venv is
 
 ## Development setup
 
-If the project's CLI ships dev-workflow commands, prefer them over raw tool invocations — they wrap uv/ruff plus any repo-specific linters. Example shape (e.g. Harmony's `hmy dev`):
+If the project's CLI ships dev-workflow commands, prefer them over raw tool invocations — they wrap uv/ruff plus any repo-specific linters. Example shape:
 
 ```bash
 <cli> dev setup                # Creates .venv, installs linters + extra collections

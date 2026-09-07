@@ -1,6 +1,6 @@
 ---
 name: k8s-kustomize-conventions
-description: Kustomize base+overlay structure, overlay patch patterns, manifest validation, and ArgoCD sync conventions. Load when writing or modifying Kubernetes manifests or kustomization files.
+description: Use when writing or changing Kubernetes manifests or Kustomize files. Defines base-and-overlay structure, patch patterns, manifest validation, and ArgoCD sync conventions.
 tier: subject
 requires: []
 expects-local: [platform-conventions]
@@ -22,7 +22,7 @@ ArgoCD syncs each `overlays/prod/<app>/` directory. Base resources are shared â€
 
 ## Required overlay content
 
-On clusters that schedule workloads onto control-plane nodes (check the project's platform conventions skill, e.g. Harmony's `harmony-platform-conventions`), every overlay must include a toleration patch for the control-plane taint:
+On clusters that schedule workloads onto control-plane nodes (check the project's platform-conventions skill), every overlay must include a toleration patch for the control-plane taint:
 
 ```yaml
 # overlays/prod/<app>/toleration-patch.yaml

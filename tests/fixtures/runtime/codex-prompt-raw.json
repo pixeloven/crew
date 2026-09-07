@@ -1,0 +1,13 @@
+[
+  {
+    "id": "fixture-developer-message",
+    "role": "developer",
+    "type": "message",
+    "content": [
+      {
+        "type": "input_text",
+        "text": "<skills_instructions>\n## Skills\nFixture preamble.\n### Available skills\n- crew:doctor: Use when checking Crew health. Report install and runtime truth. (file: /fixture/cache/crew/crew/0.35.0/skills/doctor/SKILL.md)\n- crew:onboarding: Use when onboarding (file: /fixture/cache/crew/crew/0.35.0/skills/onboarding/SKILL.md)\n- local-bare: Use when proving missing-description state. (file: /fixture/project/.agents/skills/local-bare/SKILL.md)\n</skills_instructions>"
+      }
+    ]
+  }
+]

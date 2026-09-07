@@ -1,6 +1,6 @@
 ---
 name: terraform-conventions
-description: "Terraform conventions — provider setup (worked example: bpg/proxmox + 1Password), variable structure, staged apply separation, and secret handling. Load when writing or reviewing Terraform configurations."
+description: Use when writing or reviewing Terraform. Defines provider setup, variable structure, staged-apply separation, and secret handling, with bpg/proxmox and 1Password as worked examples.
 tier: subject
 requires: []
 expects-local: [secret-paths, topology]
@@ -8,7 +8,7 @@ expects-local: [secret-paths, topology]
 
 ## Stage structure
 
-Split infrastructure into ordered stages when later resources depend on earlier ones (management plane before cluster VMs, DNS before services). Example naming (e.g. Harmony uses `stage1-omni` / `stage2-talos`):
+Split infrastructure into ordered stages when later resources depend on earlier ones (management plane before cluster VMs, DNS before services). Example naming:
 
 ```
 infrastructure/terraform/
@@ -70,7 +70,7 @@ terraform plan              # Show what would change
 
 ## Commands via the project's infra wrapper (if any)
 
-If the project ships an infra CLI wrapper (e.g. Harmony's `hmy infra`), prefer it — it enforces stage ordering and confirmation prompts. Example shape:
+If the project ships an infrastructure CLI wrapper, prefer it — it enforces stage ordering and confirmation prompts. Example shape:
 
 ```bash
 <cli> infra plan stage1     # terraform plan for stage1

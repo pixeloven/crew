@@ -35,20 +35,40 @@ Every skill, everywhere, is a directory containing SKILL.md:
     .agents/skills/<name>/SKILL.md          pi and Codex read this natively
     .claude/skills/<name>/SKILL.md          Claude Code (usually a symlink)
     skills/<name>/SKILL.md                  what a distributed plugin ships
+
+Consumer roles are flat Markdown files, but their frontmatter is still a
+discovery contract:
+
+    agents/<name>.md                        neutral/project role definitions
+    .claude/agents/<name>.md                Claude project roles
+    .pi/agents/<name>.md                    Pi project roles
+
+Each requires a matching `name` and a non-empty `description`. Model, reasoning,
+and turn-budget knobs belong to dispatch and are rejected here. Missing Pi names
+are called out explicitly because pi-subagents drops them without a diagnostic.
 """
 
 import argparse
 import pathlib
-import re
 import sys
 import tempfile
+
+try:
+    from .frontmatter import read_frontmatter
+    from .role_contract import FORBIDDEN_RUNTIME_KEYS
+except ImportError:  # Direct script execution.
+    from frontmatter import read_frontmatter
+    from role_contract import FORBIDDEN_RUNTIME_KEYS
 
 # Where each harness looks. A flat `<name>.md` in any of these is invisible to
 # the harness that reads it -- silently, which is the whole problem.
 SKILL_DIRS = (".agents/skills", ".claude/skills", "skills")
+AGENT_DIRS = ("agents", ".claude/agents", ".pi/agents")
 
-NAME_RE = re.compile(r"^name:\s*(\S+)\s*$", re.M)
-DESC_RE = re.compile(r"^description:\s*(.+)$", re.M)
+
+def frontmatter(path: pathlib.Path) -> tuple[dict[str, object] | None, str | None]:
+    """Parse only the leading YAML frontmatter, never matching body text."""
+    return read_frontmatter(path)
 
 
 def check(root: pathlib.Path) -> list[str]:
@@ -84,19 +104,53 @@ def check(root: pathlib.Path) -> list[str]:
                 errors.append(f"{rel}/{entry.name}/: no SKILL.md")
                 continue
 
-            text = skill.read_text(encoding="utf-8")
-            m = NAME_RE.search(text)
-            if not m:
+            metadata, error = frontmatter(skill)
+            if error:
+                errors.append(f"{rel}/{entry.name}/SKILL.md: {error}")
+                continue
+            name = metadata.get("name")
+            if not isinstance(name, str) or not name:
                 errors.append(f"{rel}/{entry.name}/SKILL.md: no `name:` in frontmatter")
-            elif m.group(1) != entry.name:
+            elif name != entry.name:
                 errors.append(
-                    f"{rel}/{entry.name}/SKILL.md: name is {m.group(1)!r} "
+                    f"{rel}/{entry.name}/SKILL.md: name is {name!r} "
                     f"but the directory is {entry.name!r} -- the directory wins, "
                     f"so the skill loads under a name nothing routes to"
                 )
 
-            if not DESC_RE.search(text):
+            description = metadata.get("description")
+            if not isinstance(description, str) or not description.strip():
                 errors.append(f"{rel}/{entry.name}/SKILL.md: no `description:` — it is the entire load path")
+
+    for rel in AGENT_DIRS:
+        base = root / rel
+        if not base.is_dir():
+            continue
+        for path in sorted(base.glob("*.md")):
+            metadata, error = frontmatter(path)
+            display = f"{rel}/{path.name}"
+            if error:
+                errors.append(f"{display}: {error}")
+                continue
+            name = metadata.get("name")
+            if not isinstance(name, str) or not name:
+                consequence = " — missing identity causes a silent Pi drop" if rel == ".pi/agents" else ""
+                errors.append(f"{display}: no `name:` in frontmatter{consequence}")
+                if path.stem.startswith("role-"):
+                    errors.append(
+                        f"{display}: filename/name mismatch: {path.stem!r} cannot match an absent required name"
+                    )
+            elif name != path.stem:
+                errors.append(
+                    f"{display}: filename/name mismatch: frontmatter name {name!r} != filename {path.stem!r}"
+                )
+            description = metadata.get("description")
+            if not isinstance(description, str) or not description.strip():
+                errors.append(f"{display}: no `description:` in frontmatter — the role is undiscoverable")
+            for key in sorted(set(metadata) & set(FORBIDDEN_RUNTIME_KEYS)):
+                errors.append(
+                    f"{display}: forbidden runtime knob {key!r} — {FORBIDDEN_RUNTIME_KEYS[key]}"
+                )
 
     return errors
 
@@ -132,6 +186,24 @@ def selftest() -> int:
         (bad / "SKILL.md").write_text("---\nname: something-else\ndescription: x\n---\n")
         cases.append(("a name/directory mismatch is rejected", any("but the directory is" in e for e in check(root))))
 
+        # Body text must never satisfy frontmatter requirements.
+        body_only = root / ".agents/skills/body-only"
+        body_only.mkdir()
+        (body_only / "SKILL.md").write_text("---\ntier: subject\n---\nname: body-only\ndescription: body\n")
+        cases.append(
+            (
+                "body fields do not satisfy frontmatter",
+                any("no `name:` in frontmatter" in e for e in check(root)),
+            )
+        )
+
+        invalid_agent = root / ".pi/agents/role-probe.md"
+        invalid_agent.parent.mkdir(parents=True)
+        invalid_agent.write_text("---\ndescription: probe\nmodel: fixed\n---\n")
+        agent_errors = check(root)
+        cases.append(("a silently dropped Pi role is rejected", any("silent Pi drop" in e for e in agent_errors)))
+        cases.append(("consumer runtime knobs are rejected", any("runtime knob 'model'" in e for e in agent_errors)))
+
     for label, ok in cases:
         print(f"{'ok  ' if ok else 'FAIL'} {label}")
     return 0 if all(ok for _, ok in cases) else 1
@@ -147,8 +219,12 @@ def main() -> int:
         return selftest()
 
     root = pathlib.Path(args.root).resolve()
-    if not any((root / d).is_dir() for d in SKILL_DIRS):
-        print(f"no skill directories under {root} ({', '.join(SKILL_DIRS)})", file=sys.stderr)
+    if not any((root / d).is_dir() for d in SKILL_DIRS + AGENT_DIRS):
+        print(
+            f"no skill or consumer-agent directories under {root} "
+            f"({', '.join(SKILL_DIRS + AGENT_DIRS)})",
+            file=sys.stderr,
+        )
         return 1
 
     errors = check(root)
@@ -159,7 +235,7 @@ def main() -> int:
               f"not the file tree -- the tree looks right in exactly the case that fails.",
               file=sys.stderr)
         return 1
-    print("skill layout ok: every skill is <name>/SKILL.md where its harness looks")
+    print("skill layout ok; consumer role layout ok: frontmatter identities and runtime posture are valid")
     return 0
 
 

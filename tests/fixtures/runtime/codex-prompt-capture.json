@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "harness": "codex",
+  "captured_at": "2026-09-07T00:00:00Z",
+  "source_command": "codex debug prompt-input hi",
+  "cost": "free",
+  "skills": [
+    {
+      "name": "crew:doctor",
+      "description": "Use when checking Crew health. Report install and runtime truth.",
+      "path": "/fixture/cache/crew/crew/0.35.0/skills/doctor/SKILL.md"
+    },
+    {
+      "name": "crew:onboarding",
+      "description": "Use when onboarding",
+      "path": "/fixture/cache/crew/crew/0.35.0/skills/onboarding/SKILL.md"
+    },
+    {
+      "name": "local-bare",
+      "description": null,
+      "path": "/fixture/project/.agents/skills/local-bare/SKILL.md"
+    },
+    {
+      "name": "runtime-only",
+      "description": "Loaded from a different root.",
+      "path": "/fixture/other/runtime-only/SKILL.md"
+    }
+  ],
+  "telemetry": {
+    "omitted_skills": 1,
+    "truncated_skill_descriptions": 1
+  }
+}

@@ -13,11 +13,16 @@ crew/
 ├── pi-agents/*.md                  # RENDERED pi-subagents files (do not edit) — same names as agents/
 ├── docs/CATALOG.md                 # GENERATED skill inventory
 ├── templates/AGENTS.md             # the onboarding scaffold (behavioral spine + ▸ Fill blocks)
-├── templates/local-skills/         # the 7 consumer-local slot definitions + starter stubs
+├── templates/local-skills/         # 5 declared slots + 2 recommended vocabulary stubs
 ├── scripts/render_roles.py         # role renderer; --check is the CI drift gate
+├── scripts/role_contract.py        # shared role posture/runtime-knob contract
+├── scripts/frontmatter.py          # dependency-free leading-frontmatter field parser
+├── scripts/crew_doctor.py          # deterministic read-only Doctor evidence helpers
+├── scripts/onboarding_contract.py  # audit/apply lifecycle contract
 ├── scripts/gen_catalog.py          # docs/CATALOG.md generator; --check in CI
-├── scripts/check_skills.py         # schema-v2 frontmatter validator (incl. expects-local)
-├── scripts/check_skill_refs.py     # every skill ref in agent bodies must resolve
+├── scripts/check_skills.py         # schema-v2 + 110–300 character description gate
+├── scripts/check_skill_layout.py   # skill and consumer-role layout/frontmatter gate
+├── tests/                          # fixture-driven cross-harness contract regressions
 ├── package.json                    # pi package manifest
 └── .claude-plugin/
     ├── plugin.json                 # Claude plugin manifest
@@ -26,10 +31,10 @@ crew/
 
 ## Editing rules
 
-- **Roles:** a role is exactly two files — a harness-neutral `role.yml` (`name`, `description`, `writes`, optional `dispatch`) and one shared `body.md`. Anything else in the directory is a build error. Run `scripts/render_roles.py`, commit source + rendered output together; CI fails on drift. `agents/` and `pi-agents/` are byte-identical below the frontmatter, and `render_roles.py` alone translates the posture into each harness's dialect (Claude Code denies via `disallowedTools`, pi allows via `tools`), so the two cannot drift apart by editing.
+- **Roles:** a role is exactly two files — a harness-neutral `role.yml` (`name`, `description`, `writes`, optional `dispatch`) and one shared `body.md`. Anything else in the directory is a build error. Run `scripts/render_roles.py`, commit source + rendered output together; CI fails on drift. `agents/` and `pi-agents/` are byte-identical below the frontmatter. `role_contract.py` defines posture once and `render_roles.py` translates it into each harness's dialect. Claude `drafts` deliberately retains `Write`, so it can create and overwrite files while surgical edit tools are denied. Every role retains shell access, making the posture advisory unless the host sandbox enforces it.
 - **Per-harness prose is a smell; per-deployment prose is a bug.** Roles used to carry `claude-context.md` / `pi-context.md` appendices. What they actually encoded was not a harness difference but a *runtime* one — an interactive working tree versus a workflow-managed pod — and the pi copy had accumulated one consumer's Argo paths, branch naming and exit contract. The portable default is now the interactive case, in the shared body; a deployment whose runtime differs shadows the rendered agent in **its own overlay**. If you find yourself wanting a per-harness paragraph, check first whether the real axis is the deployment.
 - **No runtime knobs in a role.** A role declares who it is and what it may touch — never which model, how hard to think, or how many turns it gets. All three harnesses support those (Claude Code: `model` / `effort` / `maxTurns`; pi: `model` / `thinking` / `turnBudget`; Codex: `model` / `model_reasoning_effort`) and all three inherit sensible values from the dispatching session when they are omitted. Shipping them from a foundation imposes one operator's cost tier and one vendor's model naming on every consumer, and goes stale on every model release. On Codex it is worse than stale: a role file's `model` is applied *after* the spawn arguments, so it silently overrides the orchestrator's explicit choice. `render_roles.py` rejects `model`, `thinking`, `effort`, `model_reasoning_effort`, `turnBudget` and `maxTurns` in `role.yml` by name — a consumer that wants to pin one sets it in its own overlay or harness config, where it belongs.
-- **Skills:** schema-v2 frontmatter (`name`, `description` ≥110 chars with trigger language, `tier`, `requires`, optional `expects-local`). No project-specific values — the dividing test is **"no project context baked in"**, not width: a single-language convention skill is fine if any project benefits; anything binding to one deployment's vault, gateway, cluster, secret paths, or domains belongs in that consumer's overlay (deferral goes through an `expects-local` slot).
+- **Skills:** schema-v2 frontmatter (`name`, `description` 110–300 chars with discriminating trigger language first, `tier`, `requires`, optional `expects-local`). The maximum is a repository policy chosen to retain useful triggers under observed catalogue pressure, not a frozen product byte limit. No project-specific values — the dividing test is **"no project context baked in"**, not width: a single-language convention skill is fine if any project benefits; anything binding to one deployment's vault, gateway, cluster, secret paths, or domains belongs in that consumer's overlay (deferral goes through an `expects-local` slot).
 - **Generated artifacts:** after any frontmatter change, run `scripts/gen_catalog.py` and commit `docs/CATALOG.md`.
 - **Discovery is the harness's job, not ours — and that is a dependency, so it gets verified and dated.** Each supported harness lists installed skills, with their descriptions, to the model itself. Verified 2026-08-15:
 
@@ -41,7 +46,7 @@ crew/
 
   This is why the catalogue needs no in-repo index: one would be a second, staler copy of what the runtime already injects. **Re-verify on a major harness upgrade** — if a harness ever stopped listing skills, roles would still say "you have a list of available skills" and agents would quietly stop loading them.
 
-  **The listing is not guaranteed complete, and roles must not claim it is.** Codex budgets its listing and, over budget, truncates descriptions and omits skills outright, reporting the loss only in telemetry. A skill can also be absent because it is in the wrong layout for that harness, has unparseable frontmatter, or sits behind a dangling symlink. So roles state the observable fact (*you have a list*) rather than the mechanism, and instruct agents to report an expected-but-missing skill as drift; `doctor`'s discovery check exists to answer why.
+  **The listing is not guaranteed complete, and roles must not claim it is.** Codex can truncate descriptions or omit skills, and Claude Code can elide descriptions under catalogue pressure. A skill can also be absent because it is in the wrong layout for that harness, has unparseable frontmatter, or sits behind a dangling symlink. So roles state the observable fact (*you have a list*) rather than the mechanism, and instruct agents to report an expected-but-missing skill as drift; `doctor`'s discovery check exists to answer why. Measurements belong in dated evidence, not permanent limit claims.
 
   Consequently `description` quality is a hard gate here and the catalogue stays small — those are the only two levers on discovery that actually exist.
 
@@ -51,4 +56,4 @@ One semver line drives all consumers. Claude Code re-fetches only when `plugin.j
 
 ## CI gates
 
-`validate` (manifests + schema-v2), `roles-rendered` (render drift + skill-ref resolution), `generated-current` (catalog freshness + templates parse), `version-bump` (on content change), plus the security floor (gitleaks, osv-scanner, dependency-review). This repo is a **supply-chain root** — its skills and agents load as instructions into every consumer's agents; every change requires owner review.
+`validate` (manifests, schema-v2, description budget, layout self-test, consumer-role fixtures, and Doctor/Onboarding unit tests), `roles-rendered` (render drift + skill-ref resolution), `generated-current` (catalog freshness + templates parse), `version-bump` (on content change), plus the security floor (gitleaks, osv-scanner, dependency-review). This repo is a **supply-chain root** — its skills and agents load as instructions into every consumer's agents; every change requires owner review.

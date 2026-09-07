@@ -1,6 +1,6 @@
 ---
 name: k8s-workload-patterns
-description: Kubernetes workload design patterns — choosing between Deployment, StatefulSet, DaemonSet and Job, resource requests and limits, probes and health checks, storage tier selection, security context, and service exposure. Load when writing or reviewing a workload manifest, choosing a controller kind, or sizing a pod.
+description: Use when writing or reviewing a Kubernetes workload, choosing Deployment vs StatefulSet vs DaemonSet vs Job, or sizing a pod. Covers resources, probes, storage, security context, and exposure.
 tier: subject
 requires: []
 expects-local: [platform-conventions, topology]
@@ -109,7 +109,7 @@ Application ("lab") services use one wildcard domain; management services use a 
 
 ## PersistentVolumeClaims
 
-Always use PVCs, never hostPath (except for DaemonSet node-exporter patterns). StorageClass selection follows the project's storage tiers — typically a runtime tier and a retained tier (e.g. Harmony's `harmony-runtime` / `harmony-storage`):
+Always use PVCs, never hostPath (except for DaemonSet node-exporter patterns). StorageClass selection follows the project's local platform conventions — typically separate runtime and retained tiers:
 - runtime tier — databases, model weights, ephemeral workspaces (fast media, Delete reclaim)
 - retained tier — user data, media, long-lived shared content (bulk media, Retain reclaim)
 

@@ -1,11 +1,11 @@
 ---
 name: platform-glossary
-description: The platform's shared vocabulary — the resolved meaning of the ambiguous nouns every consumer reuses (app, surface, consumer, tenant, gateway, platform, workload, deployment/service, component, project, skill, MCP server vs MCP consumer) plus the three-level naming hierarchy (platform / deployment / K8s-primitive) plus two human-vs-machine traps — "the operator" always means the human, and "crew" means this foundation's roles rather than a firstmate-lineage tool's dispatched workers. Load when naming a thing, reasoning about where a workload lives, or before writing docs or manifests that use these terms. Generic; a consumer's concrete names live in its own local architecture skill.
+description: Use when naming a platform concept, locating a workload, or writing docs/manifests with shared terms. Resolves app, surface, consumer, tenant, gateway, workload, deployment, project, skill, operator, and Crew vocabulary.
 tier: concept
 requires: []
 ---
 
-The generic vocabulary every consumer of the platform shares. Terminology drift is load-bearing: "app", "gateway", "agent", and "project" each carry several distinct meanings, and conflating them silently corrupts design discussions and manifests alike. This skill is the one place the ambiguous nouns resolve. It is **generic** — a consumer specializes it with concrete names (its actual services, namespaces, gateway hosts) in its own **local architecture skill**, which shadows this one where the two disagree for that consumer.
+The generic vocabulary every consumer of the platform shares. Terminology drift is load-bearing: "app", "gateway", "agent", and "project" each carry several distinct meanings, and conflating them silently corrupts design discussions and manifests alike. This skill is the one place the ambiguous nouns resolve. It is **generic** — a consumer specializes it with concrete names (its actual services, namespaces, gateway hosts) in its own **local architecture skill**. Collision behavior remains harness-specific.
 
 ## The resolved nouns
 
@@ -23,7 +23,7 @@ Bare use of an ambiguous term below is banned in favour of the qualified form.
 | **deployment** / **service** | Capitalized = the **K8s kind only** (`Deployment`, `Service`). Lowercase "deployment" in a topology / registration context is ambiguous → prefer **workload**. |
 | **component** | reserved for a shared manifest **base** under `base/{component}/` — a reusable base composed by an aggregator overlay. Not a synonym for workload or service. |
 | **project** | banned bare — the ArgoCD **`AppProject`** (an RBAC / allow-list boundary) · the **consumer project** (the actor / repo that consumes the platform) · a **repo**. Say which. |
-| **skill** | a loadable capability doc (`skills/<name>/SKILL.md`). A **platform skill** is generic and lives in the foundation; a **local skill** holds a consumer's specifics and lives in that consumer's overlay, **shadowing** the platform skill of the same name (in a flat namespace such as pi's; Claude Code namespaces the plugin copy as `plugin:skill`, so there both stay visible). |
+| **skill** | a loadable capability doc (`skills/<name>/SKILL.md`). A **platform skill** is generic and lives in the foundation; a **local skill** holds a consumer's specifics and lives in that consumer's overlay. It shadows a same-named package skill only in a flat namespace such as Pi's; Claude Code and Codex namespace the Crew plugin copy as `crew:skill`, so both stay visible. |
 | **MCP server** vs **MCP consumer** | an **MCP server** *exposes* tools / resources over MCP (the provider being called). An **MCP consumer** (client) is a runtime that *connects to and calls* an MCP server — typically a surface. Name which side you mean; "MCP client" alone hides it. |
 | **the operator** | **the human being who directs the work** — the person an agent escalates to, asks for a decision, or reports to. This is the default and winning reading of the phrase in every agent contract, prompt, plan, and doc. A *tool* named "operator" is written in code style (`operator`); see below. |
 | **crew** | banned bare when both senses are in play — the foundation's **crew roles** (lead, implementer, reviewer, triage, …) versus an external tool's **crew of dispatched workers**. Say "crew role" or name the tool's vocabulary explicitly; see below. |
@@ -46,7 +46,7 @@ Two vocabularies use *crew* for different things, and both appear in this fleet'
 
 | Vocabulary | "crew" means | The human is | A worker is |
 |---|---|---|---|
-| **this foundation** (harmony-crew) | the **set of agent roles** — lead, implementer, reviewer, researcher, triage, investigator, responder | **the operator** | a dispatched **role**, e.g. "a reviewer" |
+| **this foundation** (Crew) | the **set of agent roles** — lead, implementer, reviewer, researcher, triage, investigator, responder | **the operator** | a dispatched **role**, e.g. "a reviewer" |
 | **firstmate lineage** (`kunchenguid/firstmate` and its forks, e.g. `pixeloven/operator`) | the **fleet of dispatched worker agents** in a running session | **the captain** | a **crewmate** (or a **secondmate** — a persistent worker with its own isolated home) |
 
 Rules:

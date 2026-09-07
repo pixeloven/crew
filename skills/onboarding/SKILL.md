@@ -1,81 +1,151 @@
 ---
 name: onboarding
-description: Onboard a project to this agent foundation, or re-audit one that has drifted. Generates a new AGENTS.md, or refactors an existing AGENTS.md/CLAUDE.md, to the foundation's behavioral patterns — delegation, the platform-to-local skill bridge, tripwires, fallback — and moves facts and conventions OUT of the entry files INTO local skills. Re-runnable as the project evolves. Load when adopting the foundation, scaffolding a new repo, or when an entry file has accreted facts and conventions.
+description: Use when onboarding or re-auditing a project against Crew. Defaults to a read-only report; edits require explicit apply authorization. Preserves mature entry files, safety tripwires, delivery contracts, and runbook pointers.
 tier: concept
 requires: []
 ---
 
 # Onboarding
 
-harmony-crew is an **opinionated** foundation — like the Karpathy guidelines, it takes a stance on how agents should work, and this skill *shapes a project to match it*. It **generates** an `AGENTS.md` for a new project, **audits and refactors** an existing one, and is meant to be **re-run** as the project grows so the entry files don't drift back toward fact-stuffing.
+Crew onboarding has two distinct modes: **audit** and **apply**. A plain request
+such as “onboard this project” and an explicit audit request both select audit.
+Audit is the default and writes nothing. Apply is available only when the current
+run has a distinct, explicit authorization to apply onboarding changes.
 
-The foundation publishes to **three harnesses** (Claude Code, pi.dev, OpenAI Codex). Onboarding is mainly about the harnesses driven by an `AGENTS.md` — Claude Code and pi.dev (crew roles + skills) and **Codex** (same `AGENTS.md` read natively, full skill catalog, and its own subagent dispatch — it delegates when the routing table instructs it to). If the project *also* runs **OpenClaw** agents, they consume a **skill slice** (not roles, not `AGENTS.md`); onboarding's job there is narrower — flag that the gateway must wire the consumption-slice install (see [step 5](#5-if-the-project-runs-openclaw)).
+The lifecycle rule is deterministic in `scripts/onboarding_contract.py`. Under a
+supervised or autonomous host, bind any decision to that host's generic
+escalation/decision interface. Do not assume synchronous chat and do not embed a
+private supervisor protocol in a consumer project.
 
-## The stance (what "good" looks like)
+## The foundation stance
 
-1. **Entry files drive behavior; skills carry facts.** `AGENTS.md` / `CLAUDE.md` hold *behavior* — delegation, routing, posture, planning, memory, the platform↔local bridge, tripwires, fallback. Infrastructure facts, conventions, credentials, and command catalogs belong in **local skills** (`.agents/skills/`). A fact sitting in the entry file is a bug to fix.
-2. **Delegate by default** to the foundation's roles — `lead`, `triage`, `investigator`, `researcher`, `implementer`, `reviewer`, `responder`. The entry file's routing table is what makes delegation automatic instead of an afterthought.
-3. **Merge-don't-replace.** The foundation supplies the behavioral spine; the project fills only its specifics (ask-list, tripwires, local-skills map, verification commands, repo). The canonical shape is [`templates/AGENTS.md`](../../templates/AGENTS.md).
-4. **Trigger vs detail.** A silent landmine's *trigger* lives always-on (a Tripwire line + an imperative skill `description`); its *detail* lives in the skill, loaded on demand. Never duplicate the detail into the entry file.
-5. **Reach for the platform first; degrade only on a real failure.** Agents use the corpus / gateway / cluster as the default path and fall back gracefully once a call actually fails (the Fallback section). Onboarding delivers value before the platform is wired, and never assumes a capability is absent without checking.
+1. **Entry files drive behavior; skills carry reusable detail.** `AGENTS.md` and
+   `CLAUDE.md` hold routing, posture, planning, memory, tripwires, fallback, and
+   delivery boundaries. Project facts and conventions usually belong in local
+   skills, but bootstrap-critical runbook pointers may stay near the code.
+2. **Merge, never replace, mature entry files.** The template is a source of
+   missing behavior, not authority to erase project contracts.
+3. **Preserve safety and delivery.** Safety tripwires, project delivery gates,
+   verification commands, protected-seam rules, and runbook pointers are
+   load-bearing. Never remove or weaken them merely to make an entry file smaller.
+4. **Trigger versus detail.** A silent landmine's trigger stays always-on; its
+   detailed procedure can live in a skill or runbook. Preserve both sides of that
+   link.
+5. **Platform-first only on evidence.** Use a granted capability as the preferred
+   path; degrade after an actual failure and report whether it was unavailable or
+   simply not tested.
 
-## Procedure
+## Audit mode — always first, never mutating
 
-### 1. Assess — run the doctor
-- Is the foundation installed? (`.claude/settings.json` plugin entry / `.pi/settings.json` package / Codex's `.agents/skills` or `~/.agents/skills` catalog copy.) If not, point the operator at the per-harness quickstart (`docs/quickstart-claude-code.md` / `docs/quickstart-pi.md` / `docs/quickstart-codex.md`) first.
-- Run the `doctor` skill's checks — installation, entry file, capability probe, local slots. Its closing **profile** (portable / platform / personas) drives the rest of this procedure.
-- Inventory the entry files: is there an `AGENTS.md`? a `CLAUDE.md`? Read what's in them.
-- Note what the foundation offers that the project isn't using yet — the 7 shared roles, the platform skills.
+### 1. Run Doctor
 
-### 2a. New project (no AGENTS.md) → generate
-- Start from `templates/AGENTS.md`.
-- Fill what you can **infer** from the repo: verification commands (`package.json` / `pyproject.toml` / `Makefile`), the remote URL (`git remote`), the stack. Leave the judgment slots (ask-list, tripwires, local-skills map) marked for the operator **with concrete suggestions**, not blanks.
-- **Do not write a skills index.** The harness lists every installed skill with its description before the first turn — that listing is how agents discover skills, and a hand-written catalogue in `AGENTS.md` only adds a copy that goes stale. Write the concern → local-skill mapping instead: which local skill owns topology, conventions, seams, access. That encodes a judgement the descriptions can't make.
-- **Decide scope before installing anything.** A capability applied to THE WORK
-  (agent methodology, a memory substrate, a design language) goes to USER scope —
-  it is wanted in every repo and knows nothing about any of them. Knowledge about a
-  SPECIFIC ARTIFACT FORMAT goes to the project. A project settings file should name
-  only what is specific to that project; restating a universal is how one stale
-  version ends up registered three times. Do not declare the same plugin at both.
+Run `doctor` read-only and consume its exact profile taxonomy:
 
-- **Lay every local skill out once, in `.agents/skills/<name>/SKILL.md`.** pi and Codex read that natively; Claude Code needs `ln -s ../../.agents/skills/<name> .claude/skills/<name>`, and requires the **directory** form — a flat `.claude/skills/<name>.md` is invisible to it with no error. Confirm by starting the harness (`claude -p` in a separate process; `codex debug prompt-input`), never by looking at the tree: the tree looks right in exactly the case that fails.
-- **Let the doctor's profile shape what you recommend, not what you index.** For a `portable` project don't propose capability skills whose tools the probe couldn't reach — that's an instruction the agent can't follow. If a probe fails, confirm the capability is genuinely ungranted rather than transiently down, and re-run onboarding when a new one is granted.
-- Add a one-line `CLAUDE.md` (`@AGENTS.md`) if this is a Claude Code project (pi reads `AGENTS.md` directly).
+- `personas` when repository evidence declares an OpenClaw/persona runtime;
+- otherwise `platform` when a project capability was proven working;
+- otherwise `portable`.
 
-### 2b. Existing entry files → audit + refactor
-Walk every section of `AGENTS.md` (and `CLAUDE.md`) and classify it:
-- **Behavior** (delegation, posture, planning, memory, the bridge, tripwires, fallback) → keep; add any of these that are missing, from the scaffold.
-- **Audit every behaviour-bearing file, not just the entry file.** `CONTRIBUTING.md`,
-  `README.md` and per-directory guides carry rules agents and humans both follow, and
-  nothing reconciles them against the entry file or the skills. A fact stated in two
-  places has two sources of truth and will diverge — this foundation's own README once
-  stated the correct skill-layout rule while four other files stated the opposite, and
-  every syntactic gate passed. Where such a file restates a skill-owned fact, replace
-  the copy with a pointer.
+Keep Doctor's installation, enablement, runtime, and capability states separate.
+Do not “fix” a missing or degraded result during audit.
 
-- **Facts / conventions** (infra tables, IPs, domains, credential paths, command catalogs, service/app inventories, named conventions) → **propose moving each into a local skill** — a new `.agents/skills/<name>/SKILL.md`, or an existing one — leaving only a behavioral *pointer* in the entry file. When a fact fills one of the declared local-skill **slots** (per the doctor's slot check), start from the matching stub in `templates/local-skills/`.
-- **Accretion** (changelogs, "recent changes", duplicated conventions) → propose removal; git history is the record.
-- **Landmines** → for every convention that fails *silently* when violated, ensure (a) a Tripwire line in `AGENTS.md`, and (b) the owning skill's `description` names the trap + its consequence imperatively, so the skill loads reliably.
+### 2. Inventory behavioral surfaces
 
-### 3. Recommend, then apply
-Present a short plan first — *what moves to skills, what's added, what's removed* — then apply it. Moving content into skills is a real edit; confirm destructive removals with the operator. The entry file should come out **shorter** than it went in.
+Read the root `AGENTS.md`, `CLAUDE.md`, contribution/delivery contracts, and
+runbook indexes. Classify content without editing it:
 
-### 4. Re-run as the project evolves
-This skill is idempotent. Run it again whenever the entry files have grown — a convention crept in, a new landmine appeared, a new local skill is warranted. Each pass nudges the project back to the rule: *behavior in the entry file, facts in skills*.
+- **behavior** — routing, autonomy, planning, memory, interface boundaries,
+  tripwires, fallback, validation, and delivery;
+- **facts/conventions** — candidates for a local skill when reusable;
+- **accretion** — dated narrative or duplication that may be removable;
+- **landmines** — silent-failure triggers whose pointer and consequence must stay
+  visible;
+- **preserved project contract** — mature safety, delivery, bootstrap, or runbook
+  content that must remain even when it is detailed.
 
-### 5. If the project runs OpenClaw
-OpenClaw agents are personas, not crew roles — they don't load `AGENTS.md` or the plugin/package. They consume a **skill slice** installed into the gateway's managed skills dir. If the project runs OpenClaw, check (and flag to the operator if missing):
-- The gateway's `init-skills` step clones the foundation at its **pinned tag** and installs the slice from a **checked-in list in the consumer's own repo** — never a hand-typed list, and never a list this foundation maintains, since which skills a persona should see is a deployment decision. A private foundation repo needs an **init-only** GH token.
-- Each agent's `agents.list[].skills` allowlist exposes only the slice entries that match its LiteLLM VK grants (web search / image gen / KB) — don't hand an agent a skill for a capability its VK can't reach.
-- **Operator skills stay operator-only** — the skills for building and tuning a gateway live in the consumer's own overlay, never installed into persona agents.
-This is a wiring check, not an `AGENTS.md` edit — record the specifics (slice list, tag, allowlists) in the project's local infra manifests, not here.
+Long is not itself a defect. A mature entry file can legitimately contain more
+behavior than `templates/AGENTS.md`. Never use byte count or “shorter” as a
+success criterion.
 
-## Done when (measure the outcome; don't gate it)
+### 3. Audit local ownership and layout
 
-- `AGENTS.md` is short and behavioral; the facts are in skills.
-- `doctor` reports OK (or a deliberate N/A) on every check for the chosen profile.
-- Delegation routes to the foundation's roles.
-- Every silent landmine has a Tripwire + an imperative skill `description`.
-- Re-running the skill surfaces fewer and fewer changes over time.
+Derive only the slots the installed Crew skills actually declare in
+`expects-local:`. Keep recommended names such as `litellm-access-map` and
+`vault-ops` separate from required slots. Record the concern → local-skill owner
+map; do not create a catalogue the runtime already supplies.
 
-**Worked example:** [Harmony's filled `AGENTS.md`](https://github.com/ductiletoaster/harmony/blob/main/AGENTS.md) — the foundation's first consumer.
+Canonical local skills live once at `.agents/skills/<name>/SKILL.md`. Claude can
+consume directory symlinks at `.claude/skills/<name>`; Pi and Codex consume the
+canonical `.agents/skills` tree from the project. Use the validator from the
+absolute resolved Crew package root, not a consumer-relative `scripts/` path.
+Validate `agents/`, `.claude/agents/`, and `.pi/agents/` frontmatter as well.
+
+### 4. Audit gaps without proposing destructive shortcuts
+
+For a project without `AGENTS.md`, report that apply mode would start from
+`templates/AGENTS.md`, infer verification commands and repository facts, and
+leave judgment slots with concrete suggestions. Do not create the file in audit.
+
+For existing files, report what behavior is present, missing, duplicated, or
+ambiguous. Propose moves as a mapping of source content → destination skill or
+runbook → retained pointer. Flag every proposed deletion separately. Preserve
+source attribution and compatibility notes that still explain a live contract.
+
+### 5. Audit persona/OpenClaw consumers when present
+
+The `personas` profile is a narrower consumption model: persona agents consume
+only capability skills their grants can support; they do not inherit Crew roles
+or the repo's root `AGENTS.md`. Inspect the project's actual install source,
+allowlists, and capability grants in both directions.
+
+Crew does not currently promise a bundled capability slice. Do not prescribe a
+dead clone or invent a slice path. If the project needs a consumer-owned slice or
+an outward-facing package decision, record that as a recommendation requiring
+the host decision interface. Operator/deployment skills remain operator-only.
+
+### 6. Deliver the audit and stop
+
+Return a report with:
+
+- Doctor profile and top action;
+- observed behavior, facts, landmines, preserved contracts, and untested areas;
+- proposed additions, moves, and removals as separate lists;
+- exact validation commands the host project already owns;
+- decisions required before apply.
+
+If apply was not explicitly authorized, stop at this boundary. The report is the
+result; do not create a plan file or modify the repository just to persist it.
+
+## Apply mode — explicit authorization required
+
+Apply only when the request distinctly says to apply the onboarding findings and
+the current run is authorized to write. Record that per-run authorization. A
+prior audit, a plain onboarding request, or general autonomy is not apply
+authorization.
+
+Before the first edit:
+
+1. re-state the approved audit findings and exact files in scope;
+2. confirm the host write boundary permits those files;
+3. route destructive moves/removals through the host runtime's generic
+   escalation/decision interface and wait for a recorded decision;
+4. exclude user settings, plugin registries, deployed services, and other
+   external state unless separately authorized.
+
+For a new project, merge the filled `templates/AGENTS.md` scaffold and optional
+one-line `CLAUDE.md` shim. For a mature project, edit surgically: preserve its
+entry files, safety tripwires, delivery contracts, verification commands, and
+runbook pointers. When moving detail, establish and validate the destination
+first, retain an actionable pointer, then remove source text only if that
+specific removal is authorized.
+
+After edits, run the package layout/frontmatter validators and the project's own
+focused checks. Onboarding does not own implementation delivery: hand validation,
+review, commit, push, PR, and CI to the host project's established workflow. Do
+not declare the wider change delivered merely because the onboarding edit or
+Doctor report looks correct.
+
+## Re-audit
+
+Re-running onboarding returns to audit mode unless apply is explicitly authorized
+again. Compare the new report with prior evidence; fewer findings are useful, but
+idempotence and preserved behavior matter more than file size.

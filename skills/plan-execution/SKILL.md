@@ -1,6 +1,6 @@
 ---
 name: plan-execution
-description: How to read an approved plan, dispatch workers through its phase structure, check results against acceptance criteria and validation gates, route deltas, and drive it to completion. Load when executing a plan that already exists, dispatching a worker or a review, or driving multi-phase work to done.
+description: Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, acceptance criteria, validation gates, delta routing, and completion evidence.
 tier: concept
 requires: []
 expects-local: [protected-seams]

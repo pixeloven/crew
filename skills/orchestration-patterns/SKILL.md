@@ -1,6 +1,6 @@
 ---
 name: orchestration-patterns
-description: Composing work across multiple agents — sequential, parallel and mixed shapes, the dispatch packet a worker needs, convergence, writer isolation, and how to bind each of those to your harness's actual primitives rather than describing them in prose. Load when planning work that spans several agents, dispatching a worker, or deciding how to split and reconverge a task.
+description: Use when planning multi-agent work, dispatching workers, or splitting and reconverging a task. Covers sequential, parallel, and mixed execution, dispatch packets, convergence, writer isolation, and harness bindings.
 tier: concept
 requires: []
 ---

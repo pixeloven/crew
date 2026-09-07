@@ -1,6 +1,6 @@
 ---
 name: autonomous-agent-design
-description: Patterns for designing autonomous agent workflows — task decomposition, tool scoping, result contracts, failure modes, and the shadow→draft→autonomous maturity sequence. Load when designing new agent capabilities or evaluating agent workflow options.
+description: Use when designing or evaluating an autonomous agent workflow. Covers task decomposition, tool scoping, result contracts, failure modes, and the shadow → draft → autonomous maturity sequence.
 tier: concept
 requires: []
 expects-local: [agent-runtime]
@@ -42,7 +42,7 @@ Don't give an agent write access it doesn't need. A Researcher that can push cod
 ## Result contracts
 
 Every autonomous agent produces a structured result. The result must be:
-- Written to a structured result file at a path the runtime defines (e.g. `/tmp/agent-result.json` in Harmony's runtime)
+- Written to a structured result file at a path the runtime defines
 - Parseable by the orchestrator (Lead or the runtime's exit handler)
 - Sufficient for the next phase to proceed without re-reading the agent's full output
 
@@ -58,7 +58,7 @@ Design for three failure classes:
 | Structural | No retry — escalate to human; task is broken |
 | Success | Proceed to next phase |
 
-The concrete signaling (exit codes, result-file status fields) is the runtime's contract — see the project's agent-runtime local skill. Harmony's runtime, for example, maps these classes to exit codes 75 / 1 / 0.
+The concrete signaling (exit codes, result-file status fields) is the runtime's contract — see the project's agent-runtime local skill. A common mapping uses 75 / 1 / 0 for transient / structural / success, but the local contract is authoritative.
 
 A task that silently succeeds while producing wrong output is worse than a clean failure. Validate output before signaling success.
 

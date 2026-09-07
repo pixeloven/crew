@@ -1,10 +1,8 @@
 # Quickstart — Claude Code
 
-From zero to a working crew in four steps. Everything here is also what the `doctor` skill verifies.
+## 1. Install and enable Crew
 
-## 1. Install the plugin
-
-Add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for all projects):
+Add this at project or user scope:
 
 ```json
 {
@@ -15,29 +13,51 @@ Add to your project's `.claude/settings.json` (or `~/.claude/settings.json` for 
 }
 ```
 
-No `ref` ⇒ tracks the latest release on `main`; `autoUpdate` pulls it on startup.
+Restart Claude Code; plugins load at session start.
 
-## 2. Restart and verify
+## 2. Verify each layer separately
 
-**Restart Claude Code** — plugins load at startup, not live. Then verify: the agent list (visible when dispatching, or via `/agents`) should show the seven roles (`lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`), and the skill list should include foundation skills like `platform-glossary`. If neither appears, the marketplace fetch failed — check the repo is reachable from your machine.
+Free native checks:
 
-## 3. Decide your autonomy posture
-
-The foundation's `AGENTS.md` template assumes **act-then-report**: tool use pre-approved via
-
-```json
-{ "permissions": { "defaultMode": "dontAsk" } }
+```sh
+claude plugin validate /absolute/resolved/crew/root --strict
+claude --plugin-dir /absolute/resolved/crew/root plugin details crew
 ```
 
-in `.claude/settings.json`. This is a deliberate choice, not a default — without it, the template's "never pause to ask" posture and the permission prompts will fight each other. If you prefer prompts, keep the default mode and delete the pre-approval language when onboarding generates your `AGENTS.md`.
+Settings prove enablement. `known_marketplaces.json` proves only the source,
+location, and refresh timestamp. Read the marketplace clone's
+`.claude-plugin/plugin.json` for the served version, and enumerate every
+`installed_plugins.json` `crew@crew` record for installed version and scope.
+Only the current session catalogue proves what loaded.
 
-## 4. Onboard the project
+A fresh `claude -p` check is billed. Crew Doctor must explain what it would add
+and obtain explicit approval before running it.
 
-Ask an agent: **"onboard this project to harmony-crew"**. The `onboarding` skill will run the `doctor` checks, pick an onboarding profile (portable / platform / personas — driven by which capabilities are actually reachable), generate or audit your `AGENTS.md` (plus a one-line `CLAUDE.md` containing `@AGENTS.md`), and propose local skills for your project's specifics — starter stubs live in `templates/local-skills/`.
+The runtime should expose the seven roles: `lead`, `triage`, `investigator`,
+`researcher`, `responder`, `reviewer`, and `implementer`. Its skill list should
+contain namespaced entries such as `crew:doctor`. A loaded entry with no visible
+description is loaded-but-undiscoverable, not healthy.
 
-Your project's own skills and agents live in `.claude/skills/` and `.claude/agents/`; they **shadow** foundation entries on name collision.
+## 3. Add project-local skills and roles
 
-## Anytime after
+Keep each project skill once at `.agents/skills/<name>/SKILL.md`, then symlink its
+directory for Claude:
 
-- **"run the doctor"** — re-verify the install, see which capabilities your session can actually reach, and which local-skill slots are still unfilled.
-- Re-run onboarding whenever `AGENTS.md` has accreted facts — it moves them back into skills.
+```sh
+ln -s ../../.agents/skills/<name> .claude/skills/<name>
+```
+
+Project roles are `.claude/agents/<name>.md`. Plugin skills are namespaced as
+`crew:<name>` and project skills are bare, so a same-named pair coexists rather
+than one shadowing the other.
+
+## 4. Onboard safely
+
+Ask: **“onboard this project.”** The result is a read-only audit using one of the
+shared profiles: `personas` for declared OpenClaw/persona runtimes, otherwise
+`platform` when a capability was proven working, otherwise `portable`.
+
+To edit, give a distinct current-run instruction to **apply the onboarding
+findings**. Plain onboarding is never apply authorization. Onboarding preserves
+mature entry files, safety tripwires, project delivery contracts, and runbook
+pointers.

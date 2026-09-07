@@ -1,6 +1,6 @@
 ---
 name: plan-generation
-description: How to propose, structure, and iterate plans in chat mode — when a plan is warranted, the high-level checklist → detailed spec progression, phase/dependency/success-criteria format, and the handoff to autonomous execution. Load when developing a plan with the operator before execution begins.
+description: Use when developing a plan with the operator before execution. Covers when planning is warranted, checklist → detailed-spec progression, phases, dependencies, success criteria, and execution handoff.
 tier: concept
 requires: []
 ---

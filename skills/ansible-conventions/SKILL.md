@@ -1,6 +1,6 @@
 ---
 name: ansible-conventions
-description: Ansible role structure, inventory conventions, secret injection via op.env, and known gotchas (Jinja2/bash comment-delimiter conflicts, boot-only hardware services). Load when writing or modifying Ansible roles, playbooks, or inventory.
+description: Use when writing or changing Ansible roles, playbooks, or inventory. Covers repository structure, secret injection through op.env, Jinja2/bash delimiter traps, and boot-only hardware services.
 tier: subject
 requires: []
 expects-local: [platform-conventions, topology]
@@ -8,7 +8,7 @@ expects-local: [platform-conventions, topology]
 
 ## SSH and inventory
 
-All managed hosts use the project's standard `ansible_user` (see its conventions local skill; e.g. Harmony uses `ansible_user: harmony`) — not root. That user has SSH key authentication and passwordless sudo.
+All managed hosts use the project's standard `ansible_user` from its conventions local skill — not root. That user has SSH key authentication and passwordless sudo.
 
 Inventory lives at `ansible/inventory/`. Host definitions cover every host Ansible manages — hypervisor nodes, standalone VMs — per the project's topology.
 

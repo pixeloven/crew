@@ -1,6 +1,6 @@
 ---
 name: incident-runbook-template
-description: Standard structure for incident reports, diagnosis briefs, and scheduled-sweep findings — what broke, where, why, blast radius, recommended action, confidence. Load when writing up a failure, filing an issue for a degradation, reporting a health sweep, or turning an investigation into a runbook someone else can follow.
+description: Use when writing an incident report, diagnosis brief, degradation issue, health sweep, or repeatable runbook. Structures what broke, where, why, blast radius, recommended action, and confidence.
 tier: concept
 requires: []
 expects-local: [topology]

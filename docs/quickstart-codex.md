@@ -1,47 +1,53 @@
 # Quickstart — OpenAI Codex
 
-Codex (CLI / IDE extension / cloud) reads `AGENTS.md` natively, loads the full skill catalog, reaches platform capabilities over MCP, **and dispatches subagents** — including from `AGENTS.md` instructions, which is what makes the routing table work here.
+Codex reads the root `AGENTS.md`, loads Crew skills, and can dispatch its own
+subagents when the behavioral contract requests delegation. Crew's plugin format
+does not install named role files into Codex.
 
-> **Corrected 2026-08-14.** This page previously called Codex a "solo harness with no subagent registry". That was wrong: Codex multi-agent stabilized in `rust-v0.145.0` (2026-07-21), before this foundation documented the harness. Subagent workflows are **enabled by default** and a project-scoped role registry exists.
+Codex multi-agent workflows and project-scoped role configuration were verified
+against `openai/codex` source at commit `52e12e0` on 2026-09-06. Treat that as
+dated compatibility evidence and re-check it on a major Codex release.
 
-## 1. The behavioral contract — already compatible
+## 1. Install the skills as a plugin
 
-Codex reads the repo-root **`AGENTS.md`** natively (it originated the standard) — the same file Claude Code and pi.dev use, no shim required. Hierarchical `AGENTS.md` files in subdirectories also work. If the repo has no `AGENTS.md` yet, run onboarding from any harness (or copy `templates/AGENTS.md` and fill the ▸ blocks).
-
-## 2. Install the skills
-
-Codex loads portable `SKILL.md` skills from `.agents/skills/` (repo-level, scanned from cwd up to the repo root) and `~/.agents/skills/` (user-level). The foundation's frontmatter extras (`tier`, `requires`, `expects-local`) are ignored by Codex — the files load as-is.
-
-> **Codex budgets its skills listing — unlike pi and Claude Code.** It renders a model-visible list of installed skills with their descriptions (that listing is how agents discover skills), and that list has a budget. Measured on `codex-cli` 0.150.1 against a real catalogue:
->
-> | Entries | Section bytes | A 583-char description renders as |
-> |---|---|---|
-> | 7 | 3,512 | 583 — full |
-> | 58 | 21,309 | **387 — truncated** |
-> | 307 | 21,487 | 47 — a fragment |
->
-> The cap is on **bytes (~21.5 KB)**, not on skill count, and **nothing was omitted** even at 307 entries — every skill stayed listed. So the failure mode is not a missing skill; it is *every* description degrading at once, which is worse, because the description is the entire discovery mechanism. Telemetry reports it (`omitted_skills`, `truncated_skill_descriptions`, `truncated_description_chars_per_skill`); the session shows no error.
->
-> Practical consequences: this catalogue plus a consumer's own local skills already lands near the cap, so keep descriptions tight and front-load the discriminating words. If a skill seems ignored on Codex, suspect the budget before the files. `codex debug prompt-input` renders the model-visible prompt with no API call — the direct way to see what the model actually got.
-
-**Install it as a plugin (recommended).** Codex reads `.claude-plugin/marketplace.json` directly — no `.codex-plugin/` needed, and no vendoring:
+Pin a published tag by replacing `vX.Y.Z`:
 
 ```sh
-codex plugin marketplace add pixeloven/crew --ref v0.33.0
+codex plugin marketplace add pixeloven/crew --ref vX.Y.Z
 codex plugin add crew@crew
 ```
 
-> **Why `plugin.json` names its skills path explicitly.** On Codex's legacy manifest path — the one this repo is on, having no `$schema` key — `skills` has **no default**: omit it and the plugin installs zero skills, with no error. Claude Code resolves `./skills` either way (verified: `claude --plugin-dir . plugin details crew` reports the same 26 skills with the key present or absent), so the key is free there and load-bearing here. Don't remove it.
+The marketplace pin lives in `config.toml`. A resolved plugin normally appears at
+`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/skills`; the exact
+skill-root table in `codex debug prompt-input "hi"` is stronger evidence.
 
-The `--ref` is a **marketplace** flag, not a `plugin add` flag; that is where the pin lives, and it is persisted in `config.toml`. Update by re-running `marketplace add` at a newer tag.
+Codex's legacy manifest path needs `.claude-plugin/plugin.json` to declare
+`"skills": "./skills"`. Removing it installs zero plugin skills silently.
 
-**Vendoring (teams that want the files committed):** copy `skills/` into `<repo>/.agents/skills/` and commit. This drifts from the foundation unless you re-copy, which is why the plugin path is preferred.
+Vendoring `skills/` into `.agents/skills/` remains supported for teams that want
+the files committed. Project-local skills also live there. Plugin entries are
+namespaced as `crew:<name>` while project entries remain bare, so collisions
+coexist and count as two runtime names.
 
-Your project's own local skills (the `expects-local` slot fillings) go in the repo's `.agents/skills/` either way; on a name collision the repo-level copy is the one closest to your working directory.
+## 2. Treat description pressure as measured, not constant
 
-## 3. Grant the capabilities (MCP)
+Codex budgets the model-visible catalogue, and Claude Code can also elide or
+truncate descriptions under catalogue pressure. A skill may be exact, truncated,
+loaded with no description, or omitted.
 
-Codex speaks streamable-HTTP MCP with bearer auth — exactly the LiteLLM gateway's shape. In `~/.codex/config.toml` (or a trusted project's `.codex/config.toml`):
+One dated observation — Codex CLI 0.150.1 on 2026-09-07, with 60 entries —
+rendered a 22,216-byte skills-instruction block, shortened 33 descriptions, and
+omitted none. This is evidence from that run, not a permanent platform byte
+limit. Current telemetry may include `omitted_skills` and
+`truncated_skill_descriptions`; inspect it rather than assuming one failure mode.
+
+Crew's own CI limits descriptions to 300 characters and front-loads trigger
+language. That policy reduces risk but does not promise that an arbitrarily large
+consumer catalogue will never degrade.
+
+## 3. Grant capabilities separately
+
+Installation is independent of MCP grants. A typical streamable-HTTP grant is:
 
 ```toml
 [mcp_servers.litellm]
@@ -49,29 +55,36 @@ url = "https://<your-litellm-host>/mcp"
 bearer_token_env_var = "LITELLM_API_KEY"
 ```
 
-Set `LITELLM_API_KEY` to the surface's **virtual key** — per the capability-parity pattern, a Codex surface is a new consumer: mint it its own VK with explicit `mcp_access_groups` (see the project's gateway-routing local skill); never reuse another surface's key. The VK decides which capabilities (KB, search, image gen, cluster reads, …) this Codex install can reach.
+The config proves a declared grant, not a working capability. Use a safe read-only
+probe before reporting `working`; otherwise report `present`, `unavailable`, or
+`not tested`.
 
-## 4. Verify
+## 4. Verify for free
 
-Start a Codex session in the repo and ask it to **"run the doctor"** — the `doctor` skill loads from the installed catalog and reports install state, reachable capabilities, and unfilled local-skill slots, closing with the onboarding profile. Then, if the repo isn't onboarded yet: **"onboard this project to harmony-crew"**.
+From the consumer repository:
 
-## 5. Delegation — how the routing table works here
+```sh
+codex debug prompt-input "hi"
+python3 /absolute/resolved/crew/root/scripts/check_skill_layout.py /absolute/consumer/repo
+```
 
-Codex delegates **when you ask directly, or when applicable `AGENTS.md` or skill instructions request it** ([docs](https://learn.chatgpt.com/docs/agent-configuration/subagents)). So the routing table in your `AGENTS.md` is the trigger — no extra wiring needed to get crew-style delegation on this harness.
+`codex debug prompt-input` is native introspection and makes no model call. Compare
+disk and runtime names, roots, and descriptions in both directions. `codex exec`
+is billed and requires explicit approval.
 
-Available to the model: `spawn_agent`, `wait_agent`, `send_message`, `list_agents`, `followup_task`, `interrupt_agent` — the last two give mid-run steer and stop, which not every harness offers. `/agent` inspects and switches between running agent threads.
+## 5. Delegation and onboarding
 
-**Named roles** live in `.codex/agents/*.toml` — project-scoped (`<project>/.codex/agents/`), user-scoped (`~/.codex/agents/`), or system-scoped — alongside built-in `default` / `worker` / `explorer`. Required keys are `name` (the **filename is not** the role name), `description`, and `developer_instructions`; the file also accepts the whole `config.toml` schema, but only a bounded allowlist is actually applied to the child session: `model`, `model_reasoning_effort`, `model_reasoning_summary`, `model_verbosity`, `personality`, `service_tier`, `[features]` and `skills.config` (the last two **only to disable** things). `sandbox_mode` and `mcp_servers` parse without error and are **silently ignored** — a role may reduce the parent session's authority, never replace it. (An earlier version of this page listed those two as working options. They don't.)
+The `AGENTS.md` routing table triggers Codex's dispatch primitives. A project may
+define its own `.codex/agents/*.toml`, but Crew neither renders nor installs those
+files; audit them as project-owned configuration.
 
-> **A plugin cannot ship Codex roles — this is a hard limit, not a backlog item.** Codex's plugin manifest has exactly four component slots: skills, MCP servers, apps, and hooks. Plugins are not a config layer, so nothing a plugin installs is ever scanned for an `agents/` directory. The seven crew roles therefore reach Claude Code and pi through the package and reach Codex not at all; on Codex the routing table in your `AGENTS.md` plus the loaded skills is the delegation mechanism, and `spawn_agent` targets the built-ins. If you want the named roles here, the consumer's own repo or `$CODEX_HOME` has to own the TOMLs — generating them from `roles/<role>/` into a consumer repo is a job for the `onboarding` skill, not for the plugin.
+Leave `model` and `model_reasoning_effort` out of those project role files unless
+the override is deliberate. In the dated source above, Codex applies role-file
+values after dispatch arguments, so a pin can silently replace the dispatcher's
+explicit choice. The parent session's authority remains the boundary: role-level
+`sandbox_mode` and `mcp_servers` do not replace it. Cloud tasks are human-started
+work, not an agent dispatch primitive.
 
-> **If you do write role TOMLs, leave `model` out.** Codex applies a role file's `model` and `model_reasoning_effort` *after* the `spawn_agent` arguments, so a pinned model in a role silently overrides the orchestrator's explicit choice — the opposite of every other harness, where the dispatcher wins. Omit both and the subagent inherits the parent session's model and effort.
-
-*Verified against `openai/codex` source at commit `52e12e0` (2026-09-06), not against prose docs — `developers.openai.com` was unreachable from the verifying session. Re-check on a major Codex release; the applied-override allowlist has been tightened over time.*
-
-> Use parallel agents for read-heavy work (exploration, tests, triage, summarization). Be careful with parallel *write*-heavy workflows — concurrent editors create conflicts and coordination overhead. Subagent workflows also consume more tokens than a single-agent run, since each subagent does its own model and tool work.
-
-## What Codex doesn't get
-
-- **Unattended updates** — `codex plugin marketplace add --ref` pins a tag, so updating is deliberate: re-run it at a newer tag. (This page previously said Codex has no plugin manager at all. That was true when written and is not now — `codex plugin marketplace` ships in 0.150.1, and it reads our existing `.claude-plugin/marketplace.json`.)
-- **Cloud tasks are not a dispatch primitive.** Codex's parallel *cloud tasks* are independent agents the product runs for a human; every documented entry point is human-initiated. Don't build orchestration on them — `spawn_agent` is the agent-invocable path.
+Ask **“run Crew Doctor”** for the read-only health report. Ask **“onboard this
+project”** for a non-mutating audit. Applying onboarding findings requires a
+distinct explicit current-run authorization.

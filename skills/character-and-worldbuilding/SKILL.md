@@ -1,6 +1,6 @@
 ---
 name: character-and-worldbuilding
-description: Q&A-driven flow for defining fictional characters and their world — for companion agents, creative-project canon, and dossier writing. Methodology, not lore. Load when fleshing out a character, a setting, or a dossier.
+description: Use when defining a fictional character, setting, creative-project canon, or dossier. Provides a Q&A-driven worldbuilding method for companion agents; it supplies methodology, not lore.
 tier: subject
 requires: []
 ---

@@ -1,7 +1,7 @@
 # Local-skill SLOTS the foundation's role agents may reference.
 #
 # These do NOT ship here — a consumer supplies its own equivalents in its
-# overlay (.claude/skills/, .pi/skills/, .agents/skills/). Role bodies cite
+# canonical .agents/skills/ overlay (symlinked into .claude/skills/). Role bodies cite
 # them hedged: "the project's X local skill, if it defines one".
 #
 # List slot names only, matching templates/local-skills/. Never a specific
@@ -12,5 +12,3 @@ topology
 protected-seams
 secret-paths
 agent-runtime
-vault-ops
-litellm-access-map

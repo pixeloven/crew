@@ -1,39 +1,60 @@
 # Quickstart — pi.dev
 
-## 1. Install the package
+## 1. Install a role-discoverable release
 
-In `.pi/settings.json` — pin the tag for reproducible builds:
+Pin a published Crew release for reproducibility; replace `vX.Y.Z` with the
+chosen tag:
 
 ```json
-{ "packages": ["npm:pi-subagents@0.33.1", "git:github.com/pixeloven/crew@v0.33.0"] }
+{
+  "packages": [
+    "npm:pi-subagents@0.33.1",
+    "git:github.com/pixeloven/crew@vX.Y.Z"
+  ]
+}
 ```
 
-Bump the pin to update; the release tag list is the changelog.
+Crew must be `v0.35.0` or newer. Earlier rendered Pi roles omitted frontmatter
+`name:`; pi-subagents silently drops such files. Read the configured pin from
+settings and the resolved version from the checkout's
+`.claude-plugin/plugin.json`. Do not use `git describe` for package version.
+Package role discovery also requires `pi-subagents` `>=0.29.0`.
 
-## 2. Verify — do this, don't assume
+## 2. Verify runtime discovery
 
+In the intended Pi runtime, run its native `/subagents-doctor`. It should list
+the seven Crew roles (`lead`, `triage`, `investigator`, `researcher`, `responder`,
+`reviewer`, `implementer`) and the package skill tree. Package skill and role
+discovery are separate; report which half failed.
+
+If skills appear but roles do not, inspect both the package's
+`pi.subagents.agents` manifest entry and each role's `name:` frontmatter. These
+are separate, historically observed silent-failure seams.
+
+Do not substitute another harness's result for Pi runtime evidence. `pi -p` or
+any prompt-mediated fresh-session probe is billed and requires explicit approval.
+
+## 3. Project behavior and overlay
+
+Pi reads the repo-root `AGENTS.md`. Canonical project skills live in
+`.agents/skills/<name>/SKILL.md`; project roles live in `.pi/agents/<name>.md`.
+Pi's skill namespace is flat and walks project scope before packages, so a local
+same-named skill wins. Doctor reports the collision and both roots.
+
+Run the installed validator by absolute Crew package path:
+
+```sh
+python3 /absolute/resolved/crew/root/scripts/check_skill_layout.py /absolute/consumer/repo
 ```
-/subagents-doctor
-```
 
-It should list the seven crew agents (`lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`) alongside pi's built-ins, and show the foundation's skills loaded from the package's `skills/` tree.
+It catches missing role identity/description and forbidden runtime knobs as well
+as invisible skill layouts.
 
-> **Why this step is not optional.** Package **agent** discovery and package **skill** discovery are separate mechanisms with separate manifest keys, and a wrong agents key fails *silently* — skills load, agents don't, and nothing errors. This foundation shipped exactly that bug until v0.13.0 (the manifest declared `pi.agents`, which neither pi core nor pi-subagents reads). If the doctor lists skills but no crew agents, check the package's manifest key before anything else.
->
-> **And it shipped a second, identical-looking one until v0.35.0.** pi-subagents resolves an agent's name *strictly* from frontmatter `name:` — there is no filename fallback — and drops any file lacking it with `continue`, no diagnostic. Every rendered pi role omitted `name:`, so the entire fleet was invisible while `pi-agents/` looked perfectly correct on disk. Both failures present identically at the doctor: skills yes, agents no. If you are pinned below v0.35.0, this is why.
+## 4. Role posture and onboarding
 
-Package agent discovery requires `pi-subagents` **≥ 0.29.0**.
+Pi role `tools:` is an allowlist, but every shipped role retains `bash`; file
+posture is advisory unless the host permission system or sandbox enforces it.
+Dispatch configuration owns model, reasoning depth, and turn budget.
 
-## 3. The behavioral contract — where it lives
-
-pi workers read the **repo-root `AGENTS.md`** directly from the checkout — the same file Claude Code reads (no `CLAUDE.md` shim needed; that file is Claude-specific). One contract drives both harnesses. If the repo has no `AGENTS.md` yet, run onboarding from any harness that can write (or copy `templates/AGENTS.md` and fill the ▸ blocks).
-
-## 4. The overlay
-
-The project's own additions live in `.pi/skills/` and `.pi/agents/` — pi walks from cwd to the git root **before** the package, so local entries shadow foundation ones on name collision. Your project-specific values (topology, conventions, secret paths) belong there as local skills; starter stubs live in the foundation's `templates/local-skills/`.
-
-## Notes for autonomous workers
-
-- Workers run with the pi frontmatter's `tools:` allowlist, which mirrors the Claude Code denylist rendered from the same `role.yml`. Read-only roles get no `write`/`edit` — but they do get `bash`, so the allowlist makes writing *inconvenient*, not impossible. The prose in the role body is the real constraint; enforce the rest with pi's permission system if your runtime needs a hard boundary.
-- Implementer ships assuming the **interactive** case: it creates branches, commits, pushes and opens PRs itself. If you dispatch it from an autonomous runtime that prepares the workspace and pushes on its behalf, shadow `implementer.md` in `.pi/agents/` with your runtime's operating context — that contract is a property of your deployment, so the foundation no longer guesses at it.
-- Capability availability (KB, search, image gen, …) is granted by the worker's LiteLLM virtual key, not by installing skills — see the project's gateway-routing local skill. The `doctor` skill reports what a session can actually reach.
+Ask **“onboard this project”** for a read-only audit. Applying findings requires a
+separate explicit current-run authorization.

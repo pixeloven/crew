@@ -1,12 +1,12 @@
 ---
 name: seam-detection
-description: How to spot a change that touches a protected pattern and needs human sign-off before merge — detection patterns and greps for ExternalSecret contracts, tolerations and StorageClass selection, MCP access groups, runtime exit-code contracts, and RBAC (ClusterRole, RoleBinding, verb widening, wildcards, escalation-adjacent verbs like escalate/bind/impersonate). Load when scanning a diff for risky changes, or reviewing anything that adds or widens permissions, secrets, storage, or a runtime contract.
+description: Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects ExternalSecret, scheduling, MCP access, exit-code, and RBAC seam patterns.
 tier: concept
 requires: []
 expects-local: [protected-seams]
 ---
 
-A seam crossing is any change that touches a protected pattern in the project's seams registry without the crossing having been explicitly flagged by the author. The registry is a **consumer-local** skill (e.g. Harmony's `harmony-protected-seams`); the seams below are the common shapes a registry protects — a consumer's registry may add or drop entries. This skill defines how to detect crossings in practice.
+A seam crossing is any change that touches a protected pattern in the project's seams registry without the crossing having been explicitly flagged by the author. The registry is a **consumer-local** skill; the seams below are common shapes, and a consumer's registry may add or drop entries. This skill defines how to detect crossings in practice.
 
 ## Detection patterns
 

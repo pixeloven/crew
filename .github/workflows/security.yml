@@ -1,11 +1,11 @@
 ---
-# Security floor for this supply-chain root. harmony-crew's skills/agents load AS
+# Security floor for this supply-chain root. Crew's skills/agents load AS
 # INSTRUCTIONS into every consumer's agents and it's a public, widely-consumed
 # pi-package + Claude-plugin, so a leaked secret or a vulnerable dependency here
 # fans out to every consumer — a secret scan is the single highest-value gate.
 #
 # github-hosted floor (no baked runner) sourced from public marketplace actions,
-# per ductiletoaster/harmony-ci's ci-github-hosted.yml template:
+# adapted from the upstream hosted-CI security template:
 #   gitleaks           secret scan (full history — needs fetch-depth: 0)
 #   osv-scanner        dependency CVEs, ONLINE osv.dev DB (JS package.json)
 #   dependency-review  PR-only dependency delta gate
@@ -77,7 +77,7 @@ jobs:
           fail-on-severity: high
 
   # ── SAST CAVEAT (semgrep on github-hosted) ────────────────────────────────
-  # On ARC, semgrep uses the baked, tokenless harmony-baseline ruleset. That
+  # On the private runner fleet, semgrep uses a baked, tokenless baseline ruleset. That
   # ruleset is PRIVATE (baked into the runner image), and Semgrep's registry
   # rulesets (p/*, `auto`) are LOGIN-GATED → zero findings tokenless. So on
   # github-hosted, semgrep needs ONE of:
