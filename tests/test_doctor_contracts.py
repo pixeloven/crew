@@ -2,6 +2,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 
 from scripts.crew_doctor import (
     compare_runtime_catalog,
@@ -414,6 +415,163 @@ class InstallationTruthTests(unittest.TestCase):
                     facts = " ".join(row["fact"] for row in report["checks"])
                     self.assertNotIn("9.9.0", facts)
 
+    def test_non_loading_runtime_states_cannot_select_installations_by_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.35.0"]},
+            )
+            pi_roots = []
+            for agent, version in (("a", "0.35.0"), ("b", "0.36.0")):
+                root = home / f".pi/{agent}/git/github.com/pixeloven/crew"
+                write_json(root / ".claude-plugin/plugin.json", {"version": version})
+                pi_roots.append(root)
+
+            write_json(
+                home / ".claude/settings.json",
+                {"enabledPlugins": {"crew@crew": True}},
+            )
+            claude_roots = []
+            registrations = []
+            for version in ("0.35.0", "0.36.0"):
+                root = home / f".claude/plugins/cache/crew/crew/{version}"
+                write_json(root / ".claude-plugin/plugin.json", {"version": version})
+                claude_roots.append(root)
+                registrations.append(
+                    {"scope": "user", "installPath": str(root), "version": version}
+                )
+            write_json(
+                home / ".claude/plugins/installed_plugins.json",
+                {"plugins": {"crew@crew": registrations}},
+            )
+
+            codex_roots = []
+            for version in ("0.35.0", "0.36.0"):
+                root = home / f".codex/plugins/cache/crew/crew/{version}"
+                write_json(root / ".claude-plugin/plugin.json", {"version": version})
+                (root / "skills").mkdir()
+                codex_roots.append(root)
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nref = 'v0.35.0'\n"
+                "[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            report = inspect_installations(
+                project,
+                home,
+                {
+                    "pi": {"state": "omitted", "skill_roots": [str(pi_roots[1])]},
+                    "claude": {
+                        "state": "unavailable",
+                        "skill_roots": [str(claude_roots[1])],
+                    },
+                    "codex": {
+                        "state": "not-tested",
+                        "skill_roots": [str(codex_roots[1])],
+                    },
+                },
+            )
+            self.assertEqual("0.35.0", report["harnesses"]["pi"]["resolved_version"])
+            self.assertIsNone(report["harnesses"]["claude"]["installed_version"])
+            self.assertEqual("0.35.0", report["harnesses"]["codex"]["resolved_version"])
+            self.assertTrue(
+                all(not harness["runtime_paths"] for harness in report["harnesses"].values())
+            )
+
+    def test_grant_and_probe_evidence_are_reconciled_by_kind(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            root = home / ".codex/plugins/cache/crew/crew/0.29.0"
+            write_capability_skill(root, ["external:github"])
+            codex = inspect_installations(
+                project,
+                home,
+                capability_evidence={
+                    "codex": [
+                        {
+                            "name": "external:github",
+                            "kind": "grant",
+                            "state": "present",
+                            "source": "captured grant",
+                        },
+                        {
+                            "name": "external:github",
+                            "kind": "probe",
+                            "state": "working",
+                            "source": "free successful probe",
+                        },
+                    ]
+                },
+            )["harnesses"]["codex"]
+            check = codex["capability_checks"][0]
+            self.assertEqual("working", check["state"])
+            self.assertEqual(
+                {"captured grant", "free successful probe"},
+                {item["source"] for item in check["evidence"]},
+            )
+            self.assertEqual(
+                {"grant is present", "probe is working"},
+                {item["claim"].rsplit(" capability external:github ", 1)[1] for item in check["evidence"]},
+            )
+
+    def test_configuration_read_failures_are_distinct_degraded_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            pi_settings = project / ".pi/settings.json"
+            pi_settings.write_text("{broken", encoding="utf-8")
+            codex_config = home / ".codex/config.toml"
+            codex_config.write_text("[broken", encoding="utf-8")
+            claude_settings = home / ".claude/settings.json"
+            original_read_text = pathlib.Path.read_text
+
+            def read_text(path: pathlib.Path, *args: object, **kwargs: object) -> str:
+                if path == claude_settings:
+                    raise PermissionError("permission denied by fixture")
+                return original_read_text(path, *args, **kwargs)
+
+            with mock.patch.object(pathlib.Path, "read_text", read_text):
+                report = inspect_installations(project, home)
+
+            pi = report["harnesses"]["pi"]
+            claude = report["harnesses"]["claude"]
+            codex = report["harnesses"]["codex"]
+            self.assertEqual("malformed", pi["configuration_reads"][0]["state"])
+            self.assertEqual("unreadable", claude["configuration_reads"][1]["state"])
+            self.assertEqual("malformed", codex["configuration_reads"][0]["state"])
+            for harness, source in (
+                (pi, pi_settings),
+                (claude, claude_settings),
+                (codex, codex_config),
+            ):
+                self.assertEqual("DEGRADED", harness["status"])
+                failure = next(
+                    finding
+                    for finding in harness["findings"]
+                    if finding["evidence"][0]["source"] == str(source)
+                )
+                self.assertIn(
+                    harness["configuration_reads"][
+                        next(
+                            index
+                            for index, read in enumerate(harness["configuration_reads"])
+                            if read["source"] == str(source)
+                        )
+                    ]["state"],
+                    failure["claim"],
+                )
+            self.assertTrue(
+                any(read["state"] == "absent" for read in pi["configuration_reads"])
+            )
+
     def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -749,6 +907,33 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertEqual(2, result["visible_count"])
         self.assertEqual(["working", "present"], [row["state"] for row in result["entries"]])
         self.assertEqual("DEGRADED", result["status"])
+
+    def test_structured_runtime_namespace_is_normalized_before_matching(self) -> None:
+        disk = [
+            {
+                **self.disk[0],
+                "path": "/authorized/skills/doctor/SKILL.md",
+            }
+        ]
+        result = compare_runtime_catalog(
+            disk,
+            {
+                "harness": "codex",
+                "skills": [
+                    {
+                        "name": "doctor",
+                        "namespace": "crew",
+                        "description": self.disk[0]["description"],
+                        "path": "/authorized/skills/doctor/SKILL.md",
+                    }
+                ],
+            },
+        )
+        self.assertEqual("OK", result["status"])
+        self.assertEqual(
+            [("crew:doctor", "working")],
+            [(row["runtime_name"], row["state"]) for row in result["entries"]],
+        )
 
     def test_unrelated_catalogue_telemetry_does_not_degrade_crew_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

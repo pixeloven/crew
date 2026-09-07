@@ -15,6 +15,7 @@ import re
 import sys
 import tomllib
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any
 
 try:
@@ -39,22 +40,38 @@ EXPECTED_ROLE_NAMES = (
 LOADED_RUNTIME_STATES = {"present", "working", "loaded-but-undiscoverable", "truncated"}
 
 
-def _read_json(path: pathlib.Path, default: Any) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return default
+@dataclass(frozen=True)
+class ReadResult:
+    value: Any
+    state: str
+    source: str
+    detail: str = ""
 
 
-def _read_toml(path: pathlib.Path) -> dict[str, Any]:
+def _read_json(path: pathlib.Path, default: Any) -> ReadResult:
     try:
-        return tomllib.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, tomllib.TOMLDecodeError, OSError):
-        return {}
+        return ReadResult(json.loads(path.read_text(encoding="utf-8")), "present", str(path))
+    except FileNotFoundError:
+        return ReadResult(default, "absent", str(path))
+    except json.JSONDecodeError as error:
+        return ReadResult(default, "malformed", str(path), str(error))
+    except OSError as error:
+        return ReadResult(default, "unreadable", str(path), str(error))
+
+
+def _read_toml(path: pathlib.Path) -> ReadResult:
+    try:
+        return ReadResult(tomllib.loads(path.read_text(encoding="utf-8")), "present", str(path))
+    except FileNotFoundError:
+        return ReadResult({}, "absent", str(path))
+    except tomllib.TOMLDecodeError as error:
+        return ReadResult({}, "malformed", str(path), str(error))
+    except OSError as error:
+        return ReadResult({}, "unreadable", str(path), str(error))
 
 
 def _manifest_version(root: pathlib.Path) -> str | None:
-    value = _read_json(root / ".claude-plugin/plugin.json", {})
+    value = _read_json(root / ".claude-plugin/plugin.json", {}).value
     version = value.get("version") if isinstance(value, dict) else None
     return str(version) if version is not None else None
 
@@ -85,6 +102,8 @@ def _base_harness() -> dict[str, Any]:
         "loaded_version_source": "",
         "capabilities": {"state": "not tested", "source": ""},
         "capability_checks": [],
+        "runtime_paths": [],
+        "configuration_reads": [],
         "package_roots": [],
         "findings": [],
     }
@@ -143,9 +162,11 @@ def _record_runtime(result: dict[str, Any], runtime: dict[str, Any] | None) -> N
     }:
         raise ValueError(f"unsupported runtime state: {state}")
     result["runtime"] = {"state": state, "source": runtime.get("source", "captured runtime")}
-    if state in LOADED_RUNTIME_STATES and runtime.get("version"):
-        result["loaded_version"] = runtime["version"]
-        result["loaded_version_source"] = result["runtime"]["source"]
+    if state in LOADED_RUNTIME_STATES:
+        result["runtime_paths"] = [str(path) for path in _runtime_paths(runtime)]
+        if runtime.get("version"):
+            result["loaded_version"] = runtime["version"]
+            result["loaded_version_source"] = result["runtime"]["source"]
 
 
 def _degrade_for_runtime(result: dict[str, Any]) -> None:
@@ -185,7 +206,7 @@ def _record_capabilities(
     supplied: list[dict[str, str]],
 ) -> None:
     declared = _declared_capabilities([pathlib.Path(root) for root in result["package_roots"]])
-    observations: dict[str, dict[str, str]] = {}
+    observations: dict[str, dict[str, dict[str, str]]] = {}
     for observation in supplied:
         name = observation.get("name")
         kind = observation.get("kind")
@@ -199,27 +220,46 @@ def _record_capabilities(
             raise ValueError("probe evidence must establish working or unavailable")
         if kind not in {"grant", "probe"}:
             raise ValueError(f"unsupported capability evidence kind: {kind}")
-        if name in observations:
-            raise ValueError(f"duplicate {harness} capability evidence: {name}")
-        observations[name] = observation
+        by_kind = observations.setdefault(name, {})
+        if kind in by_kind:
+            raise ValueError(f"duplicate {harness} {kind} capability evidence: {name}")
+        by_kind[kind] = observation
 
     checks: list[dict[str, Any]] = []
     for name, declaration_sources in sorted(declared.items()):
-        observation = observations.get(name)
-        state = observation["state"] if observation else "not tested"
-        sources = [observation["source"]] if observation else declaration_sources
+        capability_observations = observations.get(name, {})
+        probe = capability_observations.get("probe")
+        grant = capability_observations.get("grant")
+        state = probe["state"] if probe else grant["state"] if grant else "not tested"
+        observation_evidence = []
+        if grant:
+            observation_evidence.append(
+                {
+                    "claim": f"{harness} capability {name} grant is present",
+                    "source": grant["source"],
+                }
+            )
+        if probe:
+            observation_evidence.append(
+                {
+                    "claim": f"{harness} capability {name} probe is {probe['state']}",
+                    "source": probe["source"],
+                }
+            )
+        if not observation_evidence:
+            observation_evidence = [
+                {
+                    "claim": f"{harness} capability {name} is declared but not tested",
+                    "source": source,
+                }
+                for source in dict.fromkeys(declaration_sources)
+            ]
         checks.append(
             {
                 "harness": harness,
                 "name": name,
                 "state": state,
-                "evidence": [
-                    {
-                        "claim": f"{harness} capability {name} is {state}",
-                        "source": source,
-                    }
-                    for source in dict.fromkeys(sources)
-                ],
+                "evidence": observation_evidence,
             }
         )
     result["capability_checks"] = checks
@@ -241,6 +281,37 @@ def _record_capabilities(
         result["status"] = "DEGRADED"
 
 
+def _record_config_read(result: dict[str, Any], label: str, read: ReadResult) -> Any:
+    result["configuration_reads"].append(
+        {
+            "label": label,
+            "state": read.state,
+            "source": read.source,
+            "detail": read.detail,
+        }
+    )
+    return read.value
+
+
+def _degrade_for_config_reads(result: dict[str, Any]) -> None:
+    for read in result["configuration_reads"]:
+        if read["state"] not in {"malformed", "unreadable"}:
+            continue
+        result["status"] = "DEGRADED"
+        claim = f"{read['label']} is {read['state']}"
+        if read["detail"]:
+            claim = f"{claim}: {read['detail']}"
+        _add_finding(result, claim, read["source"])
+
+
+def _has_config_read_failure(result: dict[str, Any], label_prefix: str = "") -> bool:
+    return any(
+        read["state"] in {"malformed", "unreadable"}
+        and read["label"].startswith(label_prefix)
+        for read in result["configuration_reads"]
+    )
+
+
 def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
     _record_runtime(result, runtime)
@@ -248,7 +319,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
     settings_paths.extend(sorted((home / ".pi").glob("*/settings.json")))
     registrations: list[dict[str, str | None]] = []
     for settings_path in dict.fromkeys(settings_paths):
-        settings = _read_json(settings_path, {})
+        settings = _record_config_read(result, "Pi settings configuration", _read_json(settings_path, {}))
         packages = settings.get("packages", []) if isinstance(settings, dict) else []
         for item in packages:
             if isinstance(item, str) and re.search(r"(?:github\.com/|github:)?pixeloven/crew(?:@|$)", item):
@@ -267,7 +338,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
         registrations[0] if registrations else None,
     )
-    runtime_paths = _runtime_paths(runtime)
+    runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
     selected = next(
         (
             item for item in resolved
@@ -300,12 +371,13 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
 
     if resolved and not registrations:
         result["status"] = "DEGRADED"
-        _add_finding(
-            result,
-            "Crew is installed for Pi but not enabled in an inspected settings scope",
-            str(resolved[0]["root"]),
-            *(str(path) for path in settings_paths),
-        )
+        if not _has_config_read_failure(result, "Pi settings"):
+            _add_finding(
+                result,
+                "Crew is installed for Pi but not enabled in an inspected settings scope",
+                str(resolved[0]["root"]),
+                *(str(path) for path in settings_paths),
+            )
     if len(resolved) > 1:
         result["status"] = "DEGRADED"
         _add_finding(
@@ -367,7 +439,11 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         ("project", project / ".claude/settings.json"),
         ("user", home / ".claude/settings.json"),
     ):
-        settings = _read_json(settings_path, {})
+        settings = _record_config_read(
+            result,
+            f"Claude {scope} settings configuration",
+            _read_json(settings_path, {}),
+        )
         enabled = settings.get("enabledPlugins", {}) if isinstance(settings, dict) else {}
         marketplaces = settings.get("extraKnownMarketplaces", {}) if isinstance(settings, dict) else {}
         if "crew" in marketplaces or "crew@crew" in enabled:
@@ -378,7 +454,11 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     result["settings_records"] = settings_records
 
     registry_path = home / ".claude/plugins/known_marketplaces.json"
-    registry = _read_json(registry_path, {})
+    registry = _record_config_read(
+        result,
+        "Claude marketplace registry configuration",
+        _read_json(registry_path, {}),
+    )
     record = registry.get("crew", {}) if isinstance(registry, dict) else {}
     # This registry is location metadata. Never synthesize a version from it.
     result["marketplace_registry_records"] = [
@@ -393,7 +473,11 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         result["installation"] = {"state": "present", "source": str(location)}
 
     installed_path = home / ".claude/plugins/installed_plugins.json"
-    installed = _read_json(installed_path, {})
+    installed = _record_config_read(
+        result,
+        "Claude installed plugins configuration",
+        _read_json(installed_path, {}),
+    )
     plugins = installed.get("plugins", {}) if isinstance(installed, dict) else {}
     registrations = plugins.get("crew@crew", []) if isinstance(plugins, dict) else []
     result["registrations"] = registrations if isinstance(registrations, list) else []
@@ -437,7 +521,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             set(installed_record["registration_versions"])
         )
     result["installed_versions"] = installed_records
-    runtime_paths = _runtime_paths(runtime)
+    runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
     runtime_matches = [
         record
         for record in installed_records
@@ -493,7 +577,11 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if result["installation"]["state"] != "present":
         return result
     result["status"] = "OK" if result["enablement"]["state"] == "present" else "DEGRADED"
-    if result["enablement"]["state"] != "present":
+    if (
+        result["enablement"]["state"] != "present"
+        and not _has_config_read_failure(result, "Claude project settings")
+        and not _has_config_read_failure(result, "Claude user settings")
+    ):
         _add_finding(
             result,
             "Crew is installed for Claude but not enabled in an inspected scope",
@@ -580,7 +668,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     result = _base_harness()
     _record_runtime(result, runtime)
     config_path = home / ".codex/config.toml"
-    config = _read_toml(config_path)
+    config = _record_config_read(result, "Codex plugin configuration", _read_toml(config_path))
     marketplaces = config.get("marketplaces", {}) if isinstance(config, dict) else {}
     plugins = config.get("plugins", {}) if isinstance(config, dict) else {}
     crew_market = marketplaces.get("crew", {}) if isinstance(marketplaces, dict) else {}
@@ -592,7 +680,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     )
     result["configured_version"] = _clean_version(crew_market.get("ref")) if isinstance(crew_market, dict) else None
     valid_cache_roots = [root for root in cache_roots if _manifest_version(root) and (root / "skills").is_dir()]
-    runtime_paths = _runtime_paths(runtime)
+    runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
     resolved_root = next(
         (root for root in valid_cache_roots if any(_path_within(path, root) for path in runtime_paths)),
         None,
@@ -633,19 +721,20 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     if isinstance(crew_plugin, dict) and crew_plugin.get("enabled") is True:
         result["enablement"] = {"state": "present", "source": str(config_path)}
     if runtime is not None and runtime.get("tested") is not False:
-        result["runtime_skill_roots"] = list(runtime.get("skill_roots", []))
+        result["runtime_skill_roots"] = list(result["runtime_paths"])
 
     if result["installation"]["state"] == "present":
         if result["enablement"]["state"] == "present":
             result["status"] = "OK"
         else:
             result["status"] = "DEGRADED"
-            _add_finding(
-                result,
-                "Crew is installed for Codex but not enabled in inspected config",
-                result["installation"].get("source", ""),
-                str(config_path),
-            )
+            if not _has_config_read_failure(result, "Codex plugin"):
+                _add_finding(
+                    result,
+                    "Crew is installed for Codex but not enabled in inspected config",
+                    result["installation"].get("source", ""),
+                    str(config_path),
+                )
     if len(cache_roots) > 1:
         result["status"] = "DEGRADED"
         _add_finding(
@@ -695,6 +784,7 @@ def inspect_installations(
         "codex": _inspect_codex(project_root, home, runtime_fixtures.get("codex")),
     }
     for harness, result in harnesses.items():
+        _degrade_for_config_reads(result)
         _record_capabilities(result, harness, capability_evidence.get(harness, []))
     evidence: list[dict[str, str]] = []
     checks: list[dict[str, Any]] = []
@@ -799,7 +889,7 @@ def inspect_installations(
 
 
 def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
-    fixture = _read_json(pathlib.Path(path), {})
+    fixture = _read_json(pathlib.Path(path), {}).value
     if fixture.get("schema_version") != 1 or fixture.get("harness") not in {"claude", "codex", "pi"}:
         raise ValueError(f"unsupported runtime fixture: {path}")
     return fixture
@@ -807,7 +897,7 @@ def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
 
 def parse_codex_prompt_capture(path: pathlib.Path) -> dict[str, Any]:
     """Parse the free `codex debug prompt-input` JSON protocol into a fixture."""
-    payload = _read_json(pathlib.Path(path), None)
+    payload = _read_json(pathlib.Path(path), None).value
     if not isinstance(payload, list):
         raise ValueError("Codex prompt capture must be the top-level JSON message array")
     source_text = None
@@ -912,6 +1002,7 @@ def compare_runtime_catalog(
         for entry in runtime_fixture.get("skills", [])
         if isinstance(entry, dict) and entry.get("name")
     ]
+    visible_names = [_runtime_name(entry, harness) for entry in visible]
     unused = set(range(len(visible)))
     rows: list[dict[str, Any]] = []
     absent_state = runtime_fixture.get("state", "omitted")
@@ -919,7 +1010,7 @@ def compare_runtime_catalog(
         absent_state = "omitted"
     for name, disk in expected:
         candidates = [
-            index for index in unused if str(visible[index].get("name")) == name
+            index for index in unused if visible_names[index] == name
         ]
         matching_paths = [index for index in candidates if _runtime_path_matches(disk, visible[index])]
         if matching_paths:
@@ -953,7 +1044,7 @@ def compare_runtime_catalog(
         runtime = visible[index]
         rows.append(
             {
-                "runtime_name": str(runtime["name"]),
+                "runtime_name": visible_names[index],
                 "state": "present",
                 "disk": None,
                 "runtime": runtime,

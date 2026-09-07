@@ -246,7 +246,19 @@ def _scalar(value: str) -> Any:
     if value.startswith("'"):
         if len(value) < 2 or not value.endswith("'"):
             raise ScalarParseError("unterminated single-quoted scalar")
-        return value[1:-1].replace("''", "'")
+        inner = value[1:-1]
+        parsed: list[str] = []
+        index = 0
+        while index < len(inner):
+            if inner[index] != "'":
+                parsed.append(inner[index])
+                index += 1
+                continue
+            if index + 1 >= len(inner) or inner[index + 1] != "'":
+                raise ScalarParseError("unescaped quote in single-quoted scalar")
+            parsed.append("'")
+            index += 2
+        return "".join(parsed)
     if value.startswith('"'):
         if len(value) < 2 or not value.endswith('"'):
             raise ScalarParseError("unterminated double-quoted scalar")
