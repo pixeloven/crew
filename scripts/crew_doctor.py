@@ -106,13 +106,16 @@ def _manifest_version(root: pathlib.Path) -> ReadResult:
 def _clean_version(value: str | None) -> str | None:
     if not value:
         return None
-    match = re.search(r"(?:^|@)v?(\d+\.\d+\.\d+)(?:$|[^0-9])", value)
-    return match.group(1) if match else None
+    candidate = value.rsplit("@", 1)[-1]
+    if candidate.startswith("v"):
+        candidate = candidate[1:]
+    return candidate if SEMVER.fullmatch(candidate) else None
 
 
 def _version_tuple(value: str | None) -> tuple[int, int, int] | None:
     clean = _clean_version(value)
-    return tuple(map(int, clean.split("."))) if clean else None
+    core = re.split(r"[-+]", clean, maxsplit=1)[0] if clean else None
+    return tuple(map(int, core.split("."))) if core else None
 
 
 def _evidence(kind: str, claim: str, source: str = "") -> dict[str, str]:
@@ -129,6 +132,7 @@ def _base_harness() -> dict[str, Any]:
         "loaded_version_source": "",
         "capabilities": {"state": "not tested", "source": ""},
         "capability_checks": [],
+        "capability_declaration_reads": [],
         "runtime_paths": [],
         "configuration_reads": [],
         "manifest_reads": [],
@@ -209,23 +213,71 @@ def _degrade_for_runtime(result: dict[str, Any]) -> None:
         )
 
 
-def _declared_capabilities(roots: list[pathlib.Path]) -> dict[str, list[str]]:
+def _declared_capabilities(
+    roots: list[pathlib.Path],
+) -> tuple[dict[str, list[str]], list[dict[str, str]]]:
     declared: dict[str, list[str]] = {}
+    failures: list[dict[str, str]] = []
     for root in dict.fromkeys(roots):
         catalogue = root if root.name == "skills" else root / "skills"
         for skill in sorted(catalogue.glob("*/SKILL.md")):
-            metadata, error = read_frontmatter(skill)
+            try:
+                metadata, error = read_frontmatter(skill)
+            except (UnicodeDecodeError, OSError) as read_error:
+                failures.append(
+                    {
+                        "state": "unreadable",
+                        "source": str(skill),
+                        "detail": str(read_error),
+                    }
+                )
+                continue
             if error or not metadata:
+                failures.append(
+                    {
+                        "state": "malformed",
+                        "source": str(skill),
+                        "detail": error or "empty frontmatter",
+                    }
+                )
                 continue
             requirements = metadata.get("requires", [])
             if isinstance(requirements, str):
-                requirements = parse_inline_list(requirements)
+                failures.append(
+                    {
+                        "state": "malformed",
+                        "source": str(skill),
+                        "detail": "requires must be a string sequence",
+                    }
+                )
+                continue
             if not isinstance(requirements, list):
+                failures.append(
+                    {
+                        "state": "malformed",
+                        "source": str(skill),
+                        "detail": "requires must be a string sequence",
+                    }
+                )
+                continue
+            if any(not isinstance(requirement, str) or not requirement for requirement in requirements):
+                failures.append(
+                    {
+                        "state": "malformed",
+                        "source": str(skill),
+                        "detail": "requires entries must be non-empty strings",
+                    }
+                )
                 continue
             for requirement in requirements:
-                if isinstance(requirement, str) and requirement:
-                    declared.setdefault(requirement, []).append(str(skill))
-    return declared
+                declared.setdefault(requirement, []).append(str(skill))
+    unique_failures = list(
+        {
+            (failure["state"], failure["source"], failure["detail"]): failure
+            for failure in failures
+        }.values()
+    )
+    return declared, unique_failures
 
 
 def _record_capabilities(
@@ -234,10 +286,18 @@ def _record_capabilities(
     supplied: list[dict[str, str]],
     consumer_skill_root: pathlib.Path,
 ) -> None:
-    declared = _declared_capabilities(
+    declared, declaration_failures = _declared_capabilities(
         [pathlib.Path(root) for root in result["package_roots"]] + [consumer_skill_root]
     )
-    observations: dict[str, dict[str, dict[str, str]]] = {}
+    result["capability_declaration_reads"] = declaration_failures
+    for failure in declaration_failures:
+        result["status"] = "DEGRADED"
+        claim = f"Capability declaration frontmatter is {failure['state']}"
+        if failure["detail"]:
+            claim = f"{claim}: {failure['detail']}"
+        _add_finding(result, claim, failure["source"])
+
+    observations: dict[str, dict[str, list[dict[str, str]]]] = {}
     for observation in supplied:
         name = observation.get("name")
         kind = observation.get("kind")
@@ -251,17 +311,35 @@ def _record_capabilities(
             raise ValueError("probe evidence must establish working or unavailable")
         if kind not in {"grant", "probe"}:
             raise ValueError(f"unsupported capability evidence kind: {kind}")
-        by_kind = observations.setdefault(name, {})
-        if kind in by_kind:
-            raise ValueError(f"duplicate {harness} {kind} capability evidence: {name}")
-        by_kind[kind] = observation
+        normalized_observation = {
+            "name": name,
+            "kind": kind,
+            "state": state,
+            "source": source,
+        }
+        by_kind = observations.setdefault(name, {}).setdefault(kind, [])
+        if normalized_observation not in by_kind:
+            by_kind.append(normalized_observation)
 
     checks: list[dict[str, Any]] = []
     for name, declaration_sources in sorted(declared.items()):
         capability_observations = observations.get(name, {})
-        probe = capability_observations.get("probe")
-        grant = capability_observations.get("grant")
-        state = probe["state"] if probe else grant["state"] if grant else "not tested"
+        probes = sorted(
+            capability_observations.get("probe", []),
+            key=lambda item: (item["state"], item["source"]),
+        )
+        grants = sorted(
+            capability_observations.get("grant", []),
+            key=lambda item: item["source"],
+        )
+        if any(probe["state"] == "unavailable" for probe in probes):
+            state = "unavailable"
+        elif probes:
+            state = "working"
+        elif grants:
+            state = "present"
+        else:
+            state = "not tested"
         observation_evidence = [
             {
                 "claim": f"{harness} capability {name} is declared",
@@ -269,14 +347,14 @@ def _record_capabilities(
             }
             for source in dict.fromkeys(declaration_sources)
         ]
-        if grant:
+        for grant in grants:
             observation_evidence.append(
                 {
                     "claim": f"{harness} capability {name} grant is present",
                     "source": grant["source"],
                 }
             )
-        if probe:
+        for probe in probes:
             observation_evidence.append(
                 {
                     "claim": f"{harness} capability {name} probe is {probe['state']}",
@@ -320,6 +398,18 @@ def _record_config_read(result: dict[str, Any], label: str, read: ReadResult) ->
         }
     )
     return read.value
+
+
+def _mark_config_malformed(result: dict[str, Any], source: pathlib.Path, detail: str) -> None:
+    for read in result["configuration_reads"]:
+        if read["source"] != str(source):
+            continue
+        if read["state"] == "present":
+            read["state"] = "malformed"
+            read["detail"] = detail
+        elif read["state"] == "malformed" and detail not in read["detail"]:
+            read["detail"] = f"{read['detail']}; {detail}"
+        return
 
 
 def _record_manifest_read(result: dict[str, Any], read: ReadResult) -> str | None:
@@ -486,8 +576,21 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             f"Claude {scope} settings configuration",
             _read_json(settings_path, {}),
         )
-        enabled = settings.get("enabledPlugins", {}) if isinstance(settings, dict) else {}
-        marketplaces = settings.get("extraKnownMarketplaces", {}) if isinstance(settings, dict) else {}
+        if not isinstance(settings, dict):
+            _mark_config_malformed(result, settings_path, "settings must be a mapping")
+            settings = {}
+        enabled = settings.get("enabledPlugins", {})
+        marketplaces = settings.get("extraKnownMarketplaces", {})
+        if not isinstance(enabled, dict):
+            _mark_config_malformed(result, settings_path, "enabledPlugins must be a mapping")
+            enabled = {}
+        if not isinstance(marketplaces, dict):
+            _mark_config_malformed(
+                result,
+                settings_path,
+                "extraKnownMarketplaces must be a mapping",
+            )
+            marketplaces = {}
         if "crew" in marketplaces or "crew@crew" in enabled:
             settings_records.append({"scope": scope, "path": str(settings_path)})
         if enabled.get("crew@crew") is True:
@@ -501,7 +604,13 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         "Claude marketplace registry configuration",
         _read_json(registry_path, {}),
     )
-    record = registry.get("crew", {}) if isinstance(registry, dict) else {}
+    if not isinstance(registry, dict):
+        _mark_config_malformed(result, registry_path, "marketplace registry must be a mapping")
+        registry = {}
+    record = registry.get("crew", {})
+    if not isinstance(record, dict):
+        _mark_config_malformed(result, registry_path, "crew marketplace record must be a mapping")
+        record = {}
     # This registry is location metadata. Never synthesize a version from it.
     result["marketplace_registry_records"] = [
         {key: record[key] for key in ("source", "installLocation", "lastUpdated") if key in record}
@@ -524,9 +633,22 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         "Claude installed plugins configuration",
         _read_json(installed_path, {}),
     )
-    plugins = installed.get("plugins", {}) if isinstance(installed, dict) else {}
-    registrations = plugins.get("crew@crew", []) if isinstance(plugins, dict) else []
-    result["registrations"] = registrations if isinstance(registrations, list) else []
+    if not isinstance(installed, dict):
+        _mark_config_malformed(result, installed_path, "installed plugins must be a mapping")
+        installed = {}
+    plugins = installed.get("plugins", {})
+    if not isinstance(plugins, dict):
+        _mark_config_malformed(result, installed_path, "plugins must be a mapping")
+        plugins = {}
+    registrations = plugins.get("crew@crew", [])
+    if not isinstance(registrations, list):
+        _mark_config_malformed(
+            result,
+            installed_path,
+            "crew@crew registrations must be a sequence",
+        )
+        registrations = []
+    result["registrations"] = registrations
     installed_records: list[dict[str, Any]] = []
     by_root: dict[pathlib.Path, dict[str, Any]] = {}
     for registration in result["registrations"]:

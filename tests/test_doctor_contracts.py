@@ -526,6 +526,58 @@ class InstallationTruthTests(unittest.TestCase):
                 {item["claim"].rsplit(" capability external:github ", 1)[1] for item in check["evidence"]},
             )
 
+    def test_multiple_capability_observations_retain_distinct_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            root = home / ".codex/plugins/cache/crew/crew/0.29.0"
+            write_capability_skill(root, ["external:github"])
+            grant = {
+                "name": "external:github",
+                "kind": "grant",
+                "state": "present",
+                "source": "captured grant one",
+            }
+            evidence = {
+                "codex": [
+                    grant,
+                    grant.copy(),
+                    {**grant, "source": "captured grant two"},
+                    {
+                        "name": "external:github",
+                        "kind": "probe",
+                        "state": "working",
+                        "source": "free successful probe",
+                    },
+                    {
+                        "name": "external:github",
+                        "kind": "probe",
+                        "state": "unavailable",
+                        "source": "free failed probe",
+                    },
+                ]
+            }
+
+            codex = inspect_installations(
+                project,
+                home,
+                capability_evidence=evidence,
+            )["harnesses"]["codex"]
+            check = codex["capability_checks"][0]
+
+            self.assertEqual("unavailable", check["state"])
+            self.assertEqual(
+                {
+                    str(root / "skills/capability-fixture/SKILL.md"),
+                    "captured grant one",
+                    "captured grant two",
+                    "free successful probe",
+                    "free failed probe",
+                },
+                {item["source"] for item in check["evidence"]},
+            )
+            self.assertEqual(5, len(check["evidence"]))
+
     def test_configuration_read_failures_are_distinct_degraded_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -638,6 +690,40 @@ class InstallationTruthTests(unittest.TestCase):
                 )
                 self.assertEqual(str(manifest), failure["evidence"][0]["source"])
 
+    def test_prerelease_and_build_versions_remain_exact_across_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            version = "0.36.0-beta.1+build.5"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": [f"git:github.com/pixeloven/crew@v{version}"]},
+            )
+            pi_root = home / ".pi/agent/git/github.com/pixeloven/crew"
+            write_json(pi_root / ".claude-plugin/plugin.json", {"version": version})
+
+            codex_root = home / f".codex/plugins/cache/crew/crew/{version}"
+            write_json(codex_root / ".claude-plugin/plugin.json", {"version": version})
+            (codex_root / "skills").mkdir()
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                f"[marketplaces.crew]\nref = 'v{version}'\n"
+                "[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            report = inspect_installations(project, home)
+
+            for harness_name in ("pi", "codex"):
+                harness = report["harnesses"][harness_name]
+                self.assertEqual(version, harness["configured_version"])
+                self.assertEqual(version, harness["resolved_version"])
+                self.assertFalse(
+                    any("differs" in finding["claim"] for finding in harness["findings"])
+                )
+
     def test_non_utf8_configuration_is_reported_without_aborting_doctor(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -673,7 +759,7 @@ class InstallationTruthTests(unittest.TestCase):
             local_skill.parent.mkdir(parents=True)
             local_skill.write_text(
                 "---\nname: local-platform\ndescription: Declares local platform access.\n"
-                "requires: [external:local-platform]\n---\n",
+                "requires: [cli:local-platform]\n---\n",
                 encoding="utf-8",
             )
             installation = inspect_installations(
@@ -682,7 +768,7 @@ class InstallationTruthTests(unittest.TestCase):
                 capability_evidence={
                     "codex": [
                         {
-                            "name": "external:local-platform",
+                            "name": "cli:local-platform",
                             "kind": "probe",
                             "state": "working",
                             "source": "free local platform probe",
@@ -693,7 +779,7 @@ class InstallationTruthTests(unittest.TestCase):
             check = next(
                 item
                 for item in installation["harnesses"]["codex"]["capability_checks"]
-                if item["name"] == "external:local-platform"
+                if item["name"] == "cli:local-platform"
             )
             self.assertEqual("working", check["state"])
             self.assertEqual(
@@ -709,6 +795,79 @@ class InstallationTruthTests(unittest.TestCase):
                 persona_evidence=[],
             )
             self.assertEqual("platform", report["profile"])
+
+    def test_malformed_capability_frontmatter_is_degraded_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            skill = project / ".agents/skills/broken/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: broken\ndescription: Broken requirement metadata.\n"
+                "requires: [cli:local-platform\n---\n",
+                encoding="utf-8",
+            )
+            installation = inspect_installations(
+                project,
+                base / "home",
+                capability_evidence={
+                    "codex": [
+                        {
+                            "name": "cli:local-platform",
+                            "kind": "probe",
+                            "state": "working",
+                            "source": "free local platform probe",
+                        }
+                    ]
+                },
+            )
+            codex = installation["harnesses"]["codex"]
+
+            self.assertEqual("DEGRADED", codex["status"])
+            self.assertEqual("malformed", codex["capability_declaration_reads"][0]["state"])
+            failure = next(
+                finding
+                for finding in codex["findings"]
+                if "Capability declaration frontmatter is malformed" in finding["claim"]
+            )
+            self.assertEqual(str(skill), failure["evidence"][0]["source"])
+            report = compose_doctor_report(
+                installation,
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=[],
+                persona_evidence=[],
+            )
+            self.assertEqual("portable", report["profile"])
+
+    def test_structurally_invalid_claude_settings_are_degraded_not_crashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            settings = home / ".claude/settings.json"
+            write_json(
+                settings,
+                {
+                    "enabledPlugins": [],
+                    "extraKnownMarketplaces": [],
+                },
+            )
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            read = next(
+                item for item in claude["configuration_reads"] if item["source"] == str(settings)
+            )
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("enabledPlugins must be a mapping", read["detail"])
+            self.assertIn("extraKnownMarketplaces must be a mapping", read["detail"])
+            self.assertEqual("DEGRADED", claude["status"])
+            failure = next(
+                finding
+                for finding in claude["findings"]
+                if finding["evidence"][0]["source"] == str(settings)
+            )
+            self.assertIn("settings configuration is malformed", failure["claim"])
 
     def test_pi_registration_requires_exact_supported_repository_identity(self) -> None:
         supported = (
