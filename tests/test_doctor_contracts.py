@@ -5,6 +5,7 @@ import unittest
 
 from scripts.crew_doctor import (
     compare_runtime_catalog,
+    compose_doctor_report,
     declared_local_slots,
     inspect_installations,
     inspect_role_postures,
@@ -119,7 +120,7 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("0.34.0", pi["configured_version"])
             self.assertEqual("0.35.0", pi["resolved_version"])
             self.assertEqual("DEGRADED", pi["status"])
-            self.assertIn("fleet is silently invisible", " ".join(pi["findings"]))
+            self.assertIn("fleet is silently invisible", " ".join(item["claim"] for item in pi["findings"]))
 
             write_json(
                 project / ".pi/settings.json",
@@ -127,6 +128,20 @@ class InstallationTruthTests(unittest.TestCase):
             )
             pi = inspect_installations(project, home)["harnesses"]["pi"]
             self.assertEqual("OK", pi["status"])
+
+    def test_pi_checkout_without_registration_is_installed_but_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            checkout = base / "home/.pi/agent/git/github.com/pixeloven/crew"
+            write_json(
+                checkout / ".claude-plugin/plugin.json",
+                {"name": "crew", "version": "0.36.0", "skills": "./skills"},
+            )
+            pi = inspect_installations(base / "project", base / "home")["harnesses"]["pi"]
+            self.assertEqual("present", pi["installation"]["state"])
+            self.assertEqual("unavailable", pi["enablement"]["state"])
+            self.assertEqual("DEGRADED", pi["status"])
+            self.assertIn("not enabled", pi["findings"][0]["claim"])
 
     def test_m2_codex_plugin_cache_is_installation_not_capability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -217,6 +232,32 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertIsNone(codex["resolved_version"])
             self.assertEqual("DEGRADED", codex["status"])
 
+    def test_codex_configured_pin_without_matching_cache_is_degraded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            config = home / ".codex/config.toml"
+            config.write_text(
+                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.36.0'\n\n"
+                "[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            codex = inspect_installations(project, home)["harnesses"]["codex"]
+            self.assertEqual("present", codex["installation"]["state"])
+            self.assertIsNone(codex["resolved_version"])
+            self.assertEqual("DEGRADED", codex["status"])
+            self.assertTrue(any("no matching resolved root" in item["claim"] for item in codex["findings"]))
+
+    def test_findings_retain_only_claim_supporting_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp), "v0.34.0")
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+            stale = next(item for item in pi["findings"] if "predates v0.35.0" in item["claim"])
+            self.assertEqual(
+                [{"claim": stale["claim"], "source": str(project / ".pi/settings.json")}],
+                stale["evidence"],
+            )
+
     def test_two_colliding_local_skill_names_are_not_a_crew_installation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -255,12 +296,21 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual(1, len(report["top_actions"]))
             allowed_kinds = {"observed", "inference", "recommendation", "untested"}
             self.assertTrue(all(item["kind"] in allowed_kinds for item in report["evidence"]))
+            report = compose_doctor_report(
+                report,
+                runtime_comparisons=[],
+                local_slots=declared_local_slots(ROOT),
+                capability_checks=[],
+                role_postures=[],
+                persona_evidence=[],
+            )
             rendered = render_doctor_report(report)
             self.assertIn(
                 "| check | status | fact | inference | recommendation | untested | repeatable evidence |",
                 rendered,
             )
             self.assertEqual(1, rendered.count("Top action:"))
+            self.assertEqual(1, rendered.count("Profile:"))
             for row in report["checks"]:
                 self.assertEqual(
                     {"check", "status", "fact", "inference", "recommendation", "untested", "evidence"},
@@ -361,6 +411,25 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertEqual(["working", "present"], [row["state"] for row in result["entries"]])
         self.assertEqual("DEGRADED", result["status"])
 
+    def test_unrelated_catalogue_telemetry_does_not_degrade_crew_runtime(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            runtime = {
+                "codex": {
+                    "skills": [
+                        {
+                            "name": "crew:doctor",
+                            "description": "Complete Crew description.",
+                            "path": "/fixture/cache/crew/crew/0.36.0/skills/doctor/SKILL.md",
+                        },
+                        {"name": "local", "description": "short", "path": "/fixture/local/SKILL.md"},
+                    ],
+                    "telemetry": {"truncated_skill_descriptions": 1},
+                }
+            }
+            codex = inspect_installations(base / "project", base / "home", runtime)["harnesses"]["codex"]
+            self.assertEqual("working", codex["runtime"]["state"])
+
 
 class DerivedContractTests(unittest.TestCase):
     def test_m6_slots_are_derived_and_vocabulary_is_separate(self) -> None:
@@ -378,6 +447,51 @@ class DerivedContractTests(unittest.TestCase):
         self.assertEqual("portable", profile_for([], persona_evidence=[]))
         self.assertEqual("platform", profile_for(["github"], persona_evidence=[]))
         self.assertEqual("personas", profile_for(["github", "cluster"], persona_evidence=["openclaw manifest"]))
+
+    def test_composed_report_covers_all_inputs_with_one_profile_and_action(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            installation = inspect_installations(base / "project", base / "home")
+            disk = [
+                {
+                    "name": "doctor",
+                    "namespace": "crew",
+                    "source": "foundation",
+                    "description": "Doctor description.",
+                    "path": "/fixture/crew/skills/doctor/SKILL.md",
+                }
+            ]
+            runtime = compare_runtime_catalog(
+                disk,
+                {
+                    "harness": "codex",
+                    "source_command": "captured free catalogue",
+                    "skills": [
+                        {
+                            "name": "crew:doctor",
+                            "description": "Doctor description.",
+                            "path": "/fixture/crew/skills/doctor/SKILL.md",
+                        }
+                    ],
+                },
+            )
+            report = compose_doctor_report(
+                installation,
+                runtime_comparisons=[runtime],
+                local_slots=declared_local_slots(ROOT),
+                capability_checks=[{"name": "github", "state": "working", "source": "free probe"}],
+                role_postures=inspect_role_postures(ROOT)[:1],
+                persona_evidence=["consumer persona manifest"],
+            )
+            prefixes = {row["check"].split(".", 1)[0] for row in report["checks"]}
+            self.assertTrue(
+                {"runtime", "local-slots", "capability", "role", "operating-profile"} <= prefixes
+            )
+            self.assertEqual("personas", report["profile"])
+            self.assertEqual(1, len(report["top_actions"]))
+            rendered = render_doctor_report(report)
+            self.assertEqual(1, rendered.count("Profile: personas"))
+            self.assertEqual(1, rendered.count("Top action:"))
 
     def test_m8_validator_command_uses_package_root_not_consumer_scripts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

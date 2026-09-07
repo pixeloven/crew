@@ -54,6 +54,34 @@ class LayoutContractTests(unittest.TestCase):
             )
             self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
 
+    def test_yaml_non_string_identity_and_description_scalars_are_rejected(self) -> None:
+        cases = (
+            ("null", "Valid description."),
+            ("false", "Valid description."),
+            ("yes", "Valid description."),
+            ("42", "Valid description."),
+            ("3.14", "Valid description."),
+            ("!role librarian", "Valid description."),
+            ("librarian", "false"),
+        )
+        for name, description in cases:
+            with self.subTest(name=name, description=description), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".pi/agents/librarian.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    f"---\nname: {name}\ndescription: {description}\n---\n",
+                    encoding="utf-8",
+                )
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(0, completed.returncode)
+
 
 class RolePostureTests(unittest.TestCase):
     def test_m10_drafts_posture_reports_overwrite_and_shell_caveat(self) -> None:

@@ -11,13 +11,19 @@ from __future__ import annotations
 import ast
 import pathlib
 import re
+from typing import Any
 
 
 FIELD = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(?:[ \t]*(.*))$")
 FOLDED_MARKERS = {">", ">-", ">+", "|", "|-", "|+"}
+INTEGER = re.compile(r"^[+-]?(?:0|[1-9][0-9_]*|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$")
+FLOAT = re.compile(
+    r"^[+-]?(?:(?:[0-9][0-9_]*)?\.[0-9_]+|[0-9][0-9_]*(?:\.[0-9_]*)?[eE][+-]?[0-9]+|\.inf|\.nan)$",
+    re.IGNORECASE,
+)
 
 
-def _scalar(value: str) -> str:
+def _scalar(value: str) -> Any:
     value = value.strip()
     quote: str | None = None
     escaped = False
@@ -45,13 +51,21 @@ def _scalar(value: str) -> str:
         except (SyntaxError, ValueError):
             return value[1:-1]
         return parsed if isinstance(parsed, str) else value
+    if value.lower() in {"null", "~"}:
+        return None
+    if value.lower() in {"true", "false", "yes", "no", "on", "off"}:
+        return value.lower() in {"true", "yes", "on"}
+    if INTEGER.fullmatch(value) or FLOAT.fullmatch(value):
+        return 0
+    if value.startswith("!"):
+        return None
     return value
 
 
-def parse_simple_mapping(text: str) -> dict[str, str]:
+def parse_simple_mapping(text: str) -> dict[str, Any]:
     """Parse top-level scalar/folded fields from a YAML mapping."""
     lines = text.splitlines()
-    values: dict[str, str] = {}
+    values: dict[str, Any] = {}
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -74,7 +88,7 @@ def parse_simple_mapping(text: str) -> dict[str, str]:
     return values
 
 
-def read_frontmatter(path: pathlib.Path) -> tuple[dict[str, str] | None, str | None]:
+def read_frontmatter(path: pathlib.Path) -> tuple[dict[str, Any] | None, str | None]:
     """Read only the leading `---` YAML block from a Markdown file."""
     lines = pathlib.Path(path).read_text(encoding="utf-8").splitlines()
     if not lines or lines[0] != "---":
@@ -91,4 +105,8 @@ def parse_inline_list(value: str) -> list[str]:
     value = value.strip()
     if not (value.startswith("[") and value.endswith("]")):
         return []
-    return [_scalar(item.strip()) for item in value[1:-1].split(",") if item.strip()]
+    return [
+        parsed
+        for item in value[1:-1].split(",")
+        if item.strip() and isinstance((parsed := _scalar(item.strip())), str)
+    ]

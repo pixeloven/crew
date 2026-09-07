@@ -14,6 +14,7 @@ import pathlib
 import re
 import sys
 import tomllib
+from copy import deepcopy
 from typing import Any
 
 try:
@@ -75,6 +76,16 @@ def _base_harness() -> dict[str, Any]:
     }
 
 
+def _add_finding(result: dict[str, Any], claim: str, *sources: str) -> None:
+    evidence = [
+        {"claim": claim, "source": source}
+        for source in dict.fromkeys(source for source in sources if source)
+    ]
+    result["findings"].append(
+        {"claim": claim, "evidence": evidence or [{"claim": claim, "source": ""}]}
+    )
+
+
 def _record_runtime(result: dict[str, Any], runtime: dict[str, Any] | None) -> None:
     """Record only evidence supplied by this harness's capture."""
     if runtime is None or runtime.get("tested") is False:
@@ -100,8 +111,6 @@ def _record_runtime(result: dict[str, Any], runtime: dict[str, Any] | None) -> N
                 state = "omitted"
             elif any(not entry.get("description") for entry in crew_entries):
                 state = "loaded-but-undiscoverable"
-            elif runtime.get("telemetry", {}).get("truncated_skill_descriptions"):
-                state = "truncated"
             else:
                 state = "working"
     if state not in {
@@ -121,7 +130,11 @@ def _degrade_for_runtime(result: dict[str, Any]) -> None:
     if state in {"unavailable", "loaded-but-undiscoverable", "truncated", "omitted"}:
         if result["status"] == "OK":
             result["status"] = "DEGRADED"
-        result["findings"].append(f"captured Crew runtime state is {state}")
+        _add_finding(
+            result,
+            f"captured Crew runtime state is {state}",
+            result["runtime"].get("source", ""),
+        )
 
 
 def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
@@ -139,16 +152,6 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
                     {"settings": str(settings_path), "package": item, "version": _clean_version(item)}
                 )
     result["registrations"] = registrations
-    if not registrations:
-        return result
-
-    primary = next(
-        (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
-        registrations[0],
-    )
-    result["enablement"] = {"state": "present", "source": str(primary["settings"])}
-    result["configured_version"] = primary["version"]
-
     checkouts = sorted((home / ".pi").glob("*/git/github.com/pixeloven/crew"))
     resolved = [
         {"root": str(checkout), "version": _manifest_version(checkout)}
@@ -160,32 +163,62 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
     if resolved:
         result["installation"] = {"state": "present", "source": str(resolved[0]["root"])}
 
+    primary = next(
+        (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
+        registrations[0] if registrations else None,
+    )
+    if primary:
+        result["enablement"] = {"state": "present", "source": str(primary["settings"])}
+    result["configured_version"] = primary["version"] if primary else None
+
+    if resolved and not registrations:
+        result["status"] = "DEGRADED"
+        _add_finding(
+            result,
+            "Crew is installed for Pi but not enabled in an inspected settings scope",
+            str(resolved[0]["root"]),
+            *(str(path) for path in settings_paths),
+        )
+    if not registrations:
+        _degrade_for_runtime(result)
+        return result
+
     stale_pins = [
         item for item in registrations
         if _version_tuple(item["version"]) and _version_tuple(item["version"]) < FIRST_PI_ROLE_DISCOVERY_VERSION
     ]
     if stale_pins:
         result["status"] = "DEGRADED"
-        result["findings"].append(
+        _add_finding(
+            result,
             f"configured pin v{stale_pins[0]['version']} predates v0.35.0; "
-            "the Pi role fleet is silently invisible below v0.35.0"
+            "the Pi role fleet is silently invisible below v0.35.0",
+            str(stale_pins[0]["settings"]),
         )
-    elif result["resolved_version"]:
+    elif result["resolved_version"] and result["status"] != "DEGRADED":
         result["status"] = "OK"
     else:
         result["status"] = "DEGRADED"
-        result["findings"].append("package is configured but its resolved checkout manifest was unavailable")
+        _add_finding(
+            result,
+            "package is configured but its resolved checkout manifest was unavailable",
+            str(primary["settings"]),
+        )
     if len(registrations) > 1:
         result["status"] = "DEGRADED"
-        result["findings"].append(f"Crew is registered in {len(registrations)} Pi settings scopes")
+        claim = f"Crew is registered in {len(registrations)} Pi settings scopes"
+        _add_finding(result, claim, *(str(item["settings"]) for item in registrations))
     if (
         result.get("configured_version")
         and result.get("resolved_version")
         and result["configured_version"] != result["resolved_version"]
     ):
         result["status"] = "DEGRADED"
-        result["findings"].append(
-            f"configured Pi version {result['configured_version']} differs from resolved {result['resolved_version']}"
+        _add_finding(
+            result,
+            f"configured Pi version {result['configured_version']} differs from resolved {result['resolved_version']}",
+            str(primary["settings"]),
+            str(resolved[0]["root"]),
         )
     _degrade_for_runtime(result)
     return result
@@ -243,11 +276,18 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         return result
     result["status"] = "OK" if result["enablement"]["state"] == "present" else "DEGRADED"
     if result["enablement"]["state"] != "present":
-        result["findings"].append("Crew is installed for Claude but not enabled in an inspected scope")
+        _add_finding(
+            result,
+            "Crew is installed for Claude but not enabled in an inspected scope",
+            result["installation"].get("source", ""),
+            *(record["path"] for record in settings_records),
+        )
     if len(result["registrations"]) > 1:
         result["status"] = "DEGRADED"
-        result["findings"].append(
-            f"installed_plugins.json contains {len(result['registrations'])} Crew scope registrations"
+        _add_finding(
+            result,
+            f"installed_plugins.json contains {len(result['registrations'])} Crew scope registrations",
+            str(installed_path),
         )
     installed_versions = {
         str(record.get("version"))
@@ -259,8 +299,12 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     }
     if len(compared_versions) > 1:
         result["status"] = "DEGRADED"
-        result["findings"].append(
-            f"Claude served/installed/loaded versions disagree: {', '.join(sorted(compared_versions))}"
+        _add_finding(
+            result,
+            f"Claude served/installed/loaded versions disagree: {', '.join(sorted(compared_versions))}",
+            str(installed_path),
+            str(location) if result.get("served_version") else "",
+            result["runtime"].get("source", "") if result.get("loaded_version") else "",
         )
     _degrade_for_runtime(result)
     return result
@@ -369,19 +413,39 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
             result["status"] = "OK"
         else:
             result["status"] = "DEGRADED"
-            result["findings"].append("Crew is installed for Codex but not enabled in inspected config")
+            _add_finding(
+                result,
+                "Crew is installed for Codex but not enabled in inspected config",
+                result["installation"].get("source", ""),
+                str(config_path),
+            )
     if len(cache_roots) > 1:
         result["status"] = "DEGRADED"
-        result["findings"].append(f"Codex has {len(cache_roots)} Crew plugin-cache versions")
+        _add_finding(
+            result,
+            f"Codex has {len(cache_roots)} Crew plugin-cache versions",
+            *(str(root) for root in cache_roots),
+        )
+    if result.get("configured_version") and resolved_root is None:
+        result["status"] = "DEGRADED"
+        _add_finding(
+            result,
+            f"configured Codex version {result['configured_version']} has no matching resolved root",
+            str(config_path),
+            *(str(root) for root in valid_cache_roots),
+        )
     if (
         result.get("configured_version")
         and result.get("resolved_version")
         and result["configured_version"] != result["resolved_version"]
     ):
         result["status"] = "DEGRADED"
-        result["findings"].append(
+        _add_finding(
+            result,
             f"configured Codex version {result['configured_version']} differs "
-            f"from resolved {result['resolved_version']}"
+            f"from resolved {result['resolved_version']}",
+            str(config_path),
+            str(resolved_root),
         )
     _degrade_for_runtime(result)
     return result
@@ -434,27 +498,15 @@ def inspect_installations(
                 }
             )
         for index, finding in enumerate(result["findings"], start=1):
-            sources = [
-                observation.get("source", "")
-                for observation in (
-                    result["installation"],
-                    result["enablement"],
-                    result["runtime"],
-                    result["capabilities"],
-                )
-                if observation.get("source")
-            ]
             checks.append(
                 {
                     "check": f"{harness}.finding.{index}",
                     "status": "DEGRADED",
-                    "fact": finding,
+                    "fact": finding["claim"],
                     "inference": "the harness evidence does not satisfy the healthy contract",
-                    "recommendation": f"Resolve {finding}",
+                    "recommendation": f"Resolve {finding['claim']}",
                     "untested": "",
-                    "evidence": [
-                        {"claim": finding, "source": source} for source in dict.fromkeys(sources)
-                    ] or [{"claim": finding, "source": ""}],
+                    "evidence": deepcopy(finding["evidence"]),
                 }
             )
     versions = {
@@ -675,14 +727,19 @@ def compare_runtime_catalog(
 
 def declared_local_slots(package_root: pathlib.Path) -> dict[str, list[str]]:
     declared: set[str] = set()
+    sources: list[str] = []
     for path in pathlib.Path(package_root).glob("skills/*/SKILL.md"):
         frontmatter, error = read_frontmatter(path)
         if error or not frontmatter:
             continue
-        declared.update(parse_inline_list(frontmatter.get("expects-local", "")))
+        slots = parse_inline_list(frontmatter.get("expects-local", ""))
+        if slots:
+            declared.update(slots)
+            sources.append(str(path))
     return {
         "declared": sorted(declared),
         "recommended_vocabulary": list(RECOMMENDED_LOCAL_VOCABULARY),
+        "sources": sources,
     }
 
 
@@ -709,6 +766,133 @@ def inspect_role_postures(package_root: pathlib.Path) -> list[dict[str, Any]]:
             posture = effective_posture(str(role.get("writes")), harness)
             rows.append({"name": role.get("name"), **posture, "source": str(path)})
     return rows
+
+
+def compose_doctor_report(
+    installation_report: dict[str, Any],
+    *,
+    runtime_comparisons: list[dict[str, Any]],
+    local_slots: dict[str, list[str]],
+    capability_checks: list[dict[str, str]],
+    role_postures: list[dict[str, Any]],
+    persona_evidence: list[str],
+) -> dict[str, Any]:
+    """Compose all Doctor checks into one deterministic, non-persisted report."""
+    report = deepcopy(installation_report)
+    checks = report["checks"]
+
+    for comparison in runtime_comparisons:
+        capture = comparison.get("capture", {})
+        capture_source = str(capture.get("source_command", "captured runtime catalogue"))
+        for entry in comparison["entries"]:
+            state = entry["state"]
+            status = "OK" if state == "working" else "N/A" if state == "not tested" else "DEGRADED"
+            fact = f"{entry['runtime_name']} runtime entry is {state}"
+            sources = [capture_source]
+            for side in (entry.get("disk"), entry.get("runtime")):
+                if isinstance(side, dict) and side.get("path"):
+                    sources.append(str(side["path"]))
+            checks.append(
+                {
+                    "check": f"runtime.{comparison['harness']}.{entry['runtime_name']}",
+                    "status": status,
+                    "fact": fact,
+                    "inference": "" if status == "N/A" else f"catalogue comparison supports {state}",
+                    "recommendation": "" if status in {"OK", "N/A"} else f"Resolve {fact}",
+                    "untested": fact if status == "N/A" else "",
+                    "evidence": [
+                        {"claim": fact, "source": source} for source in dict.fromkeys(sources)
+                    ],
+                }
+            )
+
+    slot_fact = (
+        f"declared local slots: {', '.join(local_slots['declared']) or 'none'}; "
+        f"recommended vocabulary: {', '.join(local_slots['recommended_vocabulary']) or 'none'}"
+    )
+    checks.append(
+        {
+            "check": "local-slots.declarations",
+            "status": "OK",
+            "fact": slot_fact,
+            "inference": "declared slots remain separate from recommended vocabulary",
+            "recommendation": "",
+            "untested": "",
+            "evidence": [
+                {"claim": slot_fact, "source": source}
+                for source in local_slots.get("sources", [])
+            ] or [{"claim": slot_fact, "source": ""}],
+        }
+    )
+
+    for capability in capability_checks:
+        state = capability["state"]
+        status = "OK" if state == "working" else "N/A" if state == "not tested" else "DEGRADED"
+        fact = f"capability {capability['name']} is {state}"
+        checks.append(
+            {
+                "check": f"capability.{capability['name']}",
+                "status": status,
+                "fact": fact,
+                "inference": "" if status == "N/A" else f"probe evidence supports {state}",
+                "recommendation": "" if status in {"OK", "N/A"} else f"Resolve {fact}",
+                "untested": fact if status == "N/A" else "",
+                "evidence": [{"claim": fact, "source": capability.get("source", "")}],
+            }
+        )
+
+    for posture in role_postures:
+        name = str(posture.get("name") or "unknown")
+        harness = str(posture.get("harness") or "unknown")
+        ready = name != "unknown" and harness in {"claude", "pi"}
+        fact = (
+            f"{harness} role {name}: {posture.get('write_effect', 'posture unavailable')}; "
+            f"{posture.get('caveat', 'shell caveat unavailable')}"
+        )
+        checks.append(
+            {
+                "check": f"role.{harness}.{name}",
+                "status": "OK" if ready else "DEGRADED",
+                "fact": fact,
+                "inference": "effective tool posture is reportable" if ready else "role readiness is incomplete",
+                "recommendation": "" if ready else f"Resolve {harness} role {name}",
+                "untested": "",
+                "evidence": [{"claim": fact, "source": posture.get("source", "")}],
+            }
+        )
+
+    working = [item["name"] for item in capability_checks if item["state"] == "working"]
+    report["profile"] = profile_for(working, persona_evidence)
+    profile_fact = f"operating profile is {report['profile']}"
+    if persona_evidence:
+        profile_sources = persona_evidence
+    else:
+        profile_sources = [
+            item.get("source", "") for item in capability_checks if item["state"] == "working"
+        ]
+    checks.append(
+        {
+            "check": "operating-profile.selection",
+            "status": "OK",
+            "fact": profile_fact,
+            "inference": "persona evidence takes precedence over working platform capabilities",
+            "recommendation": "",
+            "untested": "",
+            "evidence": [
+                {"claim": profile_fact, "source": source}
+                for source in dict.fromkeys(source for source in profile_sources if source)
+            ] or [{"claim": profile_fact, "source": ""}],
+        }
+    )
+    actionable = [row for row in checks if row["status"] in {"MISSING", "DEGRADED"} and row["recommendation"]]
+    actionable.sort(key=lambda row: 0 if row["status"] == "MISSING" else 1)
+    if actionable:
+        report["top_actions"] = [actionable[0]["recommendation"]]
+    elif any(row["status"] == "N/A" for row in checks):
+        report["top_actions"] = ["Run only authorized free checks still marked untested"]
+    else:
+        report["top_actions"] = ["healthy — nothing to do"]
+    return report
 
 
 def validator_command(package_root: pathlib.Path, consumer_root: pathlib.Path) -> list[str]:
@@ -739,6 +923,8 @@ def render_doctor_report(report: dict[str, Any]) -> str:
     top_actions = report.get("top_actions", [])
     if len(top_actions) != 1:
         raise ValueError("Doctor reports require exactly one top action")
+    if report.get("profile") not in PROFILE_TAXONOMY:
+        raise ValueError("Doctor reports require exactly one valid profile")
     lines = [
         "| check | status | fact | inference | recommendation | untested | repeatable evidence |",
         "|---|---|---|---|---|---|---|",
@@ -757,6 +943,8 @@ def render_doctor_report(report: dict[str, Any]) -> str:
             ),
         ]
         lines.append("| " + " | ".join(str(field).replace("|", "\\|") or "—" for field in fields) + " |")
+    lines.append("")
+    lines.append(f"Profile: {report['profile']}")
     lines.append("")
     lines.append(f"Top action: {top_actions[0]}")
     return "\n".join(lines) + "\n"
