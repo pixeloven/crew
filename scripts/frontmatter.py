@@ -54,6 +54,8 @@ def _double_quoted(value: str) -> str:
     index = 0
     while index < len(value):
         character = value[index]
+        if character == '"':
+            raise ScalarParseError("unescaped quote in double-quoted scalar")
         if character != "\\":
             result.append(character)
             index += 1

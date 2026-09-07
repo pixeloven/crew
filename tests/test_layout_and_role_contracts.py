@@ -178,6 +178,29 @@ class LayoutContractTests(unittest.TestCase):
                     self.assertNotEqual(0, completed.returncode)
                     self.assertIn("invalid YAML frontmatter", completed.stdout + completed.stderr)
 
+    def test_double_quoted_scalars_reject_unescaped_interior_quotes(self) -> None:
+        for value, expected_success in ((r'"foo" bar"', False), (r'"foo\" bar"', True)):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".pi/agents/librarian.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    f"---\nname: librarian\ndescription: {value}\n---\n",
+                    encoding="utf-8",
+                )
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                if expected_success:
+                    self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+                else:
+                    self.assertNotEqual(0, completed.returncode)
+                    self.assertIn("invalid YAML frontmatter", completed.stdout + completed.stderr)
+
     def test_distributed_pi_agents_require_identity(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

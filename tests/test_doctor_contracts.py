@@ -572,6 +572,66 @@ class InstallationTruthTests(unittest.TestCase):
                 any(read["state"] == "absent" for read in pi["configuration_reads"])
             )
 
+    def test_malformed_configured_pi_manifest_is_source_bearing_degraded_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.36.0"]},
+            )
+            manifest = (
+                home
+                / ".pi/agent/git/github.com/pixeloven/crew/.claude-plugin/plugin.json"
+            )
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text("{broken", encoding="utf-8")
+
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+            self.assertEqual("DEGRADED", pi["status"])
+            self.assertEqual(
+                {
+                    "label": "Crew plugin manifest",
+                    "state": "malformed",
+                    "source": str(manifest),
+                    "detail": pi["manifest_reads"][0]["detail"],
+                },
+                pi["manifest_reads"][0],
+            )
+            failure = next(
+                finding for finding in pi["findings"] if "manifest is malformed" in finding["claim"]
+            )
+            self.assertEqual(str(manifest), failure["evidence"][0]["source"])
+
+    def test_non_utf8_configuration_is_reported_without_aborting_doctor(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            pi_settings = project / ".pi/settings.json"
+            codex_config = home / ".codex/config.toml"
+            pi_settings.write_bytes(b"\xff")
+            codex_config.write_bytes(b"\xff")
+
+            report = inspect_installations(project, home)
+
+            for harness_name, source in (("pi", pi_settings), ("codex", codex_config)):
+                harness = report["harnesses"][harness_name]
+                read = next(
+                    item
+                    for item in harness["configuration_reads"]
+                    if item["source"] == str(source)
+                )
+                self.assertEqual("unreadable", read["state"])
+                self.assertEqual("DEGRADED", harness["status"])
+                failure = next(
+                    finding
+                    for finding in harness["findings"]
+                    if finding["evidence"][0]["source"] == str(source)
+                )
+                self.assertIn("unreadable", failure["claim"])
+
     def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)

@@ -55,6 +55,8 @@ def _read_json(path: pathlib.Path, default: Any) -> ReadResult:
         return ReadResult(default, "absent", str(path))
     except json.JSONDecodeError as error:
         return ReadResult(default, "malformed", str(path), str(error))
+    except UnicodeDecodeError as error:
+        return ReadResult(default, "unreadable", str(path), str(error))
     except OSError as error:
         return ReadResult(default, "unreadable", str(path), str(error))
 
@@ -66,14 +68,21 @@ def _read_toml(path: pathlib.Path) -> ReadResult:
         return ReadResult({}, "absent", str(path))
     except tomllib.TOMLDecodeError as error:
         return ReadResult({}, "malformed", str(path), str(error))
+    except UnicodeDecodeError as error:
+        return ReadResult({}, "unreadable", str(path), str(error))
     except OSError as error:
         return ReadResult({}, "unreadable", str(path), str(error))
 
 
-def _manifest_version(root: pathlib.Path) -> str | None:
-    value = _read_json(root / ".claude-plugin/plugin.json", {}).value
-    version = value.get("version") if isinstance(value, dict) else None
-    return str(version) if version is not None else None
+def _manifest_version(root: pathlib.Path) -> ReadResult:
+    read = _read_json(root / ".claude-plugin/plugin.json", {})
+    version = read.value.get("version") if isinstance(read.value, dict) else None
+    return ReadResult(
+        str(version) if version is not None else None,
+        read.state,
+        read.source,
+        read.detail,
+    )
 
 
 def _clean_version(value: str | None) -> str | None:
@@ -104,6 +113,7 @@ def _base_harness() -> dict[str, Any]:
         "capability_checks": [],
         "runtime_paths": [],
         "configuration_reads": [],
+        "manifest_reads": [],
         "package_roots": [],
         "findings": [],
     }
@@ -293,8 +303,21 @@ def _record_config_read(result: dict[str, Any], label: str, read: ReadResult) ->
     return read.value
 
 
-def _degrade_for_config_reads(result: dict[str, Any]) -> None:
-    for read in result["configuration_reads"]:
+def _record_manifest_read(result: dict[str, Any], read: ReadResult) -> str | None:
+    if not any(item["source"] == read.source for item in result["manifest_reads"]):
+        result["manifest_reads"].append(
+            {
+                "label": "Crew plugin manifest",
+                "state": read.state,
+                "source": read.source,
+                "detail": read.detail,
+            }
+        )
+    return read.value
+
+
+def _degrade_for_read_failures(result: dict[str, Any]) -> None:
+    for read in result["configuration_reads"] + result["manifest_reads"]:
         if read["state"] not in {"malformed", "unreadable"}:
             continue
         result["status"] = "DEGRADED"
@@ -328,11 +351,11 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
                 )
     result["registrations"] = registrations
     checkouts = sorted((home / ".pi").glob("*/git/github.com/pixeloven/crew"))
-    resolved = [
-        {"root": str(checkout), "version": _manifest_version(checkout)}
-        for checkout in checkouts
-        if _manifest_version(checkout)
-    ]
+    resolved = []
+    for checkout in checkouts:
+        version = _record_manifest_read(result, _manifest_version(checkout))
+        if version:
+            resolved.append({"root": str(checkout), "version": version})
     result["resolved_installations"] = resolved
     primary = next(
         (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
@@ -465,7 +488,11 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         {key: record[key] for key in ("source", "installLocation", "lastUpdated") if key in record}
     ] if record else []
     location = pathlib.Path(record.get("installLocation", "")) if isinstance(record, dict) else pathlib.Path()
-    result["served_version"] = _manifest_version(location) if str(location) not in {"", "."} else None
+    result["served_version"] = (
+        _record_manifest_read(result, _manifest_version(location))
+        if str(location) not in {"", "."}
+        else None
+    )
     result["served_version_source"] = (
         str(location / ".claude-plugin/plugin.json") if result["served_version"] else ""
     )
@@ -487,7 +514,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         if not isinstance(registration, dict) or not isinstance(registration.get("installPath"), str):
             continue
         root = pathlib.Path(registration["installPath"])
-        manifest_version = _manifest_version(root)
+        manifest_version = _record_manifest_read(result, _manifest_version(root))
         if not manifest_version:
             continue
         manifest_source = str(root / ".claude-plugin/plugin.json")
@@ -679,7 +706,12 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         key=lambda path: _version_tuple(path.name) or (0, 0, 0),
     )
     result["configured_version"] = _clean_version(crew_market.get("ref")) if isinstance(crew_market, dict) else None
-    valid_cache_roots = [root for root in cache_roots if _manifest_version(root) and (root / "skills").is_dir()]
+    manifest_versions = {
+        root: _record_manifest_read(result, _manifest_version(root)) for root in cache_roots
+    }
+    valid_cache_roots = [
+        root for root in cache_roots if manifest_versions[root] and (root / "skills").is_dir()
+    ]
     runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
     resolved_root = next(
         (root for root in valid_cache_roots if any(_path_within(path, root) for path in runtime_paths)),
@@ -690,7 +722,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
             (
                 root
                 for root in valid_cache_roots
-                if (_manifest_version(root) or _clean_version(root.name)) == result["configured_version"]
+                if (manifest_versions[root] or _clean_version(root.name)) == result["configured_version"]
             ),
             None,
         )
@@ -703,7 +735,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     )
     if resolved_root:
         result["installation"] = {"state": "present", "source": str(resolved_root / "skills")}
-        result["resolved_version"] = _manifest_version(resolved_root) or _clean_version(resolved_root.name)
+        result["resolved_version"] = manifest_versions[resolved_root] or _clean_version(resolved_root.name)
         result["resolved_version_source"] = str(resolved_root / ".claude-plugin/plugin.json")
     else:
         result["resolved_version"] = None
@@ -784,7 +816,7 @@ def inspect_installations(
         "codex": _inspect_codex(project_root, home, runtime_fixtures.get("codex")),
     }
     for harness, result in harnesses.items():
-        _degrade_for_config_reads(result)
+        _degrade_for_read_failures(result)
         _record_capabilities(result, harness, capability_evidence.get(harness, []))
     evidence: list[dict[str, str]] = []
     checks: list[dict[str, Any]] = []
