@@ -73,7 +73,9 @@ and never starts a billed model probe without explicit approval.
 Ask an agent to “onboard this project” for a non-mutating audit. That plain request
 does not edit files. Applying findings requires a distinct, explicit apply
 authorization for the current run, and destructive movement is routed through the
-host runtime's decision interface. Onboarding preserves mature entry files,
+host runtime's decision interface. That host verifies a fresh, non-persisted
+current-invocation signal; Onboarding does not mint, authenticate, save, or reuse
+authorization tokens. Onboarding preserves mature entry files,
 safety tripwires, project delivery contracts, and runbook pointers, then defers
 implementation delivery to the project's existing workflow.
 

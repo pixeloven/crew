@@ -19,7 +19,27 @@ FOLDED_MARKERS = {">", ">-", ">+", "|", "|-", "|+"}
 
 def _scalar(value: str) -> str:
     value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(value):
+        if quote == '"' and character == "\\" and not escaped:
+            escaped = True
+            continue
+        if character in {"'", '"'} and not escaped:
+            if quote is None:
+                quote = character
+            elif quote == character:
+                if quote == "'" and index + 1 < len(value) and value[index + 1] == "'":
+                    escaped = True
+                    continue
+                quote = None
+        if character == "#" and quote is None and (index == 0 or value[index - 1].isspace()):
+            value = value[:index].rstrip()
+            break
+        escaped = False
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if len(value) >= 2 and value[0] == value[-1] == '"':
         try:
             parsed = ast.literal_eval(value)
         except (SyntaxError, ValueError):

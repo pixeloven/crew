@@ -88,3 +88,5 @@ work, not an agent dispatch primitive.
 Ask **“run Crew Doctor”** for the read-only health report. Ask **“onboard this
 project”** for a non-mutating audit. Applying onboarding findings requires a
 distinct explicit current-run authorization.
+The supervising host verifies a fresh, non-persisted signal for that exact
+invocation; saved, standing, reusable, and prior-run authority is rejected.

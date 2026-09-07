@@ -1,6 +1,11 @@
 import unittest
 
-from scripts.onboarding_contract import ApplyAuthorizationRequired, consume_doctor_profile, resolve_mode
+from scripts.onboarding_contract import (
+    ApplyAuthorizationRequired,
+    HostApplyAuthorizationSignal,
+    consume_doctor_profile,
+    resolve_mode,
+)
 
 
 class OnboardingLifecycleTests(unittest.TestCase):
@@ -11,13 +16,29 @@ class OnboardingLifecycleTests(unittest.TestCase):
             self.assertFalse(contract.writes_allowed)
             self.assertEqual("audit report delivered", contract.stop_boundary)
 
-    def test_m3_apply_requires_a_distinct_recorded_authorization(self) -> None:
+    def test_m3_apply_requires_a_fresh_current_invocation_host_signal(self) -> None:
         with self.assertRaises(ApplyAuthorizationRequired):
             resolve_mode(explicit_apply=True)
-        contract = resolve_mode(explicit_apply=True, authorization="decision:onboarding-apply-42")
+        with self.assertRaises(ApplyAuthorizationRequired):
+            resolve_mode(explicit_apply=True, invocation_id="run-42", authorization="old-token")
+        signal = HostApplyAuthorizationSignal(invocation_id="run-42", host_verified=True)
+        contract = resolve_mode(explicit_apply=True, invocation_id="run-42", authorization=signal)
         self.assertEqual("apply", contract.mode)
         self.assertTrue(contract.writes_allowed)
-        self.assertEqual("decision:onboarding-apply-42", contract.authorization)
+        self.assertTrue(contract.authorization_verified)
+        with self.assertRaises(ApplyAuthorizationRequired):
+            resolve_mode(explicit_apply=True, invocation_id="run-42", authorization=signal)
+
+    def test_m3_rejects_saved_standing_and_prior_run_authority(self) -> None:
+        rejected = (
+            HostApplyAuthorizationSignal(invocation_id="prior-run", host_verified=True),
+            HostApplyAuthorizationSignal(invocation_id="run-42", host_verified=True, persisted=True),
+            HostApplyAuthorizationSignal(invocation_id="run-42", host_verified=True, scope="standing"),
+            HostApplyAuthorizationSignal(invocation_id="run-42", host_verified=False),
+        )
+        for signal in rejected:
+            with self.subTest(signal=signal), self.assertRaises(ApplyAuthorizationRequired):
+                resolve_mode(explicit_apply=True, invocation_id="run-42", authorization=signal)
 
     def test_m3_mature_safety_and_delivery_contracts_are_preservation_requirements(self) -> None:
         contract = resolve_mode()

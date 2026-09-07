@@ -61,3 +61,5 @@ To edit, give a distinct current-run instruction to **apply the onboarding
 findings**. Plain onboarding is never apply authorization. Onboarding preserves
 mature entry files, safety tripwires, project delivery contracts, and runbook
 pointers.
+The supervising host verifies a fresh, non-persisted signal for that exact
+invocation; saved, standing, reusable, and prior-run authority is rejected.

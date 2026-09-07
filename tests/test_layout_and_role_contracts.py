@@ -1,9 +1,10 @@
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 
-from scripts.role_contract import FORBIDDEN_RUNTIME_KEYS, effective_posture
+from scripts.role_contract import effective_posture
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -35,6 +36,24 @@ class LayoutContractTests(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
         self.assertIn("consumer role layout ok", completed.stdout)
 
+    def test_yaml_plain_scalar_comment_is_not_part_of_role_name(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            agent = root / ".pi/agents/librarian.md"
+            agent.parent.mkdir(parents=True)
+            agent.write_text(
+                "---\nname: librarian # role identity\ndescription: 'Keeps # references' # note\n---\n",
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
 
 class RolePostureTests(unittest.TestCase):
     def test_m10_drafts_posture_reports_overwrite_and_shell_caveat(self) -> None:
@@ -44,11 +63,25 @@ class RolePostureTests(unittest.TestCase):
         self.assertNotIn("Write", posture["denied_tools"])
         self.assertIn("shell access", posture["caveat"])
 
-    def test_runtime_knob_contract_is_shared_and_complete(self) -> None:
-        self.assertEqual(
-            {"model", "thinking", "effort", "model_reasoning_effort", "turnBudget", "maxTurns"},
-            set(FORBIDDEN_RUNTIME_KEYS),
-        )
+    def test_every_runtime_knob_is_observably_rejected(self) -> None:
+        for key in ("model", "thinking", "effort", "model_reasoning_effort", "turnBudget", "maxTurns"):
+            with self.subTest(key=key), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".pi/agents/reviewer.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    f"---\nname: reviewer\ndescription: Reviews changes.\n{key}: fixture-value\n---\n",
+                    encoding="utf-8",
+                )
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(0, completed.returncode)
+                self.assertIn(f"forbidden runtime knob '{key}'", completed.stdout + completed.stderr)
 
 
 if __name__ == "__main__":

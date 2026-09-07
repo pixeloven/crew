@@ -118,9 +118,11 @@ result; do not create a plan file or modify the repository just to persist it.
 ## Apply mode — explicit authorization required
 
 Apply only when the request distinctly says to apply the onboarding findings and
-the current run is authorized to write. Record that per-run authorization. A
-prior audit, a plain onboarding request, or general autonomy is not apply
-authorization.
+the supervising host supplies a fresh, non-persisted authorization signal for
+this exact invocation. The host verifies the decision and invocation identity;
+Onboarding does not mint, authenticate, persist, or reuse authorization tokens.
+A saved or standing decision, prior-run signal, prior audit, plain onboarding
+request, or general autonomy is not apply authorization.
 
 Before the first edit:
 

@@ -152,14 +152,80 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("unavailable", codex["enablement"]["state"])
             self.assertEqual("DEGRADED", codex["status"])
 
-    def test_pi_runtime_evidence_is_retained_when_settings_are_absent(self) -> None:
+    def test_empty_pi_capture_does_not_invent_working_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
             runtime = {"pi": {"source": "captured Pi catalogue", "skills": []}}
             pi = inspect_installations(base / "project", base / "home", runtime)["harnesses"]["pi"]
             self.assertEqual("unavailable", pi["installation"]["state"])
-            self.assertEqual("working", pi["runtime"]["state"])
+            self.assertEqual("omitted", pi["runtime"]["state"])
             self.assertEqual("MISSING", pi["status"])
+
+    def test_configuration_without_package_files_is_not_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            write_json(
+                base / "project/.pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.36.0"]},
+            )
+            write_json(
+                base / "home/.claude/settings.json",
+                {
+                    "extraKnownMarketplaces": {"crew": {"source": "pixeloven/crew"}},
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            report = inspect_installations(base / "project", base / "home")
+            self.assertEqual("unavailable", report["harnesses"]["pi"]["installation"]["state"])
+            self.assertEqual("present", report["harnesses"]["pi"]["enablement"]["state"])
+            self.assertEqual("unavailable", report["harnesses"]["claude"]["installation"]["state"])
+            self.assertEqual("present", report["harnesses"]["claude"]["enablement"]["state"])
+
+    def test_codex_resolves_runtime_then_configured_root_not_newest_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            newer = home / ".codex/plugins/cache/crew/crew/0.36.0"
+            write_json(newer / ".claude-plugin/plugin.json", {"name": "crew", "version": "0.36.0"})
+            (newer / "skills").mkdir()
+            configured = inspect_installations(project, home)["harnesses"]["codex"]
+            self.assertEqual("0.29.0", configured["resolved_version"])
+            runtime = {
+                "codex": {
+                    "state": "working",
+                    "skills": [
+                        {
+                            "name": "crew:doctor",
+                            "description": "doctor",
+                            "path": str(newer / "skills/doctor/SKILL.md"),
+                        }
+                    ],
+                }
+            }
+            selected = inspect_installations(project, home, runtime)["harnesses"]["codex"]
+            self.assertEqual("0.36.0", selected["resolved_version"])
+
+    def test_codex_cache_is_installed_even_when_resolution_is_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            for version in ("0.35.0", "0.36.0"):
+                root = base / f"home/.codex/plugins/cache/crew/crew/{version}"
+                write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": version})
+                (root / "skills").mkdir()
+            codex = inspect_installations(base / "project", base / "home")["harnesses"]["codex"]
+            self.assertEqual("present", codex["installation"]["state"])
+            self.assertIsNone(codex["resolved_version"])
+            self.assertEqual("DEGRADED", codex["status"])
+
+    def test_two_colliding_local_skill_names_are_not_a_crew_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            for name in ("doctor", "onboarding"):
+                path = base / f"project/.agents/skills/{name}/SKILL.md"
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(f"---\nname: {name}\ndescription: local\n---\n", encoding="utf-8")
+            codex = inspect_installations(base / "project", base / "home")["harnesses"]["codex"]
+            self.assertEqual("unavailable", codex["installation"]["state"])
 
     def test_m11_claude_registry_roles_are_not_conflated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -190,8 +256,18 @@ class InstallationTruthTests(unittest.TestCase):
             allowed_kinds = {"observed", "inference", "recommendation", "untested"}
             self.assertTrue(all(item["kind"] in allowed_kinds for item in report["evidence"]))
             rendered = render_doctor_report(report)
-            self.assertIn("| fact | inference | recommendation | untested |", rendered)
-            self.assertIn("Top action:", rendered)
+            self.assertIn(
+                "| check | status | fact | inference | recommendation | untested | repeatable evidence |",
+                rendered,
+            )
+            self.assertEqual(1, rendered.count("Top action:"))
+            for row in report["checks"]:
+                self.assertEqual(
+                    {"check", "status", "fact", "inference", "recommendation", "untested", "evidence"},
+                    set(row),
+                )
+                for item in row["evidence"]:
+                    self.assertIn(f"source: {item['source'] or 'not recorded'}", rendered)
 
 
 class RuntimeDiscoveryTests(unittest.TestCase):
@@ -262,6 +338,28 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         result = compare_runtime_catalog(self.disk, {"harness": "pi", "tested": False})
         self.assertTrue(result["entries"])
         self.assertEqual({"not tested"}, {row["state"] for row in result["entries"]})
+
+    def test_duplicate_or_wrong_root_runtime_entries_degrade(self) -> None:
+        disk = [{**self.disk[0], "path": "/authorized/skills/doctor/SKILL.md"}]
+        fixture = {
+            "harness": "codex",
+            "skills": [
+                {
+                    "name": "crew:doctor",
+                    "description": self.disk[0]["description"],
+                    "path": "/stale/skills/doctor/SKILL.md",
+                },
+                {
+                    "name": "crew:doctor",
+                    "description": self.disk[0]["description"],
+                    "path": "/authorized/skills/doctor/SKILL.md",
+                },
+            ],
+        }
+        result = compare_runtime_catalog(disk, fixture)
+        self.assertEqual(2, result["visible_count"])
+        self.assertEqual(["working", "present"], [row["state"] for row in result["entries"]])
+        self.assertEqual("DEGRADED", result["status"])
 
 
 class DerivedContractTests(unittest.TestCase):
