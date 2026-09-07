@@ -1,4 +1,5 @@
 ---
+name: reviewer
 description: Adversarial pre-merge review. Hard-coded skeptical posture — assumes problems exist until the diff proves otherwise. Use for code review, manifest review, design review, and seam detection on any PR or proposed change.
 tools: read, bash, grep, find
 ---

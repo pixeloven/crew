@@ -108,9 +108,15 @@ def frontmatter(role, harness):
     desc = role["description"]
     if ":" in desc or desc.lstrip().startswith(("'", '"')):
         desc = '"' + desc.replace('"', '\\"') + '"'
-    lines = []
+    # `name` is REQUIRED on BOTH harnesses, and its absence is silent on pi.
+    # pi-subagents resolves an agent's name strictly from this key — there is no
+    # filename fallback anywhere in its load path — and `agents.ts` does
+    # `if (!frontmatter.name || !frontmatter.description) continue;`, dropping the
+    # file with no diagnostic. Every pi role this repo shipped omitted it, so the
+    # whole pi fleet was invisible while the tree looked correct. Do not "simplify"
+    # this back into the Claude branch.
+    lines = [f"name: {role['name']}"]
     if harness == "claude":
-        lines.append(f"name: {role['name']}")
         lines.append(f"description: {desc}")
         denied = WRITES[role["writes"]]["claude"]
         if denied:

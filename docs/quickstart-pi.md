@@ -19,6 +19,8 @@ Bump the pin to update; the release tag list is the changelog.
 It should list the seven crew agents (`lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer`) alongside pi's built-ins, and show the foundation's skills loaded from the package's `skills/` tree.
 
 > **Why this step is not optional.** Package **agent** discovery and package **skill** discovery are separate mechanisms with separate manifest keys, and a wrong agents key fails *silently* — skills load, agents don't, and nothing errors. This foundation shipped exactly that bug until v0.13.0 (the manifest declared `pi.agents`, which neither pi core nor pi-subagents reads). If the doctor lists skills but no crew agents, check the package's manifest key before anything else.
+>
+> **And it shipped a second, identical-looking one until v0.35.0.** pi-subagents resolves an agent's name *strictly* from frontmatter `name:` — there is no filename fallback — and drops any file lacking it with `continue`, no diagnostic. Every rendered pi role omitted `name:`, so the entire fleet was invisible while `pi-agents/` looked perfectly correct on disk. Both failures present identically at the doctor: skills yes, agents no. If you are pinned below v0.35.0, this is why.
 
 Package agent discovery requires `pi-subagents` **≥ 0.29.0**.
 
