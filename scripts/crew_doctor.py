@@ -1344,76 +1344,92 @@ def inspect_role_postures(
     package_root = pathlib.Path(package_root)
     consumer_root = pathlib.Path(consumer_root) if consumer_root else package_root
     rows: list[dict[str, Any]] = []
-    for name in EXPECTED_ROLE_NAMES:
-        for harness, distributed, overlay in (
-            ("claude", package_root / "agents", consumer_root / ".claude/agents"),
-            ("pi", package_root / "pi-agents", consumer_root / ".pi/agents"),
-        ):
-            overlay_path = overlay / f"{name}.md"
-            path = overlay_path if overlay_path.is_file() else distributed / f"{name}.md"
-            errors: list[str] = []
-            try:
-                metadata, error = read_frontmatter(path)
-            except (OSError, UnicodeDecodeError) as exception:
-                metadata, error = None, f"role file is unreadable: {exception}"
-            if error:
-                errors.append(error)
-            if not isinstance(metadata, dict):
-                metadata = {}
-            if metadata.get("name") != name:
-                errors.append(f"name must be {name}")
-            if not isinstance(metadata.get("description"), str) or not metadata["description"].strip():
-                errors.append("description must be a non-empty string")
-            forbidden = sorted(key for key in metadata if key in FORBIDDEN_RUNTIME_KEYS)
-            if forbidden:
-                errors.append(f"forbidden runtime keys: {', '.join(forbidden)}")
+    harness_roots = (
+        ("claude", package_root / "agents", consumer_root / ".claude/agents"),
+        ("pi", package_root / "pi-agents", consumer_root / ".pi/agents"),
+    )
+    targets = [
+        (name, harness, distributed, overlay)
+        for name in EXPECTED_ROLE_NAMES
+        for harness, distributed, overlay in harness_roots
+    ]
+    targets.extend(
+        (path.stem, harness, distributed, overlay)
+        for harness, distributed, overlay in harness_roots
+        if overlay.is_dir()
+        for path in sorted(overlay.glob("*.md"))
+        if path.stem not in EXPECTED_ROLE_NAMES
+    )
 
-            writes: str | None = None
-            if harness == "claude":
-                denied = _role_string_list(metadata.get("disallowedTools", ""))
-                if denied is None:
-                    errors.append("disallowedTools must be a string sequence")
-                else:
-                    matches = [
-                        mode
-                        for mode, contract in WRITE_POSTURES.items()
-                        if set(denied) == set(contract["claude"]["denied"])
-                    ]
-                    writes = matches[0] if len(matches) == 1 else None
-            else:
-                allowed = _role_string_list(metadata.get("tools"))
-                if allowed is None:
-                    errors.append("tools must be a string sequence")
-                else:
-                    effective_allowed = set(allowed) - {"subagent"}
-                    matches = [
-                        mode
-                        for mode, contract in WRITE_POSTURES.items()
-                        if effective_allowed == set(contract["pi"]["allowed"])
-                    ]
-                    writes = matches[0] if len(matches) == 1 else None
-            if writes is None and not any("string sequence" in item for item in errors):
-                errors.append("tool posture does not match a supported write posture")
+    for name, harness, distributed, overlay in targets:
+        overlay_path = overlay / f"{name}.md"
+        is_consumer_role = overlay_path.is_file()
+        path = overlay_path if is_consumer_role else distributed / f"{name}.md"
+        errors: list[str] = []
+        try:
+            metadata, error = read_frontmatter(path)
+        except (OSError, UnicodeDecodeError) as exception:
+            metadata, error = None, f"role file is unreadable: {exception}"
+        if error:
+            errors.append(error)
+        if not isinstance(metadata, dict):
+            metadata = {}
+        if metadata.get("name") != name:
+            errors.append(f"name must be {name}")
+        if not isinstance(metadata.get("description"), str) or not metadata["description"].strip():
+            errors.append("description must be a non-empty string")
+        forbidden = sorted(key for key in metadata if key in FORBIDDEN_RUNTIME_KEYS)
+        if forbidden:
+            errors.append(f"forbidden runtime keys: {', '.join(forbidden)}")
 
-            if errors:
-                rows.append(
-                    {
-                        "name": name,
-                        "harness": harness,
-                        "source": str(path),
-                        "role_valid": False,
-                        "validation_errors": errors,
-                    }
-                )
+        writes: str | None = None
+        if harness == "claude":
+            denied = _role_string_list(metadata.get("disallowedTools", ""))
+            if denied is None:
+                errors.append("disallowedTools must be a string sequence")
             else:
-                rows.append(
-                    {
-                        "name": name,
-                        **effective_posture(writes, harness),
-                        "source": str(path),
-                        "role_valid": True,
-                    }
-                )
+                matches = [
+                    mode
+                    for mode, contract in WRITE_POSTURES.items()
+                    if set(denied) == set(contract["claude"]["denied"])
+                ]
+                writes = matches[0] if len(matches) == 1 else None
+        else:
+            allowed = _role_string_list(metadata.get("tools"))
+            if allowed is None:
+                errors.append("tools must be a string sequence")
+            else:
+                effective_allowed = set(allowed) - {"subagent"}
+                matches = [
+                    mode
+                    for mode, contract in WRITE_POSTURES.items()
+                    if effective_allowed == set(contract["pi"]["allowed"])
+                ]
+                writes = matches[0] if len(matches) == 1 else None
+        if writes is None and not any("string sequence" in item for item in errors):
+            errors.append("tool posture does not match a supported write posture")
+
+        if errors:
+            rows.append(
+                {
+                    "name": name,
+                    "harness": harness,
+                    "source": str(path),
+                    "scope": "consumer" if is_consumer_role else "crew",
+                    "role_valid": False,
+                    "validation_errors": errors,
+                }
+            )
+        else:
+            rows.append(
+                {
+                    "name": name,
+                    **effective_posture(writes, harness),
+                    "source": str(path),
+                    "scope": "consumer" if is_consumer_role else "crew",
+                    "role_valid": True,
+                }
+            )
     return rows
 
 
@@ -1562,6 +1578,47 @@ def compose_doctor_report(
                     ] or [{"claim": fact, "source": ""}],
                 }
             )
+
+    fleet_keys = {
+        (harness, name)
+        for harness in ("claude", "pi")
+        for name in EXPECTED_ROLE_NAMES
+    }
+    consumer_keys = sorted(
+        key
+        for key, postures in posture_index.items()
+        if key not in fleet_keys
+        and key[0] in {"claude", "pi"}
+        and any(posture.get("scope") == "consumer" for posture in postures)
+    )
+    for harness, name in consumer_keys:
+        matches = posture_index[(harness, name)]
+        ready = len(matches) == 1 and _complete_role_posture(matches[0], harness, name)
+        if ready:
+            posture = matches[0]
+            fact = f"{harness} consumer role {name}: {posture['write_effect']}; {posture['caveat']}"
+            inference = "effective tool posture matches the resolved consumer role contract"
+        else:
+            fact = f"{harness} consumer role {name} posture evidence is incomplete or duplicated"
+            inference = "consumer role readiness cannot be established"
+        sources = [
+            str(posture.get("source", ""))
+            for posture in matches
+            if posture.get("source")
+        ]
+        checks.append(
+            {
+                "check": f"role.consumer.{harness}.{name}",
+                "status": "OK" if ready else "DEGRADED",
+                "fact": fact,
+                "inference": inference,
+                "recommendation": "" if ready else f"Resolve {harness} consumer role {name}",
+                "untested": "",
+                "evidence": [
+                    {"claim": fact, "source": source} for source in dict.fromkeys(sources)
+                ] or [{"claim": fact, "source": ""}],
+            }
+        )
 
     working = [item["name"] for item in capability_checks if item["state"] == "working"]
     report["profile"] = profile_for(working, persona_evidence)

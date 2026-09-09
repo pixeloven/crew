@@ -1602,6 +1602,50 @@ class DerivedContractTests(unittest.TestCase):
             self.assertFalse(reviewer["role_valid"])
             self.assertIn("forbidden runtime keys", " ".join(reviewer["validation_errors"]))
 
+    def test_consumer_only_roles_are_enumerated_separately_from_the_crew_fleet(self) -> None:
+        consumer = FIXTURES / "consumer-valid"
+
+        postures = inspect_role_postures(ROOT, consumer)
+        librarian_postures = {
+            row["harness"]: row
+            for row in postures
+            if row["name"] == "librarian"
+        }
+        self.assertEqual({"claude", "pi"}, set(librarian_postures))
+        self.assertTrue(all(row["role_valid"] for row in librarian_postures.values()))
+        self.assertTrue(
+            all("shell access" in row["caveat"] for row in librarian_postures.values())
+        )
+
+        report = compose_doctor_report(
+            inspect_installations(consumer, pathlib.Path("/nonexistent-doctor-home")),
+            runtime_comparisons=[],
+            local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+            role_postures=postures,
+            persona_evidence=[],
+        )
+        role_checks = {
+            row["check"]: row
+            for row in report["checks"]
+            if row["check"].startswith("role.")
+        }
+        consumer_checks = {
+            name: row for name, row in role_checks.items() if name.startswith("role.consumer.")
+        }
+        fleet_checks = {
+            name: row for name, row in role_checks.items() if not name.startswith("role.consumer.")
+        }
+
+        self.assertEqual(14, len(fleet_checks))
+        self.assertEqual(
+            {"role.consumer.claude.librarian", "role.consumer.pi.librarian"},
+            set(consumer_checks),
+        )
+        self.assertEqual({"OK"}, {row["status"] for row in consumer_checks.values()})
+        self.assertTrue(all("shell access" in row["fact"] for row in consumer_checks.values()))
+        rendered = render_doctor_report(report)
+        self.assertTrue(all(check in rendered for check in consumer_checks))
+
     def test_validator_assets_are_in_the_dry_run_npm_tarball(self) -> None:
         import subprocess
 
