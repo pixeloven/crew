@@ -170,19 +170,29 @@ def _record_runtime(
     """Record only evidence supplied by this harness's capture."""
     if runtime is None or runtime.get("tested") is False:
         return
-    state = runtime.get("state")
-    if state in {"not-tested", "not tested"}:
+    captured_state = runtime.get("state")
+    if captured_state in {"not-tested", "not tested"}:
         result["runtime"] = {
             "state": "not tested",
             "source": runtime.get("source", "captured runtime"),
         }
         return
-    if state is None:
+    if captured_state not in {
+        None,
+        "present",
+        "working",
+        "unavailable",
+        "loaded-but-undiscoverable",
+        "truncated",
+        "omitted",
+    }:
+        raise ValueError(f"unsupported runtime state: {captured_state}")
+    if captured_state in {"unavailable", "omitted"}:
+        state = captured_state
+    else:
         skills = runtime.get("skills")
-        if not isinstance(skills, list):
-            state = "unavailable"
-        else:
-            crew_entries = [
+        crew_entries = (
+            [
                 entry
                 for entry in skills
                 if isinstance(entry, dict)
@@ -197,21 +207,24 @@ def _record_runtime(
                     )
                 )
             ]
-            if not crew_entries:
-                state = "omitted"
-            elif any(not entry.get("description") for entry in crew_entries):
-                state = "loaded-but-undiscoverable"
-            else:
-                state = "working"
-    if state not in {
-        "present",
-        "working",
-        "unavailable",
-        "loaded-but-undiscoverable",
-        "truncated",
-        "omitted",
-    }:
-        raise ValueError(f"unsupported runtime state: {state}")
+            if isinstance(skills, list)
+            else []
+        )
+        validated_runtime_root = any(
+            _path_within(path, root)
+            for path in _runtime_paths(runtime)
+            for root in validated_roots
+        )
+        if not crew_entries and not validated_runtime_root:
+            state = "omitted" if isinstance(skills, list) else "unavailable"
+        elif captured_state == "truncated":
+            state = "truncated"
+        elif any(not entry.get("description") for entry in crew_entries):
+            state = "loaded-but-undiscoverable"
+        elif captured_state == "present" or not crew_entries:
+            state = "present"
+        else:
+            state = "working"
     result["runtime"] = {"state": state, "source": runtime.get("source", "captured runtime")}
     if state in LOADED_RUNTIME_STATES:
         result["runtime_paths"] = [str(path) for path in _runtime_paths(runtime)]
@@ -705,6 +718,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         )
         registrations = []
     result["registrations"] = registrations
+    valid_registrations: list[dict[str, Any]] = []
     installed_records: list[dict[str, Any]] = []
     by_root: dict[pathlib.Path, dict[str, Any]] = {}
     for index, registration in enumerate(result["registrations"]):
@@ -724,6 +738,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             )
             continue
         project_path = registration.get("projectPath")
+        valid = True
         if project_path is not None and (
             not isinstance(project_path, str) or not project_path.strip()
         ):
@@ -732,6 +747,29 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 installed_path,
                 f"crew@crew registration {index} projectPath must be a non-empty string",
             )
+            valid = False
+        raw_registration_version = registration.get("version")
+        if raw_registration_version is not None and (
+            not isinstance(raw_registration_version, str)
+            or _clean_version(raw_registration_version) is None
+        ):
+            _mark_config_malformed(
+                result,
+                installed_path,
+                f"crew@crew registration {index} version must be a SemVer string",
+            )
+            valid = False
+        scope = registration.get("scope")
+        if scope is not None and (not isinstance(scope, str) or not scope.strip()):
+            _mark_config_malformed(
+                result,
+                installed_path,
+                f"crew@crew registration {index} scope must be a non-empty string",
+            )
+            valid = False
+        if not valid:
+            continue
+        valid_registrations.append(registration)
         root = pathlib.Path(install_path)
         manifest_version = _record_manifest_read(result, _manifest_version(root))
         if not manifest_version:
@@ -746,11 +784,8 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 "registration_versions": [],
             },
         )
-        raw_registration_version = registration.get("version")
         if raw_registration_version:
-            registration_version = (
-                _clean_version(str(raw_registration_version)) or str(raw_registration_version)
-            )
+            registration_version = _clean_version(raw_registration_version)
             record["registration_versions"].append(registration_version)
             if registration_version != manifest_version:
                 result["status"] = "DEGRADED"
@@ -790,9 +825,8 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if selected_installed is None:
         project_roots = {
             pathlib.Path(registration["installPath"]).resolve(strict=False)
-            for registration in result["registrations"]
-            if isinstance(registration, dict)
-            and registration.get("scope") == "project"
+            for registration in valid_registrations
+            if registration.get("scope") == "project"
             and isinstance(registration.get("projectPath"), str)
             and pathlib.Path(registration["projectPath"]).resolve(strict=False)
             == project.resolve(strict=False)
@@ -845,11 +879,11 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             result["installation"].get("source", ""),
             *(record["path"] for record in settings_records),
         )
-    if len(result["registrations"]) > 1:
+    if len(valid_registrations) > 1:
         result["status"] = "DEGRADED"
         _add_finding(
             result,
-            f"installed_plugins.json contains {len(result['registrations'])} Crew scope registrations",
+            f"installed_plugins.json contains {len(valid_registrations)} Crew scope registrations",
             str(installed_path),
         )
     if len(installed_records) > 1:
@@ -862,9 +896,9 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             *(record["source"] for record in installed_records),
         )
     registration_versions = {
-        _clean_version(str(registration.get("version"))) or str(registration.get("version"))
-        for registration in result["registrations"]
-        if isinstance(registration, dict) and registration.get("version")
+        _clean_version(registration.get("version"))
+        for registration in valid_registrations
+        if registration.get("version")
     }
     manifest_versions = {record["version"] for record in installed_records}
     compared_versions = registration_versions | manifest_versions | {
@@ -1433,7 +1467,7 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
             continue
         raw_slots = frontmatter.get("expects-local", "")
         if isinstance(raw_slots, list):
-            if any(not isinstance(slot, str) or not slot for slot in raw_slots):
+            if any(not isinstance(slot, str) or not slot.strip() for slot in raw_slots):
                 reads.append(
                     {
                         "state": "malformed",
@@ -1441,8 +1475,11 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
                         "detail": "expects-local entries must be non-empty strings",
                     }
                 )
-                continue
-            slots = raw_slots
+            slots = [
+                slot.strip()
+                for slot in raw_slots
+                if isinstance(slot, str) and slot.strip()
+            ]
         else:
             if not isinstance(raw_slots, str):
                 reads.append(

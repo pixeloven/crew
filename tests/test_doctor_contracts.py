@@ -277,6 +277,31 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("omitted", pi["runtime"]["state"])
             self.assertEqual("MISSING", pi["status"])
 
+    def test_forged_working_state_cannot_promote_unrelated_runtime_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            runtime = {
+                "codex": {
+                    "state": "working",
+                    "version": "9.9.0",
+                    "source": "captured Codex catalogue",
+                    "skills": [
+                        {
+                            "name": "unrelated",
+                            "description": "Unrelated skill.",
+                            "path": "/unrelated/skills/example/SKILL.md",
+                        }
+                    ],
+                }
+            }
+
+            codex = inspect_installations(
+                base / "project", base / "home", runtime
+            )["harnesses"]["codex"]
+
+            self.assertEqual("omitted", codex["runtime"]["state"])
+            self.assertIsNone(codex["loaded_version"])
+
     def test_configuration_without_package_files_is_not_installation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -917,6 +942,48 @@ class InstallationTruthTests(unittest.TestCase):
             }
             self.assertTrue({str(registry_path), str(installed_path)} <= finding_sources)
 
+    def test_malformed_claude_version_and_scope_are_excluded_from_reconciliation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            root = base / "home/.claude/plugins/cache/crew/crew/0.36.0"
+            write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            installed_path = base / "home/.claude/plugins/installed_plugins.json"
+            write_json(
+                installed_path,
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {
+                                "installPath": str(root),
+                                "version": ["0.36.0"],
+                                "scope": 7,
+                            }
+                        ]
+                    }
+                },
+            )
+
+            claude = inspect_installations(
+                base / "project", base / "home"
+            )["harnesses"]["claude"]
+
+            read = next(
+                item
+                for item in claude["configuration_reads"]
+                if item["source"] == str(installed_path)
+            )
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("version must be a SemVer string", read["detail"])
+            self.assertIn("scope must be a non-empty string", read["detail"])
+            self.assertEqual([], claude["installed_versions"])
+            self.assertIsNone(claude["installed_version"])
+            finding = next(
+                item
+                for item in claude["findings"]
+                if item["evidence"][0]["source"] == str(installed_path)
+            )
+            self.assertIn("installed plugins configuration is malformed", finding["claim"])
+
     def test_malformed_codex_plugin_shapes_are_degraded_not_crashing(self) -> None:
         cases = (
             (
@@ -1269,7 +1336,16 @@ class InstallationTruthTests(unittest.TestCase):
                     "harness": "claude",
                     "state": "present",
                     "version": "0.30.0",
-                    "skills": [],
+                    "skills": [
+                        {
+                            "name": "crew:doctor",
+                            "description": "Crew Doctor.",
+                            "path": str(
+                                home
+                                / ".claude/plugins/cache/crew/crew/0.30.0/skills/doctor/SKILL.md"
+                            ),
+                        }
+                    ],
                     "agents": [],
                 }
             }
@@ -1527,6 +1603,23 @@ class DerivedContractTests(unittest.TestCase):
             check = next(row for row in report["checks"] if row["check"] == "local-slots.declarations")
             self.assertEqual("DEGRADED", check["status"])
             self.assertEqual(str(skill), check["evidence"][0]["source"])
+
+    def test_local_slot_entries_are_trimmed_and_whitespace_entries_are_malformed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            skill = root / "skills/example/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: example\ndescription: Example.\n"
+                "expects-local: [' topology ', '   ']\n---\n",
+                encoding="utf-8",
+            )
+
+            slots = declared_local_slots(root)
+
+            self.assertEqual(["topology"], slots["declared"])
+            self.assertEqual("malformed", slots["reads"][0]["state"])
+            self.assertEqual(str(skill), slots["reads"][0]["source"])
 
     def test_m7_profile_taxonomy_has_deterministic_persona_precedence(self) -> None:
         self.assertEqual("portable", profile_for([], persona_evidence=[]))
