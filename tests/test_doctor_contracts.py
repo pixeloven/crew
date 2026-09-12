@@ -1262,6 +1262,20 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertIn("name must be doctor", read["detail"])
             self.assertEqual("DEGRADED", codex["status"])
 
+    def test_complete_vendored_catalogue_is_enabled_without_plugin_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            vendored = project / ".agents/skills"
+            shutil.copytree(ROOT / "skills", vendored)
+
+            codex = inspect_installations(project, base / "home")["harnesses"]["codex"]
+
+            self.assertEqual({"state": "present", "source": str(vendored)}, codex["installation"])
+            self.assertEqual({"state": "present", "source": str(vendored)}, codex["enablement"])
+            self.assertIsNone(codex["resolved_version"])
+            self.assertFalse(any("not enabled" in finding["claim"] for finding in codex["findings"]))
+
     def test_pi_registration_requires_exact_supported_repository_identity(self) -> None:
         supported = (
             "pixeloven/crew",
@@ -1698,6 +1712,26 @@ class InstallationTruthTests(unittest.TestCase):
                 for item in row["evidence"]:
                     self.assertIn(f"source: {item['source'] or 'not recorded'}", rendered)
 
+    def test_negative_dimension_preserves_direct_and_inspection_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            report = inspect_installations(
+                base / "project",
+                base / "home",
+                runtime_fixtures={
+                    "codex": {
+                        "state": "unavailable",
+                        "source": "codex debug prompt-input capture",
+                    }
+                },
+            )
+
+            runtime = next(row for row in report["checks"] if row["check"] == "codex.runtime")
+            sources = {item["source"] for item in runtime["evidence"]}
+            self.assertIn("codex debug prompt-input capture", sources)
+            self.assertIn(str(base / "home/.codex/config.toml"), sources)
+            self.assertIn(str(base / "home/.codex/plugins/cache/crew/crew"), sources)
+
 
 class RuntimeDiscoveryTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -1938,13 +1972,13 @@ class DerivedContractTests(unittest.TestCase):
             skill.parent.mkdir(parents=True)
             skill.write_text(
                 "---\nname: example\ndescription: Example.\n"
-                "expects-local: [' topology ', topolgy]\n---\n",
+                "expects-local: [' topology ', vault-ops, topolgy]\n---\n",
                 encoding="utf-8",
             )
 
             slots = declared_local_slots(root)
 
-            self.assertEqual(["topology"], slots["declared"])
+            self.assertEqual(["topology", "vault-ops"], slots["declared"])
             self.assertEqual("malformed", slots["reads"][0]["state"])
             self.assertIn("accepted taxonomy", slots["reads"][0]["detail"])
             self.assertNotIn("topolgy", slots["declared"])

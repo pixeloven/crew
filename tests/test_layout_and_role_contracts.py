@@ -220,6 +220,31 @@ class LayoutContractTests(unittest.TestCase):
             self.assertNotEqual(0, completed.returncode)
             self.assertIn("silent Pi drop", completed.stdout + completed.stderr)
 
+    def test_unreadable_frontmatter_is_a_source_bearing_validation_error(self) -> None:
+        for relative_path in (
+            ".agents/skills/broken/SKILL.md",
+            ".pi/agents/broken.md",
+        ):
+            with self.subTest(relative_path=relative_path), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                target = root / relative_path
+                target.parent.mkdir(parents=True)
+                target.write_bytes(b"\xff")
+
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                output = completed.stdout + completed.stderr
+                self.assertNotEqual(0, completed.returncode)
+                self.assertIn(relative_path, output)
+                self.assertIn("could not read frontmatter", output)
+                self.assertNotIn("Traceback", output)
+
 
 class RolePostureTests(unittest.TestCase):
     def test_m10_drafts_posture_reports_overwrite_and_shell_caveat(self) -> None:

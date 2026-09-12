@@ -19,17 +19,16 @@ from dataclasses import dataclass
 from typing import Any
 
 try:
+    from .check_skills import LOCAL_SLOT_VOCABULARY
     from .frontmatter import parse_inline_list, parse_simple_mapping, read_frontmatter
 except ImportError:  # Direct script execution.
+    from check_skills import LOCAL_SLOT_VOCABULARY
     from frontmatter import parse_inline_list, parse_simple_mapping, read_frontmatter
 
 
 CREW_REPO = "pixeloven/crew"
 FIRST_PI_ROLE_DISCOVERY_VERSION = (0, 35, 0, 1, ())
 RECOMMENDED_LOCAL_VOCABULARY = ("litellm-access-map", "vault-ops")
-LOCAL_SLOT_TAXONOMY = frozenset(
-    ("agent-runtime", "platform-conventions", "protected-seams", "secret-paths", "topology")
-)
 PROFILE_TAXONOMY = ("portable", "platform", "personas")
 EXPECTED_ROLE_NAMES = (
     "implementer",
@@ -1237,6 +1236,10 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
                 "state": "present",
                 "source": str(vendored_catalogues[0]),
             }
+            result["enablement"] = {
+                "state": "present",
+                "source": str(vendored_catalogues[0]),
+            }
             result["package_roots"].append(str(vendored_catalogues[0]))
     if raw_enabled is True and crew_source_valid:
         result["enablement"] = {"state": "present", "source": str(config_path)}
@@ -1342,7 +1345,7 @@ def inspect_installations(
                 recommendation = f"Resolve or verify {harness} {dimension}"
             observation_source = observation.get("source", "")
             sources = (
-                inspected_sources
+                [observation_source, *inspected_sources]
                 if state in {"unavailable", "not tested"}
                 else [observation_source]
             )
@@ -1675,7 +1678,7 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
                 )
                 continue
         if slots:
-            invalid_slots = sorted(set(slots) - LOCAL_SLOT_TAXONOMY)
+            invalid_slots = sorted(set(slots) - LOCAL_SLOT_VOCABULARY)
             if invalid_slots:
                 reads.append(
                     {
@@ -1683,11 +1686,11 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
                         "source": str(path),
                         "detail": (
                             "expects-local entries must use the accepted taxonomy: "
-                            + ", ".join(sorted(LOCAL_SLOT_TAXONOMY))
+                            + ", ".join(sorted(LOCAL_SLOT_VOCABULARY))
                         ),
                     }
                 )
-            valid_slots = set(slots) & LOCAL_SLOT_TAXONOMY
+            valid_slots = set(slots) & LOCAL_SLOT_VOCABULARY
             if valid_slots:
                 declared.update(valid_slots)
                 sources.append(str(path))

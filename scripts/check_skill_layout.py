@@ -68,7 +68,10 @@ AGENT_DIRS = ("agents", ".claude/agents", ".pi/agents", "pi-agents")
 
 def frontmatter(path: pathlib.Path) -> tuple[dict[str, object] | None, str | None]:
     """Parse only the leading YAML frontmatter, never matching body text."""
-    return read_frontmatter(path)
+    try:
+        return read_frontmatter(path)
+    except (OSError, UnicodeDecodeError) as error:
+        return None, f"could not read frontmatter: {error}"
 
 
 def check(root: pathlib.Path) -> list[str]:
