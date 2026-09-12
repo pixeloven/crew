@@ -25,7 +25,7 @@ except ImportError:  # Direct script execution.
 
 
 CREW_REPO = "pixeloven/crew"
-FIRST_PI_ROLE_DISCOVERY_VERSION = (0, 35, 0)
+FIRST_PI_ROLE_DISCOVERY_VERSION = (0, 35, 0, 1, ())
 RECOMMENDED_LOCAL_VOCABULARY = ("litellm-access-map", "vault-ops")
 PROFILE_TAXONOMY = ("portable", "platform", "personas")
 EXPECTED_ROLE_NAMES = (
@@ -103,8 +103,8 @@ def _manifest_version(root: pathlib.Path) -> ReadResult:
     )
 
 
-def _clean_version(value: str | None) -> str | None:
-    if not value:
+def _clean_version(value: Any) -> str | None:
+    if not isinstance(value, str) or not value:
         return None
     candidate = value.rsplit("@", 1)[-1]
     if candidate.startswith("v"):
@@ -112,10 +112,20 @@ def _clean_version(value: str | None) -> str | None:
     return candidate if SEMVER.fullmatch(candidate) else None
 
 
-def _version_tuple(value: str | None) -> tuple[int, int, int] | None:
+def _version_tuple(
+    value: Any,
+) -> tuple[int, int, int, int, tuple[tuple[int, int | str], ...]] | None:
     clean = _clean_version(value)
-    core = re.split(r"[-+]", clean, maxsplit=1)[0] if clean else None
-    return tuple(map(int, core.split("."))) if core else None
+    if not clean:
+        return None
+    without_build = clean.split("+", 1)[0]
+    core, separator, prerelease = without_build.partition("-")
+    major, minor, patch = map(int, core.split("."))
+    identifiers = tuple(
+        (0, int(identifier)) if identifier.isdigit() else (1, identifier)
+        for identifier in prerelease.split(".")
+    )
+    return (major, minor, patch, 0 if separator else 1, identifiers)
 
 
 def _evidence(kind: str, claim: str, source: str = "") -> dict[str, str]:
@@ -136,6 +146,7 @@ def _base_harness() -> dict[str, Any]:
         "runtime_paths": [],
         "configuration_reads": [],
         "manifest_reads": [],
+        "catalogue_reads": [],
         "package_roots": [],
         "findings": [],
     }
@@ -434,7 +445,11 @@ def _record_manifest_read(result: dict[str, Any], read: ReadResult) -> str | Non
 
 
 def _degrade_for_read_failures(result: dict[str, Any]) -> None:
-    for read in result["configuration_reads"] + result["manifest_reads"]:
+    for read in (
+        result["configuration_reads"]
+        + result["manifest_reads"]
+        + result["catalogue_reads"]
+    ):
         if read["state"] not in {"malformed", "unreadable"}:
             continue
         result["status"] = "DEGRADED"
@@ -646,7 +661,17 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     result["marketplace_registry_records"] = [
         {key: record[key] for key in ("source", "installLocation", "lastUpdated") if key in record}
     ] if record else []
-    location = pathlib.Path(record.get("installLocation", "")) if isinstance(record, dict) else pathlib.Path()
+    raw_location = record.get("installLocation")
+    if raw_location is not None and (
+        not isinstance(raw_location, str) or not raw_location.strip()
+    ):
+        _mark_config_malformed(
+            result,
+            registry_path,
+            "crew marketplace installLocation must be a non-empty string",
+        )
+        raw_location = None
+    location = pathlib.Path(raw_location) if raw_location else pathlib.Path()
     result["served_version"] = (
         _record_manifest_read(result, _manifest_version(location))
         if str(location) not in {"", "."}
@@ -682,10 +707,32 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     result["registrations"] = registrations
     installed_records: list[dict[str, Any]] = []
     by_root: dict[pathlib.Path, dict[str, Any]] = {}
-    for registration in result["registrations"]:
-        if not isinstance(registration, dict) or not isinstance(registration.get("installPath"), str):
+    for index, registration in enumerate(result["registrations"]):
+        if not isinstance(registration, dict):
+            _mark_config_malformed(
+                result,
+                installed_path,
+                f"crew@crew registration {index} must be a mapping",
+            )
             continue
-        root = pathlib.Path(registration["installPath"])
+        install_path = registration.get("installPath")
+        if not isinstance(install_path, str) or not install_path.strip():
+            _mark_config_malformed(
+                result,
+                installed_path,
+                f"crew@crew registration {index} installPath must be a non-empty string",
+            )
+            continue
+        project_path = registration.get("projectPath")
+        if project_path is not None and (
+            not isinstance(project_path, str) or not project_path.strip()
+        ):
+            _mark_config_malformed(
+                result,
+                installed_path,
+                f"crew@crew registration {index} projectPath must be a non-empty string",
+            )
+        root = pathlib.Path(install_path)
         manifest_version = _record_manifest_read(result, _manifest_version(root))
         if not manifest_version:
             continue
@@ -837,21 +884,64 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     return result
 
 
-def _catalogue_skill_names(catalogue: pathlib.Path) -> set[str]:
+def _catalogue_skill_names(
+    catalogue: pathlib.Path,
+) -> tuple[set[str], list[dict[str, str]]]:
     names: set[str] = set()
+    failures: list[dict[str, str]] = []
     if not catalogue.is_dir():
-        return names
+        return names, failures
     for skill in catalogue.glob("*/SKILL.md"):
-        metadata, error = read_frontmatter(skill)
-        if not error and metadata and metadata.get("name") == skill.parent.name:
-            names.add(skill.parent.name)
-    return names
+        try:
+            metadata, error = read_frontmatter(skill)
+        except (OSError, UnicodeDecodeError) as exception:
+            failures.append(
+                {
+                    "label": "Crew vendored catalogue skill",
+                    "state": "unreadable",
+                    "source": str(skill),
+                    "detail": str(exception),
+                }
+            )
+            continue
+        if error or not isinstance(metadata, dict):
+            failures.append(
+                {
+                    "label": "Crew vendored catalogue skill",
+                    "state": "malformed",
+                    "source": str(skill),
+                    "detail": error or "frontmatter must be a mapping",
+                }
+            )
+            continue
+        if metadata.get("name") != skill.parent.name:
+            failures.append(
+                {
+                    "label": "Crew vendored catalogue skill",
+                    "state": "malformed",
+                    "source": str(skill),
+                    "detail": f"name must be {skill.parent.name}",
+                }
+            )
+            continue
+        names.add(skill.parent.name)
+    return names, failures
 
 
-def _is_complete_crew_catalogue(catalogue: pathlib.Path) -> bool:
+def _inspect_crew_catalogue(
+    catalogue: pathlib.Path,
+) -> tuple[bool, list[dict[str, str]]]:
     distributed = pathlib.Path(__file__).resolve().parents[1] / "skills"
-    expected = _catalogue_skill_names(distributed)
-    return len(expected) >= 10 and expected <= _catalogue_skill_names(catalogue)
+    expected, _ = _catalogue_skill_names(distributed)
+    candidate_directories = (
+        {path.parent.name for path in catalogue.glob("*/SKILL.md")}
+        if catalogue.is_dir()
+        else set()
+    )
+    if len(expected) < 10 or not expected <= candidate_directories:
+        return False, []
+    names, failures = _catalogue_skill_names(catalogue)
+    return expected <= names, failures
 
 
 def _runtime_paths(runtime: dict[str, Any] | None) -> list[pathlib.Path]:
@@ -878,27 +968,51 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     result = _base_harness()
     config_path = home / ".codex/config.toml"
     config = _record_config_read(result, "Codex plugin configuration", _read_toml(config_path))
-    marketplaces = config.get("marketplaces", {}) if isinstance(config, dict) else {}
-    plugins = config.get("plugins", {}) if isinstance(config, dict) else {}
-    crew_market = marketplaces.get("crew", {}) if isinstance(marketplaces, dict) else {}
-    crew_plugin = plugins.get("crew@crew", {}) if isinstance(plugins, dict) else {}
+    if not isinstance(config, dict):
+        _mark_config_malformed(result, config_path, "configuration must be a mapping")
+        config = {}
+    marketplaces = config.get("marketplaces", {})
+    plugins = config.get("plugins", {})
+    if not isinstance(marketplaces, dict):
+        _mark_config_malformed(result, config_path, "marketplaces must be a mapping")
+        marketplaces = {}
+    if not isinstance(plugins, dict):
+        _mark_config_malformed(result, config_path, "plugins must be a mapping")
+        plugins = {}
+    crew_market = marketplaces.get("crew", {})
+    crew_plugin = plugins.get("crew@crew", {})
+    if not isinstance(crew_market, dict):
+        _mark_config_malformed(result, config_path, "marketplaces.crew must be a mapping")
+        crew_market = {}
+    if not isinstance(crew_plugin, dict):
+        _mark_config_malformed(result, config_path, 'plugins."crew@crew" must be a mapping')
+        crew_plugin = {}
+    raw_ref = crew_market.get("ref")
+    if raw_ref is not None and not isinstance(raw_ref, str):
+        _mark_config_malformed(result, config_path, "marketplaces.crew.ref must be a string")
+        raw_ref = None
+    raw_enabled = crew_plugin.get("enabled")
+    if raw_enabled is not None and not isinstance(raw_enabled, bool):
+        _mark_config_malformed(result, config_path, 'plugins."crew@crew".enabled must be boolean')
+        raw_enabled = None
     cache_base = home / ".codex/plugins/cache/crew/crew"
     cache_roots = sorted(
         (path for path in cache_base.glob("*") if path.is_dir()),
-        key=lambda path: _version_tuple(path.name) or (0, 0, 0),
+        key=lambda path: _version_tuple(path.name) or (0, 0, 0, 0, ()),
     )
-    result["configured_version"] = _clean_version(crew_market.get("ref")) if isinstance(crew_market, dict) else None
+    result["configured_version"] = _clean_version(raw_ref)
     manifest_versions = {
         root: _record_manifest_read(result, _manifest_version(root)) for root in cache_roots
     }
     valid_cache_roots = [
         root for root in cache_roots if manifest_versions[root] and (root / "skills").is_dir()
     ]
-    vendored_catalogues = [
-        catalogue
-        for catalogue in (project / ".agents/skills", home / ".agents/skills")
-        if _is_complete_crew_catalogue(catalogue)
-    ]
+    vendored_catalogues: list[pathlib.Path] = []
+    for catalogue in (project / ".agents/skills", home / ".agents/skills"):
+        complete, reads = _inspect_crew_catalogue(catalogue)
+        result["catalogue_reads"].extend(reads)
+        if complete:
+            vendored_catalogues.append(catalogue)
     _record_runtime(result, runtime, [*valid_cache_roots, *vendored_catalogues])
     runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
     resolved_root = next(
@@ -939,7 +1053,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
                 "source": str(vendored_catalogues[0]),
             }
             result["package_roots"].append(str(vendored_catalogues[0]))
-    if isinstance(crew_plugin, dict) and crew_plugin.get("enabled") is True:
+    if raw_enabled is True:
         result["enablement"] = {"state": "present", "source": str(config_path)}
     if runtime is not None and runtime.get("tested") is not False:
         result["runtime_skill_roots"] = list(result["runtime_paths"])
@@ -1292,18 +1406,63 @@ def compare_runtime_catalog(
     }
 
 
-def declared_local_slots(package_root: pathlib.Path) -> dict[str, list[str]]:
+def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
     declared: set[str] = set()
     sources: list[str] = []
+    reads: list[dict[str, str]] = []
     for path in pathlib.Path(package_root).glob("skills/*/SKILL.md"):
-        frontmatter, error = read_frontmatter(path)
+        try:
+            frontmatter, error = read_frontmatter(path)
+        except (OSError, UnicodeDecodeError) as exception:
+            reads.append(
+                {
+                    "state": "unreadable",
+                    "source": str(path),
+                    "detail": str(exception),
+                }
+            )
+            continue
         if error or not frontmatter:
+            reads.append(
+                {
+                    "state": "malformed",
+                    "source": str(path),
+                    "detail": error or "frontmatter must be a mapping",
+                }
+            )
             continue
         raw_slots = frontmatter.get("expects-local", "")
         if isinstance(raw_slots, list):
-            slots = [slot for slot in raw_slots if isinstance(slot, str)]
+            if any(not isinstance(slot, str) or not slot for slot in raw_slots):
+                reads.append(
+                    {
+                        "state": "malformed",
+                        "source": str(path),
+                        "detail": "expects-local entries must be non-empty strings",
+                    }
+                )
+                continue
+            slots = raw_slots
         else:
-            slots = parse_inline_list(raw_slots) if isinstance(raw_slots, str) else []
+            if not isinstance(raw_slots, str):
+                reads.append(
+                    {
+                        "state": "malformed",
+                        "source": str(path),
+                        "detail": "expects-local must be a string sequence",
+                    }
+                )
+                continue
+            slots = parse_inline_list(raw_slots)
+            if raw_slots and not slots:
+                reads.append(
+                    {
+                        "state": "malformed",
+                        "source": str(path),
+                        "detail": "expects-local must be a string sequence",
+                    }
+                )
+                continue
         if slots:
             declared.update(slots)
             sources.append(str(path))
@@ -1311,6 +1470,7 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, list[str]]:
         "declared": sorted(declared),
         "recommended_vocabulary": list(RECOMMENDED_LOCAL_VOCABULARY),
         "sources": sources,
+        "reads": reads,
     }
 
 
@@ -1342,6 +1502,7 @@ def inspect_role_postures(
         from role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES, effective_posture
 
     package_root = pathlib.Path(package_root)
+    has_consumer_root = consumer_root is not None
     consumer_root = pathlib.Path(consumer_root) if consumer_root else package_root
     rows: list[dict[str, Any]] = []
     harness_roots = (
@@ -1360,6 +1521,12 @@ def inspect_role_postures(
         for path in sorted(overlay.glob("*.md"))
         if path.stem not in EXPECTED_ROLE_NAMES
     )
+    if has_consumer_root:
+        neutral_root = consumer_root / "agents"
+        targets.extend(
+            (path.stem, "neutral", neutral_root, neutral_root)
+            for path in sorted(neutral_root.glob("*.md"))
+        )
 
     for name, harness, distributed, overlay in targets:
         overlay_path = overlay / f"{name}.md"
@@ -1383,7 +1550,9 @@ def inspect_role_postures(
             errors.append(f"forbidden runtime keys: {', '.join(forbidden)}")
 
         writes: str | None = None
-        if harness == "claude":
+        if harness == "neutral":
+            writes = "neutral"
+        elif harness == "claude":
             denied = _role_string_list(metadata.get("disallowedTools", ""))
             if denied is None:
                 errors.append("disallowedTools must be a string sequence")
@@ -1421,6 +1590,21 @@ def inspect_role_postures(
                 }
             )
         else:
+            if harness == "neutral":
+                rows.append(
+                    {
+                        "name": name,
+                        "harness": harness,
+                        "allowed_tools": [],
+                        "denied_tools": [],
+                        "write_effect": "no harness-specific tool posture is declared",
+                        "caveat": "effective tools depend on the harness that resolves this neutral role",
+                        "source": str(path),
+                        "scope": "consumer",
+                        "role_valid": True,
+                    }
+                )
+                continue
             rows.append(
                 {
                     "name": name,
@@ -1439,6 +1623,14 @@ def _complete_role_posture(posture: dict[str, Any], harness: str, name: str) -> 
     except ImportError:
         from role_contract import effective_posture
 
+    if harness == "neutral":
+        return (
+            posture.get("role_valid") is True
+            and posture.get("name") == name
+            and posture.get("harness") == harness
+            and isinstance(posture.get("source"), str)
+            and bool(posture["source"])
+        )
     writes = posture.get("writes")
     if not isinstance(writes, str):
         return False
@@ -1460,7 +1652,7 @@ def compose_doctor_report(
     installation_report: dict[str, Any],
     *,
     runtime_comparisons: list[dict[str, Any]],
-    local_slots: dict[str, list[str]],
+    local_slots: dict[str, Any],
     role_postures: list[dict[str, Any]],
     persona_evidence: list[str],
 ) -> dict[str, Any]:
@@ -1497,17 +1689,26 @@ def compose_doctor_report(
         f"declared local slots: {', '.join(local_slots['declared']) or 'none'}; "
         f"recommended vocabulary: {', '.join(local_slots['recommended_vocabulary']) or 'none'}"
     )
+    slot_reads = local_slots.get("reads", [])
+    slot_status = "DEGRADED" if slot_reads else "OK"
     checks.append(
         {
             "check": "local-slots.declarations",
-            "status": "OK",
+            "status": slot_status,
             "fact": slot_fact,
-            "inference": "declared slots remain separate from recommended vocabulary",
-            "recommendation": "",
+            "inference": (
+                "local-slot declarations could not be fully derived"
+                if slot_reads
+                else "declared slots remain separate from recommended vocabulary"
+            ),
+            "recommendation": "Resolve malformed local-slot declarations" if slot_reads else "",
             "untested": "",
             "evidence": [
-                {"claim": slot_fact, "source": source}
-                for source in local_slots.get("sources", [])
+                {
+                    "claim": f"local-slot declaration is {read['state']}: {read['detail']}",
+                    "source": read["source"],
+                }
+                for read in slot_reads
             ] or [{"claim": slot_fact, "source": ""}],
         }
     )
@@ -1588,7 +1789,7 @@ def compose_doctor_report(
         key
         for key, postures in posture_index.items()
         if key not in fleet_keys
-        and key[0] in {"claude", "pi"}
+        and key[0] in {"claude", "pi", "neutral"}
         and any(posture.get("scope") == "consumer" for posture in postures)
     )
     for harness, name in consumer_keys:
@@ -1597,7 +1798,11 @@ def compose_doctor_report(
         if ready:
             posture = matches[0]
             fact = f"{harness} consumer role {name}: {posture['write_effect']}; {posture['caveat']}"
-            inference = "effective tool posture matches the resolved consumer role contract"
+            inference = (
+                "neutral role metadata is valid; effective tools remain harness-dependent"
+                if harness == "neutral"
+                else "effective tool posture matches the resolved consumer role contract"
+            )
         else:
             fact = f"{harness} consumer role {name} posture evidence is incomplete or duplicated"
             inference = "consumer role readiness cannot be established"

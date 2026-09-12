@@ -1,5 +1,6 @@
 import json
 import pathlib
+import shutil
 import tempfile
 import unittest
 from unittest import mock
@@ -139,6 +140,16 @@ class InstallationTruthTests(unittest.TestCase):
             )
             pi = inspect_installations(project, home)["harnesses"]["pi"]
             self.assertEqual("OK", pi["status"])
+
+    def test_pi_prerelease_pin_predates_the_stable_role_discovery_release(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0-beta.1")
+
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+            self.assertEqual("DEGRADED", pi["status"])
+            stale = next(item for item in pi["findings"] if "predates v0.35.0" in item["claim"])
+            self.assertEqual(str(project / ".pi/settings.json"), stale["evidence"][0]["source"])
 
     def test_pi_checkout_without_registration_is_installed_but_disabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -869,6 +880,118 @@ class InstallationTruthTests(unittest.TestCase):
             )
             self.assertIn("settings configuration is malformed", failure["claim"])
 
+    def test_malformed_claude_install_locations_are_source_bearing_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            registry_path = home / ".claude/plugins/known_marketplaces.json"
+            installed_path = home / ".claude/plugins/installed_plugins.json"
+            write_json(
+                registry_path,
+                {"crew": {"installLocation": ["not", "a", "path"]}},
+            )
+            write_json(
+                installed_path,
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {"installPath": ["not", "a", "path"]},
+                            {"installPath": str(base / "cache"), "projectPath": ["not", "a", "path"]},
+                        ]
+                    }
+                },
+            )
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            reads = {item["source"]: item for item in claude["configuration_reads"]}
+            self.assertEqual("malformed", reads[str(registry_path)]["state"])
+            self.assertIn("installLocation", reads[str(registry_path)]["detail"])
+            self.assertEqual("malformed", reads[str(installed_path)]["state"])
+            self.assertIn("installPath", reads[str(installed_path)]["detail"])
+            self.assertIn("projectPath", reads[str(installed_path)]["detail"])
+            finding_sources = {
+                evidence["source"]
+                for finding in claude["findings"]
+                for evidence in finding["evidence"]
+            }
+            self.assertTrue({str(registry_path), str(installed_path)} <= finding_sources)
+
+    def test_malformed_codex_plugin_shapes_are_degraded_not_crashing(self) -> None:
+        cases = (
+            (
+                "marketplaces = []\nplugins = false\n",
+                ("marketplaces must be a mapping", "plugins must be a mapping"),
+            ),
+            (
+                "[marketplaces.crew]\nref = 36\n",
+                ("marketplaces.crew.ref must be a string",),
+            ),
+        )
+        for contents, expected_details in cases:
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project = base / "project"
+                home = base / "home"
+                config = home / ".codex/config.toml"
+                config.parent.mkdir(parents=True)
+                config.write_text(contents, encoding="utf-8")
+
+                codex = inspect_installations(project, home)["harnesses"]["codex"]
+
+                read = next(
+                    item
+                    for item in codex["configuration_reads"]
+                    if item["source"] == str(config)
+                )
+                self.assertEqual("malformed", read["state"])
+                for detail in expected_details:
+                    self.assertIn(detail, read["detail"])
+                finding = next(
+                    item for item in codex["findings"]
+                    if item["evidence"][0]["source"] == str(config)
+                )
+                self.assertIn("Codex plugin configuration is malformed", finding["claim"])
+
+    def test_unreadable_vendored_catalogue_is_degraded_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            vendored = project / ".agents/skills"
+            shutil.copytree(ROOT / "skills", vendored)
+            broken = vendored / "doctor/SKILL.md"
+            broken.write_bytes(b"\xff")
+
+            codex = inspect_installations(project, base / "home")["harnesses"]["codex"]
+
+            read = next(item for item in codex["catalogue_reads"] if item["source"] == str(broken))
+            self.assertEqual("unreadable", read["state"])
+            self.assertEqual("DEGRADED", codex["status"])
+            finding = next(
+                item for item in codex["findings"]
+                if item["evidence"][0]["source"] == str(broken)
+            )
+            self.assertIn("vendored catalogue skill is unreadable", finding["claim"])
+
+    def test_malformed_vendored_catalogue_identity_is_degraded_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            vendored = project / ".agents/skills"
+            shutil.copytree(ROOT / "skills", vendored)
+            broken = vendored / "doctor/SKILL.md"
+            broken.write_text(
+                "---\nname: wrong-name\ndescription: Broken vendored identity.\n---\n",
+                encoding="utf-8",
+            )
+
+            codex = inspect_installations(project, base / "home")["harnesses"]["codex"]
+
+            read = next(item for item in codex["catalogue_reads"] if item["source"] == str(broken))
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("name must be doctor", read["detail"])
+            self.assertEqual("DEGRADED", codex["status"])
+
     def test_pi_registration_requires_exact_supported_repository_identity(self) -> None:
         supported = (
             "pixeloven/crew",
@@ -1380,6 +1503,31 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual(["protected-seams", "topology"], contract["declared"])
             self.assertEqual([str(skill)], contract["sources"])
 
+    def test_malformed_local_slot_declaration_degrades_the_composed_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            skill = root / "skills/example/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: example\ndescription: Example.\nexpects-local: topology\n---\n",
+                encoding="utf-8",
+            )
+
+            slots = declared_local_slots(root)
+            report = compose_doctor_report(
+                inspect_installations(root, root / "home"),
+                runtime_comparisons=[],
+                local_slots=slots,
+                role_postures=[],
+                persona_evidence=[],
+            )
+
+            self.assertEqual([], slots["declared"])
+            self.assertEqual("malformed", slots["reads"][0]["state"])
+            check = next(row for row in report["checks"] if row["check"] == "local-slots.declarations")
+            self.assertEqual("DEGRADED", check["status"])
+            self.assertEqual(str(skill), check["evidence"][0]["source"])
+
     def test_m7_profile_taxonomy_has_deterministic_persona_precedence(self) -> None:
         self.assertEqual("portable", profile_for([], persona_evidence=[]))
         self.assertEqual("platform", profile_for(["github"], persona_evidence=[]))
@@ -1611,11 +1759,16 @@ class DerivedContractTests(unittest.TestCase):
             for row in postures
             if row["name"] == "librarian"
         }
-        self.assertEqual({"claude", "pi"}, set(librarian_postures))
+        self.assertEqual({"claude", "pi", "neutral"}, set(librarian_postures))
         self.assertTrue(all(row["role_valid"] for row in librarian_postures.values()))
         self.assertTrue(
-            all("shell access" in row["caveat"] for row in librarian_postures.values())
+            all(
+                "shell access" in row["caveat"]
+                for harness, row in librarian_postures.items()
+                if harness in {"claude", "pi"}
+            )
         )
+        self.assertIn("harness", librarian_postures["neutral"]["caveat"])
 
         report = compose_doctor_report(
             inspect_installations(consumer, pathlib.Path("/nonexistent-doctor-home")),
@@ -1638,11 +1791,22 @@ class DerivedContractTests(unittest.TestCase):
 
         self.assertEqual(14, len(fleet_checks))
         self.assertEqual(
-            {"role.consumer.claude.librarian", "role.consumer.pi.librarian"},
+            {
+                "role.consumer.claude.librarian",
+                "role.consumer.pi.librarian",
+                "role.consumer.neutral.librarian",
+            },
             set(consumer_checks),
         )
         self.assertEqual({"OK"}, {row["status"] for row in consumer_checks.values()})
-        self.assertTrue(all("shell access" in row["fact"] for row in consumer_checks.values()))
+        self.assertTrue(
+            all(
+                "shell access" in row["fact"]
+                for name, row in consumer_checks.items()
+                if ".neutral." not in name
+            )
+        )
+        self.assertIn("harness", consumer_checks["role.consumer.neutral.librarian"]["fact"])
         rendered = render_doctor_report(report)
         self.assertTrue(all(check in rendered for check in consumer_checks))
 
