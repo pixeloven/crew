@@ -39,6 +39,26 @@ def write_capability_skill(root: pathlib.Path, requirements: list[str]) -> None:
     )
 
 
+def write_claude_marketplace_identity(home: pathlib.Path) -> None:
+    write_json(
+        home / ".claude/plugins/known_marketplaces.json",
+        {
+            "crew": {
+                "source": {"source": "github", "repo": "pixeloven/crew"},
+            }
+        },
+    )
+
+
+def write_codex_marketplace_identity(home: pathlib.Path) -> None:
+    config = home / ".codex/config.toml"
+    config.parent.mkdir(parents=True, exist_ok=True)
+    config.write_text(
+        "[marketplaces.crew]\nsource = 'pixeloven/crew'\n",
+        encoding="utf-8",
+    )
+
+
 class InstallationTruthTests(unittest.TestCase):
     def make_install_tree(self, base: pathlib.Path, pi_pin: str = "v0.34.0") -> tuple[pathlib.Path, pathlib.Path]:
         project = base / "project"
@@ -302,6 +322,31 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("omitted", codex["runtime"]["state"])
             self.assertIsNone(codex["loaded_version"])
 
+    def test_validated_root_preserves_loaded_but_undiscoverable_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            root = home / ".codex/plugins/cache/crew/crew/0.29.0"
+            runtime = {
+                "codex": {
+                    "state": "loaded-but-undiscoverable",
+                    "source": "captured Codex catalogue",
+                    "skill_roots": [str(root / "skills")],
+                    "skills": [],
+                }
+            }
+
+            codex = inspect_installations(project, home, runtime)["harnesses"]["codex"]
+
+            self.assertEqual("loaded-but-undiscoverable", codex["runtime"]["state"])
+            self.assertEqual("DEGRADED", codex["status"])
+            finding = next(
+                item
+                for item in codex["findings"]
+                if "loaded-but-undiscoverable" in item["claim"]
+            )
+            self.assertEqual("captured Codex catalogue", finding["evidence"][0]["source"])
+
     def test_configuration_without_package_files_is_not_installation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -353,6 +398,7 @@ class InstallationTruthTests(unittest.TestCase):
                 root = base / f"home/.codex/plugins/cache/crew/crew/{version}"
                 write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": version})
                 (root / "skills").mkdir()
+            write_codex_marketplace_identity(base / "home")
             codex = inspect_installations(base / "project", base / "home")["harnesses"]["codex"]
             self.assertEqual("present", codex["installation"]["state"])
             self.assertIsNone(codex["resolved_version"])
@@ -484,6 +530,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/plugins/installed_plugins.json",
                 {"plugins": {"crew@crew": registrations}},
             )
+            write_claude_marketplace_identity(home)
 
             codex_roots = []
             for version in ("0.35.0", "0.36.0"):
@@ -494,7 +541,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.crew]\nref = 'v0.35.0'\n"
+                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -710,6 +757,7 @@ class InstallationTruthTests(unittest.TestCase):
                 config = home / ".codex/config.toml"
                 config.parent.mkdir(parents=True, exist_ok=True)
                 config.write_text(
+                    "[marketplaces.crew]\nsource = 'pixeloven/crew'\n"
                     "[plugins.\"crew@crew\"]\nenabled = true\n",
                     encoding="utf-8",
                 )
@@ -745,7 +793,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                f"[marketplaces.crew]\nref = 'v{version}'\n"
+                f"[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v{version}'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -948,6 +996,7 @@ class InstallationTruthTests(unittest.TestCase):
             root = base / "home/.claude/plugins/cache/crew/crew/0.36.0"
             write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
             installed_path = base / "home/.claude/plugins/installed_plugins.json"
+            write_claude_marketplace_identity(base / "home")
             write_json(
                 installed_path,
                 {
@@ -974,7 +1023,7 @@ class InstallationTruthTests(unittest.TestCase):
             )
             self.assertEqual("malformed", read["state"])
             self.assertIn("version must be a SemVer string", read["detail"])
-            self.assertIn("scope must be a non-empty string", read["detail"])
+            self.assertIn("scope must be local, project, or user", read["detail"])
             self.assertEqual([], claude["installed_versions"])
             self.assertIsNone(claude["installed_version"])
             finding = next(
@@ -991,8 +1040,12 @@ class InstallationTruthTests(unittest.TestCase):
                 ("marketplaces must be a mapping", "plugins must be a mapping"),
             ),
             (
-                "[marketplaces.crew]\nref = 36\n",
-                ("marketplaces.crew.ref must be a string",),
+                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 36\n",
+                ("marketplaces.crew.ref must be a SemVer string",),
+            ),
+            (
+                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'banana'\n",
+                ("marketplaces.crew.ref must be a SemVer string",),
             ),
         )
         for contents, expected_details in cases:
@@ -1019,6 +1072,70 @@ class InstallationTruthTests(unittest.TestCase):
                     if item["evidence"][0]["source"] == str(config)
                 )
                 self.assertIn("Codex plugin configuration is malformed", finding["claim"])
+
+    def test_claude_alias_cannot_attribute_an_unrelated_marketplace_to_crew(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            marketplace = home / ".claude/plugins/marketplaces/crew"
+            settings = home / ".claude/settings.json"
+            registry = home / ".claude/plugins/known_marketplaces.json"
+            write_json(
+                settings,
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {
+                            "source": {"source": "github", "repo": "someone-else/crew"}
+                        }
+                    },
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            write_json(
+                registry,
+                {
+                    "crew": {
+                        "source": {"source": "github", "repo": "someone-else/crew"},
+                        "installLocation": str(marketplace),
+                    }
+                },
+            )
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual("unavailable", claude["installation"]["state"])
+            self.assertEqual("unavailable", claude["enablement"]["state"])
+            self.assertIsNone(claude["served_version"])
+            sources = {
+                evidence["source"]
+                for finding in claude["findings"]
+                for evidence in finding["evidence"]
+            }
+            self.assertTrue({str(settings), str(registry)} <= sources)
+
+    def test_codex_alias_cannot_attribute_an_unrelated_marketplace_to_crew(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            config = home / ".codex/config.toml"
+            config.write_text(
+                "[marketplaces.crew]\nsource = 'someone-else/crew'\nref = 'v0.29.0'\n\n"
+                "[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            codex = inspect_installations(project, home)["harnesses"]["codex"]
+
+            self.assertEqual("unavailable", codex["installation"]["state"])
+            self.assertEqual("unavailable", codex["enablement"]["state"])
+            self.assertIsNone(codex["resolved_version"])
+            read = next(
+                item
+                for item in codex["configuration_reads"]
+                if item["source"] == str(config)
+            )
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("source must identify pixeloven/crew", read["detail"])
 
     def test_unreadable_vendored_catalogue_is_degraded_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1155,7 +1272,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.crew]\nref = 'v0.35.0'\n"
+                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1180,6 +1297,7 @@ class InstallationTruthTests(unittest.TestCase):
                     }
                 },
             )
+            write_claude_marketplace_identity(home)
 
             report = inspect_installations(project, home)
             claude = report["harnesses"]["claude"]
@@ -1210,6 +1328,7 @@ class InstallationTruthTests(unittest.TestCase):
             manifest = root / ".claude-plugin/plugin.json"
             write_json(manifest, {"name": "crew", "version": "0.36.0"})
             installed_path = base / "home/.claude/plugins/installed_plugins.json"
+            write_claude_marketplace_identity(base / "home")
             write_json(
                 installed_path,
                 {
@@ -1252,11 +1371,12 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.crew]\nref = 'v0.35.0'\n"
+                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
             installed_path = home / ".claude/plugins/installed_plugins.json"
+            write_claude_marketplace_identity(home)
             registrations = [
                 {"scope": "user", "installPath": str(root), "version": root.name}
                 for root in roots
@@ -1307,6 +1427,60 @@ class InstallationTruthTests(unittest.TestCase):
                 str(roots[1] / ".claude-plugin/plugin.json"),
                 selected["installed_version_source"],
             )
+
+    def test_claude_scope_resolution_uses_local_project_user_precedence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_claude_marketplace_identity(home)
+            installed_path = home / ".claude/plugins/installed_plugins.json"
+            roots: dict[str, pathlib.Path] = {}
+            for scope, version in (
+                ("user", "0.35.0"),
+                ("unrelated", "0.36.0"),
+                ("project", "0.37.0"),
+                ("local", "0.38.0"),
+            ):
+                root = home / f".claude/plugins/cache/crew/crew/{version}"
+                write_json(root / ".claude-plugin/plugin.json", {"version": version})
+                roots[scope] = root
+            registrations = [
+                {
+                    "scope": "user",
+                    "installPath": str(roots["user"]),
+                    "version": "0.35.0",
+                },
+                {
+                    "scope": "project",
+                    "projectPath": str(base / "other-project"),
+                    "installPath": str(roots["unrelated"]),
+                    "version": "0.36.0",
+                },
+                {
+                    "scope": "project",
+                    "projectPath": str(project),
+                    "installPath": str(roots["project"]),
+                    "version": "0.37.0",
+                },
+                {
+                    "scope": "local",
+                    "projectPath": str(project),
+                    "installPath": str(roots["local"]),
+                    "version": "0.38.0",
+                },
+            ]
+
+            write_json(installed_path, {"plugins": {"crew@crew": registrations}})
+            local = inspect_installations(project, home)["harnesses"]["claude"]
+            self.assertEqual("0.38.0", local["installed_version"])
+
+            write_json(
+                installed_path,
+                {"plugins": {"crew@crew": registrations[:2]}},
+            )
+            user = inspect_installations(project, home)["harnesses"]["claude"]
+            self.assertEqual("0.35.0", user["installed_version"])
 
     def test_findings_retain_only_claim_supporting_sources(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1632,6 +1806,7 @@ class DerivedContractTests(unittest.TestCase):
             root = base / "home/.codex/plugins/cache/crew/crew/0.36.0"
             write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": "0.36.0"})
             write_capability_skill(root, ["external:github"])
+            write_codex_marketplace_identity(base / "home")
             installation = inspect_installations(
                 base / "project",
                 base / "home",
@@ -1692,6 +1867,7 @@ class DerivedContractTests(unittest.TestCase):
             root = base / "home/.codex/plugins/cache/crew/crew/0.36.0"
             write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": "0.36.0"})
             write_capability_skill(root, ["configured", "proven", "failed", "skipped"])
+            write_codex_marketplace_identity(base / "home")
             installation = inspect_installations(
                 base / "project",
                 base / "home",

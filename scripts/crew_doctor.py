@@ -128,6 +128,16 @@ def _version_tuple(
     return (major, minor, patch, 0 if separator else 1, identifiers)
 
 
+def _is_crew_marketplace_source(value: Any) -> bool:
+    if value == CREW_REPO:
+        return True
+    return (
+        isinstance(value, dict)
+        and value.get("source") == "github"
+        and value.get("repo") == CREW_REPO
+    )
+
+
 def _evidence(kind: str, claim: str, source: str = "") -> dict[str, str]:
     return {"kind": kind, "claim": claim, "source": source}
 
@@ -217,8 +227,8 @@ def _record_runtime(
         )
         if not crew_entries and not validated_runtime_root:
             state = "omitted" if isinstance(skills, list) else "unavailable"
-        elif captured_state == "truncated":
-            state = "truncated"
+        elif captured_state in {"loaded-but-undiscoverable", "truncated"}:
+            state = captured_state
         elif any(not entry.get("description") for entry in crew_entries):
             state = "loaded-but-undiscoverable"
         elif captured_state == "present" or not crew_entries:
@@ -616,6 +626,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     result = _base_harness()
     settings_records: list[dict[str, str]] = []
     enabled_records: list[dict[str, str]] = []
+    valid_settings_sources: list[str] = []
     for scope, settings_path in (
         ("project", project / ".claude/settings.json"),
         ("user", home / ".claude/settings.json"),
@@ -640,23 +651,29 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 "extraKnownMarketplaces must be a mapping",
             )
             marketplaces = {}
+        crew_marketplace = marketplaces.get("crew")
+        if "crew" in marketplaces:
+            source = (
+                crew_marketplace.get("source")
+                if isinstance(crew_marketplace, dict)
+                else None
+            )
+            if not isinstance(crew_marketplace, dict) or not _is_crew_marketplace_source(
+                source
+            ):
+                _mark_config_malformed(
+                    result,
+                    settings_path,
+                    f"extraKnownMarketplaces.crew source must identify {CREW_REPO}",
+                )
+            else:
+                valid_settings_sources.append(str(settings_path))
         if "crew" in marketplaces or "crew@crew" in enabled:
             settings_records.append({"scope": scope, "path": str(settings_path)})
         if enabled.get("crew@crew") is True:
             enabled_records.append({"scope": scope, "path": str(settings_path)})
     result["settings_records"] = settings_records
     result["enabled_scopes"] = enabled_records
-    if enabled_records:
-        selected_enablement = next(
-            (record for record in enabled_records if record["scope"] == "project"),
-            enabled_records[0],
-        )
-        result["enablement"] = {
-            "state": "present",
-            "source": selected_enablement["path"],
-        }
-        result["enabled_scope"] = selected_enablement["scope"]
-
     registry_path = home / ".claude/plugins/known_marketplaces.json"
     registry = _record_config_read(
         result,
@@ -670,6 +687,28 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if not isinstance(record, dict):
         _mark_config_malformed(result, registry_path, "crew marketplace record must be a mapping")
         record = {}
+    registry_source_valid = False
+    if record:
+        registry_source_valid = _is_crew_marketplace_source(record.get("source"))
+        if not registry_source_valid:
+            _mark_config_malformed(
+                result,
+                registry_path,
+                f"crew marketplace source must identify {CREW_REPO}",
+            )
+    crew_identity_valid = registry_source_valid or (
+        not record and bool(valid_settings_sources)
+    )
+    if enabled_records and (crew_identity_valid or valid_settings_sources):
+        selected_enablement = next(
+            (record for record in enabled_records if record["scope"] == "project"),
+            enabled_records[0],
+        )
+        result["enablement"] = {
+            "state": "present",
+            "source": selected_enablement["path"],
+        }
+        result["enabled_scope"] = selected_enablement["scope"]
     # This registry is location metadata. Never synthesize a version from it.
     result["marketplace_registry_records"] = [
         {key: record[key] for key in ("source", "installLocation", "lastUpdated") if key in record}
@@ -687,7 +726,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     location = pathlib.Path(raw_location) if raw_location else pathlib.Path()
     result["served_version"] = (
         _record_manifest_read(result, _manifest_version(location))
-        if str(location) not in {"", "."}
+        if registry_source_valid and str(location) not in {"", "."}
         else None
     )
     result["served_version_source"] = (
@@ -721,6 +760,12 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     valid_registrations: list[dict[str, Any]] = []
     installed_records: list[dict[str, Any]] = []
     by_root: dict[pathlib.Path, dict[str, Any]] = {}
+    if registrations and not crew_identity_valid:
+        _mark_config_malformed(
+            result,
+            installed_path,
+            f"crew@crew registrations require a validated {CREW_REPO} marketplace source",
+        )
     for index, registration in enumerate(result["registrations"]):
         if not isinstance(registration, dict):
             _mark_config_malformed(
@@ -737,8 +782,16 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 f"crew@crew registration {index} installPath must be a non-empty string",
             )
             continue
-        project_path = registration.get("projectPath")
         valid = True
+        scope = registration.get("scope")
+        if scope not in {"local", "project", "user"}:
+            _mark_config_malformed(
+                result,
+                installed_path,
+                f"crew@crew registration {index} scope must be local, project, or user",
+            )
+            valid = False
+        project_path = registration.get("projectPath")
         if project_path is not None and (
             not isinstance(project_path, str) or not project_path.strip()
         ):
@@ -748,8 +801,15 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 f"crew@crew registration {index} projectPath must be a non-empty string",
             )
             valid = False
+        if scope in {"local", "project"} and project_path is None:
+            _mark_config_malformed(
+                result,
+                installed_path,
+                f"crew@crew registration {index} projectPath is required for {scope} scope",
+            )
+            valid = False
         raw_registration_version = registration.get("version")
-        if raw_registration_version is not None and (
+        if (
             not isinstance(raw_registration_version, str)
             or _clean_version(raw_registration_version) is None
         ):
@@ -759,15 +819,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 f"crew@crew registration {index} version must be a SemVer string",
             )
             valid = False
-        scope = registration.get("scope")
-        if scope is not None and (not isinstance(scope, str) or not scope.strip()):
-            _mark_config_malformed(
-                result,
-                installed_path,
-                f"crew@crew registration {index} scope must be a non-empty string",
-            )
-            valid = False
-        if not valid:
+        if not valid or not crew_identity_valid:
             continue
         valid_registrations.append(registration)
         root = pathlib.Path(install_path)
@@ -823,25 +875,28 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         if len(marketplace_matches) == 1:
             selected_installed = marketplace_matches[0]
     if selected_installed is None:
-        project_roots = {
-            pathlib.Path(registration["installPath"]).resolve(strict=False)
-            for registration in valid_registrations
-            if registration.get("scope") == "project"
-            and isinstance(registration.get("projectPath"), str)
-            and pathlib.Path(registration["projectPath"]).resolve(strict=False)
-            == project.resolve(strict=False)
-            and isinstance(registration.get("installPath"), str)
-            and pathlib.Path(registration["installPath"]) in by_root
-        }
-        if len(project_roots) == 1:
-            selected_root = next(iter(project_roots))
-            selected_installed = next(
-                record
-                for record in installed_records
-                if pathlib.Path(record["root"]).resolve(strict=False) == selected_root
-            )
-    if selected_installed is None and len(installed_records) == 1:
-        selected_installed = installed_records[0]
+        for scope in ("local", "project", "user"):
+            scoped_roots = {
+                pathlib.Path(registration["installPath"]).resolve(strict=False)
+                for registration in valid_registrations
+                if registration["scope"] == scope
+                and (
+                    scope == "user"
+                    or pathlib.Path(registration["projectPath"]).resolve(strict=False)
+                    == project.resolve(strict=False)
+                )
+                and pathlib.Path(registration["installPath"]) in by_root
+            }
+            if scoped_roots:
+                if len(scoped_roots) == 1:
+                    selected_root = next(iter(scoped_roots))
+                    selected_installed = next(
+                        record
+                        for record in installed_records
+                        if pathlib.Path(record["root"]).resolve(strict=False)
+                        == selected_root
+                    )
+                break
     result["installed_version"] = selected_installed["version"] if selected_installed else None
     result["installed_version_source"] = selected_installed["source"] if selected_installed else ""
     if installed_records:
@@ -1021,9 +1076,23 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     if not isinstance(crew_plugin, dict):
         _mark_config_malformed(result, config_path, 'plugins."crew@crew" must be a mapping')
         crew_plugin = {}
+    raw_source = crew_market.get("source")
+    crew_source_valid = _is_crew_marketplace_source(raw_source)
+    if crew_market and not crew_source_valid:
+        _mark_config_malformed(
+            result,
+            config_path,
+            f"marketplaces.crew.source must identify {CREW_REPO}",
+        )
     raw_ref = crew_market.get("ref")
-    if raw_ref is not None and not isinstance(raw_ref, str):
-        _mark_config_malformed(result, config_path, "marketplaces.crew.ref must be a string")
+    if raw_ref is not None and (
+        not isinstance(raw_ref, str) or _clean_version(raw_ref) is None
+    ):
+        _mark_config_malformed(
+            result,
+            config_path,
+            "marketplaces.crew.ref must be a SemVer string",
+        )
         raw_ref = None
     raw_enabled = crew_plugin.get("enabled")
     if raw_enabled is not None and not isinstance(raw_enabled, bool):
@@ -1036,10 +1105,14 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     )
     result["configured_version"] = _clean_version(raw_ref)
     manifest_versions = {
-        root: _record_manifest_read(result, _manifest_version(root)) for root in cache_roots
+        root: _record_manifest_read(result, _manifest_version(root))
+        for root in cache_roots
+        if crew_source_valid
     }
     valid_cache_roots = [
-        root for root in cache_roots if manifest_versions[root] and (root / "skills").is_dir()
+        root
+        for root in cache_roots
+        if manifest_versions.get(root) and (root / "skills").is_dir()
     ]
     vendored_catalogues: list[pathlib.Path] = []
     for catalogue in (project / ".agents/skills", home / ".agents/skills"):
@@ -1087,7 +1160,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
                 "source": str(vendored_catalogues[0]),
             }
             result["package_roots"].append(str(vendored_catalogues[0]))
-    if raw_enabled is True:
+    if raw_enabled is True and crew_source_valid:
         result["enablement"] = {"state": "present", "source": str(config_path)}
     if runtime is not None and runtime.get("tested") is not False:
         result["runtime_skill_roots"] = list(result["runtime_paths"])
