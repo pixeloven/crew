@@ -54,7 +54,7 @@ def write_codex_marketplace_identity(home: pathlib.Path) -> None:
     config = home / ".codex/config.toml"
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text(
-        "[marketplaces.crew]\nsource = 'pixeloven/crew'\n",
+        "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n",
         encoding="utf-8",
     )
 
@@ -137,7 +137,7 @@ class InstallationTruthTests(unittest.TestCase):
         config = home / ".codex/config.toml"
         config.parent.mkdir(parents=True, exist_ok=True)
         config.write_text(
-            "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.29.0'\n\n"
+            "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.29.0'\n\n"
             "[plugins.\"crew@crew\"]\nenabled = true\n",
             encoding="utf-8",
         )
@@ -280,7 +280,7 @@ class InstallationTruthTests(unittest.TestCase):
             project, home = self.make_install_tree(pathlib.Path(tmp))
             config = home / ".codex/config.toml"
             config.write_text(
-                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.29.0'\n",
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.29.0'\n",
                 encoding="utf-8",
             )
             codex = inspect_installations(project, home)["harnesses"]["codex"]
@@ -410,7 +410,7 @@ class InstallationTruthTests(unittest.TestCase):
             project, home = self.make_install_tree(base)
             config = home / ".codex/config.toml"
             config.write_text(
-                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.36.0'\n\n"
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.36.0'\n\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -541,7 +541,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -684,7 +684,14 @@ class InstallationTruthTests(unittest.TestCase):
             claude = report["harnesses"]["claude"]
             codex = report["harnesses"]["codex"]
             self.assertEqual("malformed", pi["configuration_reads"][0]["state"])
-            self.assertEqual("unreadable", claude["configuration_reads"][1]["state"])
+            self.assertEqual(
+                "unreadable",
+                next(
+                    read["state"]
+                    for read in claude["configuration_reads"]
+                    if read["source"] == str(claude_settings)
+                ),
+            )
             self.assertEqual("malformed", codex["configuration_reads"][0]["state"])
             for harness, source in (
                 (pi, pi_settings),
@@ -757,7 +764,7 @@ class InstallationTruthTests(unittest.TestCase):
                 config = home / ".codex/config.toml"
                 config.parent.mkdir(parents=True, exist_ok=True)
                 config.write_text(
-                    "[marketplaces.crew]\nsource = 'pixeloven/crew'\n"
+                    "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                     "[plugins.\"crew@crew\"]\nenabled = true\n",
                     encoding="utf-8",
                 )
@@ -793,7 +800,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                f"[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v{version}'\n"
+                f"[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v{version}'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1040,11 +1047,11 @@ class InstallationTruthTests(unittest.TestCase):
                 ("marketplaces must be a mapping", "plugins must be a mapping"),
             ),
             (
-                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 36\n",
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 36\n",
                 ("marketplaces.crew.ref must be a SemVer string",),
             ),
             (
-                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'banana'\n",
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'banana'\n",
                 ("marketplaces.crew.ref must be a SemVer string",),
             ),
         )
@@ -1119,7 +1126,7 @@ class InstallationTruthTests(unittest.TestCase):
             project, home = self.make_install_tree(base)
             config = home / ".codex/config.toml"
             config.write_text(
-                "[marketplaces.crew]\nsource = 'someone-else/crew'\nref = 'v0.29.0'\n\n"
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'someone-else/crew'\nref = 'v0.29.0'\n\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1135,7 +1142,86 @@ class InstallationTruthTests(unittest.TestCase):
                 if item["source"] == str(config)
             )
             self.assertEqual("malformed", read["state"])
-            self.assertIn("source must identify pixeloven/crew", read["detail"])
+            self.assertIn("git source identifying pixeloven/crew", read["detail"])
+
+    def test_codex_marketplace_requires_git_kind_and_normalizes_git_sources(self) -> None:
+        supported_sources = (
+            "pixeloven/crew",
+            "https://github.com/pixeloven/crew.git",
+            "git+https://github.com/pixeloven/crew.git",
+            "git@github.com:pixeloven/crew.git",
+            "ssh://git@github.com/pixeloven/crew.git",
+        )
+        for source in supported_sources:
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project, home = self.make_install_tree(base)
+                config = home / ".codex/config.toml"
+                config.write_text(
+                    "[marketplaces.crew]\nsource_type = 'git'\n"
+                    f"source = '{source}'\nref = 'v0.29.0'\n"
+                    "[plugins.\"crew@crew\"]\nenabled = true\n",
+                    encoding="utf-8",
+                )
+
+                codex = inspect_installations(project, home)["harnesses"]["codex"]
+
+                self.assertEqual("present", codex["installation"]["state"])
+                self.assertEqual("present", codex["enablement"]["state"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            config = home / ".codex/config.toml"
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'local'\n"
+                "source = 'pixeloven/crew'\nref = 'v0.29.0'\n"
+                "[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            codex = inspect_installations(project, home)["harnesses"]["codex"]
+
+            self.assertEqual("unavailable", codex["installation"]["state"])
+            self.assertEqual("unavailable", codex["enablement"]["state"])
+            read = next(
+                item for item in codex["configuration_reads"] if item["source"] == str(config)
+            )
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("must use a git source", read["detail"])
+
+    def test_codex_cache_version_sources_must_agree(self) -> None:
+        cases = (("cache-name", "0.36.0"), ("0.35.0", "0.36.0"))
+        for directory_version, manifest_version in cases:
+            with self.subTest(directory_version=directory_version), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                home = base / "home"
+                root = home / f".codex/plugins/cache/crew/crew/{directory_version}"
+                write_json(root / ".claude-plugin/plugin.json", {"version": manifest_version})
+                (root / "skills").mkdir()
+                config = home / ".codex/config.toml"
+                config.parent.mkdir(parents=True, exist_ok=True)
+                config.write_text(
+                    "[marketplaces.crew]\nsource_type = 'git'\n"
+                    "source = 'https://github.com/pixeloven/crew.git'\n"
+                    "ref = 'v0.36.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                    encoding="utf-8",
+                )
+
+                codex = inspect_installations(base / "project", home)["harnesses"]["codex"]
+
+                self.assertEqual("unavailable", codex["installation"]["state"])
+                self.assertIsNone(codex["resolved_version"])
+                self.assertEqual("DEGRADED", codex["status"])
+                self.assertEqual("malformed", codex["cache_reads"][0]["state"])
+                self.assertIn(
+                    "cache directory",
+                    next(
+                        finding["claim"]
+                        for finding in codex["findings"]
+                        if "Codex plugin cache root is malformed" in finding["claim"]
+                    ),
+                )
 
     def test_unreadable_vendored_catalogue_is_degraded_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1252,6 +1338,39 @@ class InstallationTruthTests(unittest.TestCase):
                 {item["source"] for item in duplicate["evidence"]},
             )
 
+    def test_claude_enablement_resolves_local_project_user_true_and_false(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            write_json(
+                project / ".claude/settings.json",
+                {"enabledPlugins": {"crew@crew": False}},
+            )
+
+            project_disabled = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual("unavailable", project_disabled["enablement"]["state"])
+            self.assertEqual("project", project_disabled["enabled_scope"])
+            self.assertFalse(project_disabled["enabled_value"])
+            self.assertEqual(
+                str(project / ".claude/settings.json"),
+                project_disabled["enablement"]["source"],
+            )
+
+            write_json(
+                project / ".claude/settings.local.json",
+                {"enabledPlugins": {"crew@crew": True}},
+            )
+            local_enabled = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual("present", local_enabled["enablement"]["state"])
+            self.assertEqual("local", local_enabled["enabled_scope"])
+            self.assertTrue(local_enabled["enabled_value"])
+            self.assertEqual(
+                ["local", "project", "user"],
+                [row["scope"] for row in local_enabled["enabled_scopes"]],
+            )
+
     def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -1272,7 +1391,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1371,7 +1490,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.crew]\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@crew\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1537,6 +1656,23 @@ class InstallationTruthTests(unittest.TestCase):
             report = inspect_installations(base / "project", base / "home")
             for harness in report["harnesses"].values():
                 self.assertIn(harness["runtime"]["state"], {"unavailable", "not tested"})
+            for row in report["checks"]:
+                if row["fact"].endswith(("is unavailable", "is not tested")):
+                    self.assertTrue(row["evidence"])
+                    self.assertTrue(all(item["source"] for item in row["evidence"]))
+            claude_installation = next(
+                row for row in report["checks"] if row["check"] == "claude.installation"
+            )
+            self.assertEqual(
+                {
+                    str(base / "project/.claude/settings.local.json"),
+                    str(base / "project/.claude/settings.json"),
+                    str(base / "home/.claude/settings.json"),
+                    str(base / "home/.claude/plugins/known_marketplaces.json"),
+                    str(base / "home/.claude/plugins/installed_plugins.json"),
+                },
+                {item["source"] for item in claude_installation["evidence"]},
+            )
             self.assertEqual(1, len(report["top_actions"]))
             allowed_kinds = {"observed", "inference", "recommendation", "untested"}
             self.assertTrue(all(item["kind"] in allowed_kinds for item in report["evidence"]))
@@ -1794,6 +1930,24 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual(["topology"], slots["declared"])
             self.assertEqual("malformed", slots["reads"][0]["state"])
             self.assertEqual(str(skill), slots["reads"][0]["source"])
+
+    def test_local_slot_entries_must_use_the_closed_taxonomy(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            skill = root / "skills/example/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: example\ndescription: Example.\n"
+                "expects-local: [' topology ', topolgy]\n---\n",
+                encoding="utf-8",
+            )
+
+            slots = declared_local_slots(root)
+
+            self.assertEqual(["topology"], slots["declared"])
+            self.assertEqual("malformed", slots["reads"][0]["state"])
+            self.assertIn("accepted taxonomy", slots["reads"][0]["detail"])
+            self.assertNotIn("topolgy", slots["declared"])
 
     def test_m7_profile_taxonomy_has_deterministic_persona_precedence(self) -> None:
         self.assertEqual("portable", profile_for([], persona_evidence=[]))

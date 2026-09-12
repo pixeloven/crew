@@ -27,6 +27,9 @@ except ImportError:  # Direct script execution.
 CREW_REPO = "pixeloven/crew"
 FIRST_PI_ROLE_DISCOVERY_VERSION = (0, 35, 0, 1, ())
 RECOMMENDED_LOCAL_VOCABULARY = ("litellm-access-map", "vault-ops")
+LOCAL_SLOT_TAXONOMY = frozenset(
+    ("agent-runtime", "platform-conventions", "protected-seams", "secret-paths", "topology")
+)
 PROFILE_TAXONOMY = ("portable", "platform", "personas")
 EXPECTED_ROLE_NAMES = (
     "implementer",
@@ -138,6 +141,24 @@ def _is_crew_marketplace_source(value: Any) -> bool:
     )
 
 
+def _is_codex_crew_git_source(source_type: Any, source: Any) -> bool:
+    if source_type != "git" or not isinstance(source, str):
+        return False
+    normalized = source.strip().rstrip("/")
+    if normalized.endswith(".git"):
+        normalized = normalized[:-4]
+    for prefix in (
+        "git+https://github.com/",
+        "https://github.com/",
+        "ssh://git@github.com/",
+        "git@github.com:",
+    ):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :]
+            break
+    return normalized == CREW_REPO
+
+
 def _evidence(kind: str, claim: str, source: str = "") -> dict[str, str]:
     return {"kind": kind, "claim": claim, "source": source}
 
@@ -157,6 +178,8 @@ def _base_harness() -> dict[str, Any]:
         "configuration_reads": [],
         "manifest_reads": [],
         "catalogue_reads": [],
+        "cache_reads": [],
+        "inspection_paths": [],
         "package_roots": [],
         "findings": [],
     }
@@ -472,6 +495,7 @@ def _degrade_for_read_failures(result: dict[str, Any]) -> None:
         result["configuration_reads"]
         + result["manifest_reads"]
         + result["catalogue_reads"]
+        + result["cache_reads"]
     ):
         if read["state"] not in {"malformed", "unreadable"}:
             continue
@@ -494,6 +518,10 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
     result = _base_harness()
     settings_paths = [project / ".pi/settings.json", home / ".pi/settings.json"]
     settings_paths.extend(sorted((home / ".pi").glob("*/settings.json")))
+    result["inspection_paths"] = [
+        *(str(path) for path in dict.fromkeys(settings_paths)),
+        str(home / ".pi"),
+    ]
     registrations: list[dict[str, str | None]] = []
     for settings_path in dict.fromkeys(settings_paths):
         settings = _record_config_read(result, "Pi settings configuration", _read_json(settings_path, {}))
@@ -624,13 +652,22 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
 
 def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
-    settings_records: list[dict[str, str]] = []
-    enabled_records: list[dict[str, str]] = []
-    valid_settings_sources: list[str] = []
-    for scope, settings_path in (
+    registry_path = home / ".claude/plugins/known_marketplaces.json"
+    installed_path = home / ".claude/plugins/installed_plugins.json"
+    settings_paths = (
+        ("local", project / ".claude/settings.local.json"),
         ("project", project / ".claude/settings.json"),
         ("user", home / ".claude/settings.json"),
-    ):
+    )
+    result["inspection_paths"] = [
+        *(str(path) for _, path in settings_paths),
+        str(registry_path),
+        str(installed_path),
+    ]
+    settings_records: list[dict[str, Any]] = []
+    enabled_records: list[dict[str, Any]] = []
+    valid_settings_sources: list[str] = []
+    for scope, settings_path in settings_paths:
         settings = _record_config_read(
             result,
             f"Claude {scope} settings configuration",
@@ -670,11 +707,20 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 valid_settings_sources.append(str(settings_path))
         if "crew" in marketplaces or "crew@crew" in enabled:
             settings_records.append({"scope": scope, "path": str(settings_path)})
-        if enabled.get("crew@crew") is True:
-            enabled_records.append({"scope": scope, "path": str(settings_path)})
+        if "crew@crew" in enabled:
+            enabled_value = enabled["crew@crew"]
+            if not isinstance(enabled_value, bool):
+                _mark_config_malformed(
+                    result,
+                    settings_path,
+                    "enabledPlugins.crew@crew must be boolean",
+                )
+            else:
+                enabled_records.append(
+                    {"scope": scope, "path": str(settings_path), "enabled": enabled_value}
+                )
     result["settings_records"] = settings_records
     result["enabled_scopes"] = enabled_records
-    registry_path = home / ".claude/plugins/known_marketplaces.json"
     registry = _record_config_read(
         result,
         "Claude marketplace registry configuration",
@@ -700,15 +746,13 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         not record and bool(valid_settings_sources)
     )
     if enabled_records and (crew_identity_valid or valid_settings_sources):
-        selected_enablement = next(
-            (record for record in enabled_records if record["scope"] == "project"),
-            enabled_records[0],
-        )
+        selected_enablement = enabled_records[0]
         result["enablement"] = {
-            "state": "present",
+            "state": "present" if selected_enablement["enabled"] else "unavailable",
             "source": selected_enablement["path"],
         }
         result["enabled_scope"] = selected_enablement["scope"]
+        result["enabled_value"] = selected_enablement["enabled"]
     # This registry is location metadata. Never synthesize a version from it.
     result["marketplace_registry_records"] = [
         {key: record[key] for key in ("source", "installLocation", "lastUpdated") if key in record}
@@ -735,7 +779,6 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if result["served_version"]:
         result["installation"] = {"state": "present", "source": str(location)}
 
-    installed_path = home / ".claude/plugins/installed_plugins.json"
     installed = _record_config_read(
         result,
         "Claude installed plugins configuration",
@@ -920,11 +963,13 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         result["status"] = "DEGRADED"
         _add_finding(
             result,
-            "Crew is enabled in multiple Claude settings scopes; project precedence selected",
+            f"Crew enablement is declared in multiple Claude settings scopes; "
+            f"{enabled_records[0]['scope']} precedence selected",
             *(record["path"] for record in enabled_records),
         )
     if (
         result["enablement"]["state"] != "present"
+        and not _has_config_read_failure(result, "Claude local settings")
         and not _has_config_read_failure(result, "Claude project settings")
         and not _has_config_read_failure(result, "Claude user settings")
     ):
@@ -1056,6 +1101,13 @@ def _path_within(path: pathlib.Path, root: pathlib.Path) -> bool:
 def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
     config_path = home / ".codex/config.toml"
+    cache_base = home / ".codex/plugins/cache/crew/crew"
+    vendored_paths = (project / ".agents/skills", home / ".agents/skills")
+    result["inspection_paths"] = [
+        str(config_path),
+        str(cache_base),
+        *(str(path) for path in vendored_paths),
+    ]
     config = _record_config_read(result, "Codex plugin configuration", _read_toml(config_path))
     if not isinstance(config, dict):
         _mark_config_malformed(result, config_path, "configuration must be a mapping")
@@ -1077,12 +1129,13 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         _mark_config_malformed(result, config_path, 'plugins."crew@crew" must be a mapping')
         crew_plugin = {}
     raw_source = crew_market.get("source")
-    crew_source_valid = _is_crew_marketplace_source(raw_source)
+    raw_source_type = crew_market.get("source_type")
+    crew_source_valid = _is_codex_crew_git_source(raw_source_type, raw_source)
     if crew_market and not crew_source_valid:
         _mark_config_malformed(
             result,
             config_path,
-            f"marketplaces.crew.source must identify {CREW_REPO}",
+            f"marketplaces.crew must use a git source identifying {CREW_REPO}",
         )
     raw_ref = crew_market.get("ref")
     if raw_ref is not None and (
@@ -1098,24 +1151,49 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     if raw_enabled is not None and not isinstance(raw_enabled, bool):
         _mark_config_malformed(result, config_path, 'plugins."crew@crew".enabled must be boolean')
         raw_enabled = None
-    cache_base = home / ".codex/plugins/cache/crew/crew"
     cache_roots = sorted(
         (path for path in cache_base.glob("*") if path.is_dir()),
         key=lambda path: _version_tuple(path.name) or (0, 0, 0, 0, ()),
     )
     result["configured_version"] = _clean_version(raw_ref)
-    manifest_versions = {
-        root: _record_manifest_read(result, _manifest_version(root))
-        for root in cache_roots
-        if crew_source_valid
-    }
+    manifest_versions: dict[pathlib.Path, str | None] = {}
+    directory_versions: dict[pathlib.Path, str | None] = {}
+    if crew_source_valid:
+        for root in cache_roots:
+            directory_version = _clean_version(root.name)
+            directory_versions[root] = directory_version
+            manifest_version = _record_manifest_read(result, _manifest_version(root))
+            manifest_versions[root] = manifest_version
+            if directory_version is None:
+                result["cache_reads"].append(
+                    {
+                        "label": "Codex plugin cache root",
+                        "state": "malformed",
+                        "source": str(root),
+                        "detail": "cache directory name must be a SemVer string",
+                    }
+                )
+            elif manifest_version and manifest_version != directory_version:
+                result["cache_reads"].append(
+                    {
+                        "label": "Codex plugin cache root",
+                        "state": "malformed",
+                        "source": str(root / ".claude-plugin/plugin.json"),
+                        "detail": (
+                            f"cache directory version {directory_version} differs from "
+                            f"manifest version {manifest_version}"
+                        ),
+                    }
+                )
     valid_cache_roots = [
         root
         for root in cache_roots
-        if manifest_versions.get(root) and (root / "skills").is_dir()
+        if manifest_versions.get(root)
+        and directory_versions.get(root) == manifest_versions[root]
+        and (root / "skills").is_dir()
     ]
     vendored_catalogues: list[pathlib.Path] = []
-    for catalogue in (project / ".agents/skills", home / ".agents/skills"):
+    for catalogue in vendored_paths:
         complete, reads = _inspect_crew_catalogue(catalogue)
         result["catalogue_reads"].extend(reads)
         if complete:
@@ -1131,7 +1209,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
             (
                 root
                 for root in valid_cache_roots
-                if (manifest_versions[root] or _clean_version(root.name)) == result["configured_version"]
+                if manifest_versions[root] == result["configured_version"]
             ),
             None,
         )
@@ -1144,7 +1222,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     )
     if resolved_root:
         result["installation"] = {"state": "present", "source": str(resolved_root / "skills")}
-        result["resolved_version"] = manifest_versions[resolved_root] or _clean_version(resolved_root.name)
+        result["resolved_version"] = manifest_versions[resolved_root]
         result["resolved_version_source"] = str(resolved_root / ".claude-plugin/plugin.json")
     else:
         result["resolved_version"] = None
@@ -1236,6 +1314,16 @@ def inspect_installations(
     evidence: list[dict[str, str]] = []
     checks: list[dict[str, Any]] = []
     for harness, result in harnesses.items():
+        inspected_sources = list(
+            dict.fromkeys(
+                [
+                    *result["inspection_paths"],
+                    *(read["source"] for read in result["configuration_reads"]),
+                    *(read["source"] for read in result["manifest_reads"]),
+                    *result.get("cache_roots", []),
+                ]
+            )
+        )
         for dimension in ("installation", "enablement", "runtime", "capabilities"):
             observation = result[dimension]
             state = observation["state"]
@@ -1252,8 +1340,21 @@ def inspect_installations(
             recommendation = ""
             if status in {"MISSING", "DEGRADED"}:
                 recommendation = f"Resolve or verify {harness} {dimension}"
-            item = _evidence("untested" if untested else "observed", fact, observation.get("source", ""))
-            evidence.append(item)
+            observation_source = observation.get("source", "")
+            sources = (
+                inspected_sources
+                if state in {"unavailable", "not tested"}
+                else [observation_source]
+            )
+            sources = [source for source in dict.fromkeys(sources) if source]
+            row_evidence = [
+                {"claim": fact, "source": source}
+                for source in sources
+            ]
+            evidence.extend(
+                _evidence("untested" if untested else "observed", fact, source)
+                for source in sources
+            )
             checks.append(
                 {
                     "check": f"{harness}.{dimension}",
@@ -1262,7 +1363,7 @@ def inspect_installations(
                     "inference": "" if untested else f"evidence supports {state}",
                     "recommendation": recommendation,
                     "untested": untested,
-                    "evidence": [{"claim": fact, "source": observation.get("source", "")}],
+                    "evidence": row_evidence,
                 }
             )
         for index, finding in enumerate(result["findings"], start=1):
@@ -1574,8 +1675,22 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
                 )
                 continue
         if slots:
-            declared.update(slots)
-            sources.append(str(path))
+            invalid_slots = sorted(set(slots) - LOCAL_SLOT_TAXONOMY)
+            if invalid_slots:
+                reads.append(
+                    {
+                        "state": "malformed",
+                        "source": str(path),
+                        "detail": (
+                            "expects-local entries must use the accepted taxonomy: "
+                            + ", ".join(sorted(LOCAL_SLOT_TAXONOMY))
+                        ),
+                    }
+                )
+            valid_slots = set(slots) & LOCAL_SLOT_TAXONOMY
+            if valid_slots:
+                declared.update(valid_slots)
+                sources.append(str(path))
     return {
         "declared": sorted(declared),
         "recommended_vocabulary": list(RECOMMENDED_LOCAL_VOCABULARY),
