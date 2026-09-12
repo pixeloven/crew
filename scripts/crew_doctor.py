@@ -105,19 +105,23 @@ def _manifest_version(root: pathlib.Path) -> ReadResult:
     )
 
 
-def _clean_version(value: Any) -> str | None:
+def _semver(value: Any, *, allow_v: bool = False) -> str | None:
     if not isinstance(value, str) or not value:
         return None
-    candidate = value.rsplit("@", 1)[-1]
-    if candidate.startswith("v"):
+    candidate = value
+    if allow_v and candidate.startswith("v"):
         candidate = candidate[1:]
     return candidate if SEMVER.fullmatch(candidate) else None
+
+
+def _pi_package_version(value: str) -> str | None:
+    return _semver(value.rsplit("@", 1)[-1], allow_v=True)
 
 
 def _version_tuple(
     value: Any,
 ) -> tuple[int, int, int, int, tuple[tuple[int, int | str], ...]] | None:
-    clean = _clean_version(value)
+    clean = _semver(value)
     if not clean:
         return None
     without_build = clean.split("+", 1)[0]
@@ -537,7 +541,11 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
                 continue
             if PI_CREW_PACKAGE.fullmatch(item):
                 registrations.append(
-                    {"settings": str(settings_path), "package": item, "version": _clean_version(item)}
+                    {
+                        "settings": str(settings_path),
+                        "package": item,
+                        "version": _pi_package_version(item),
+                    }
                 )
     result["registrations"] = registrations
     checkouts = sorted((home / ".pi").glob("*/git/github.com/pixeloven/crew"))
@@ -853,7 +861,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         raw_registration_version = registration.get("version")
         if (
             not isinstance(raw_registration_version, str)
-            or _clean_version(raw_registration_version) is None
+            or _semver(raw_registration_version) is None
         ):
             _mark_config_malformed(
                 result,
@@ -879,7 +887,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             },
         )
         if raw_registration_version:
-            registration_version = _clean_version(raw_registration_version)
+            registration_version = _semver(raw_registration_version)
             record["registration_versions"].append(registration_version)
             if registration_version != manifest_version:
                 result["status"] = "DEGRADED"
@@ -995,7 +1003,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             *(record["source"] for record in installed_records),
         )
     registration_versions = {
-        _clean_version(registration.get("version"))
+        _semver(registration.get("version"))
         for registration in valid_registrations
         if registration.get("version")
     }
@@ -1138,7 +1146,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         )
     raw_ref = crew_market.get("ref")
     if raw_ref is not None and (
-        not isinstance(raw_ref, str) or _clean_version(raw_ref) is None
+        not isinstance(raw_ref, str) or _semver(raw_ref, allow_v=True) is None
     ):
         _mark_config_malformed(
             result,
@@ -1150,16 +1158,19 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     if raw_enabled is not None and not isinstance(raw_enabled, bool):
         _mark_config_malformed(result, config_path, 'plugins."crew@crew".enabled must be boolean')
         raw_enabled = None
-    cache_roots = sorted(
+    discovered_cache_roots = sorted(
         (path for path in cache_base.glob("*") if path.is_dir()),
         key=lambda path: _version_tuple(path.name) or (0, 0, 0, 0, ()),
     )
-    result["configured_version"] = _clean_version(raw_ref)
+    cache_roots = discovered_cache_roots if crew_source_valid else []
+    result["configured_version"] = (
+        _semver(raw_ref, allow_v=True) if crew_source_valid else None
+    )
     manifest_versions: dict[pathlib.Path, str | None] = {}
     directory_versions: dict[pathlib.Path, str | None] = {}
     if crew_source_valid:
         for root in cache_roots:
-            directory_version = _clean_version(root.name)
+            directory_version = _semver(root.name)
             directory_versions[root] = directory_version
             manifest_version = _record_manifest_read(result, _manifest_version(root))
             manifest_versions[root] = manifest_version
@@ -1214,33 +1225,30 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         )
     if resolved_root is None and not result["configured_version"] and len(valid_cache_roots) == 1:
         resolved_root = valid_cache_roots[0]
+    accepted_roots = [*valid_cache_roots, *vendored_catalogues]
     result["cache_roots"] = [str(path) for path in cache_roots]
+    result["skill_roots"] = [
+        *(str(path / "skills") for path in valid_cache_roots),
+        *(str(path) for path in vendored_catalogues),
+    ]
     result["stale_cache_roots"] = [str(path) for path in valid_cache_roots if path != resolved_root]
-    result["package_roots"] = (
-        [str(resolved_root)] if resolved_root else [str(path) for path in valid_cache_roots]
-    )
+    result["package_roots"] = [str(path) for path in accepted_roots]
     if resolved_root:
-        result["installation"] = {"state": "present", "source": str(resolved_root / "skills")}
         result["resolved_version"] = manifest_versions[resolved_root]
         result["resolved_version_source"] = str(resolved_root / ".claude-plugin/plugin.json")
     else:
         result["resolved_version"] = None
         result["resolved_version_source"] = ""
-        if valid_cache_roots:
-            result["installation"] = {
-                "state": "present",
-                "source": "; ".join(str(root / "skills") for root in valid_cache_roots),
-            }
-        if vendored_catalogues:
-            result["installation"] = {
-                "state": "present",
-                "source": str(vendored_catalogues[0]),
-            }
-            result["enablement"] = {
-                "state": "present",
-                "source": str(vendored_catalogues[0]),
-            }
-            result["package_roots"].append(str(vendored_catalogues[0]))
+    if accepted_roots:
+        result["installation"] = {
+            "state": "present",
+            "source": "; ".join(result["skill_roots"]),
+        }
+    if vendored_catalogues:
+        result["enablement"] = {
+            "state": "present",
+            "source": "; ".join(str(path) for path in vendored_catalogues),
+        }
     if raw_enabled is True and crew_source_valid:
         result["enablement"] = {"state": "present", "source": str(config_path)}
     if runtime is not None and runtime.get("tested") is not False:
@@ -1258,12 +1266,20 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
                     result["installation"].get("source", ""),
                     str(config_path),
                 )
-    if len(cache_roots) > 1:
+    if len(accepted_roots) > 1:
+        relationships = []
+        if len(valid_cache_roots) > 1:
+            relationships.append("plugin-cache versions are stale or duplicate")
+        if len(vendored_catalogues) > 1:
+            relationships.append("project/user vendored scopes overlap")
+        if valid_cache_roots and vendored_catalogues:
+            relationships.append("plugin and vendored catalogues coexist")
         result["status"] = "DEGRADED"
         _add_finding(
             result,
-            f"Codex has {len(cache_roots)} Crew plugin-cache versions",
-            *(str(root) for root in cache_roots),
+            f"Codex has {len(accepted_roots)} accepted Crew skill roots; "
+            + "; ".join(relationships),
+            *result["skill_roots"],
         )
     if result.get("configured_version") and resolved_root is None:
         result["status"] = "DEGRADED"

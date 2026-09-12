@@ -1191,7 +1191,11 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertIn("must use a git source", read["detail"])
 
     def test_codex_cache_version_sources_must_agree(self) -> None:
-        cases = (("cache-name", "0.36.0"), ("0.35.0", "0.36.0"))
+        cases = (
+            ("cache-name", "0.36.0"),
+            ("v0.36.0", "0.36.0"),
+            ("0.35.0", "0.36.0"),
+        )
         for directory_version, manifest_version in cases:
             with self.subTest(directory_version=directory_version), tempfile.TemporaryDirectory() as tmp:
                 base = pathlib.Path(tmp)
@@ -1222,6 +1226,104 @@ class InstallationTruthTests(unittest.TestCase):
                         if "Codex plugin cache root is malformed" in finding["claim"]
                     ),
                 )
+
+    def test_non_pi_version_fields_reject_package_spec_prefixes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            config = home / ".codex/config.toml"
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
+                "ref = 'junk@v0.29.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            codex = inspect_installations(project, home)["harnesses"]["codex"]
+
+            self.assertIsNone(codex["configured_version"])
+            self.assertEqual("DEGRADED", codex["status"])
+            self.assertIn(
+                "ref must be a SemVer string",
+                next(
+                    read["detail"]
+                    for read in codex["configuration_reads"]
+                    if read["source"] == str(config)
+                ),
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            home = base / "home"
+            root = home / ".codex/plugins/cache/crew/crew/junk@0.36.0"
+            write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            (root / "skills").mkdir()
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
+                "ref = 'v0.36.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            codex = inspect_installations(base / "project", home)["harnesses"]["codex"]
+
+            self.assertEqual("unavailable", codex["installation"]["state"])
+            self.assertEqual("malformed", codex["cache_reads"][0]["state"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            home = base / "home"
+            root = home / ".claude/plugins/cache/crew/crew/0.36.0"
+            write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            write_claude_marketplace_identity(home)
+            write_json(
+                home / ".claude/plugins/installed_plugins.json",
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {
+                                "scope": "user",
+                                "installPath": str(root),
+                                "version": "junk@v0.36.0",
+                            },
+                            {
+                                "scope": "user",
+                                "installPath": str(root),
+                                "version": "v0.36.0",
+                            },
+                        ]
+                    }
+                },
+            )
+
+            claude = inspect_installations(base / "project", home)["harnesses"]["claude"]
+
+            self.assertEqual([], claude["installed_versions"])
+            self.assertEqual("DEGRADED", claude["status"])
+
+    def test_invalid_codex_identity_cannot_attribute_alias_cache_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            other = home / ".codex/plugins/cache/crew/crew/0.36.0"
+            write_json(other / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            (other / "skills").mkdir()
+            config = home / ".codex/config.toml"
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'someone-else/crew'\n"
+                "ref = 'v0.36.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            codex = inspect_installations(project, home)["harnesses"]["codex"]
+
+            self.assertIsNone(codex["configured_version"])
+            self.assertEqual([], codex["cache_roots"])
+            self.assertEqual([], codex["package_roots"])
+            self.assertEqual("unavailable", codex["installation"]["state"])
+            self.assertFalse(
+                any("Crew skill roots" in finding["claim"] for finding in codex["findings"])
+            )
 
     def test_unreadable_vendored_catalogue_is_degraded_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1275,6 +1377,57 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual({"state": "present", "source": str(vendored)}, codex["enablement"])
             self.assertIsNone(codex["resolved_version"])
             self.assertFalse(any("not enabled" in finding["claim"] for finding in codex["findings"]))
+
+    def test_all_accepted_codex_roots_are_enumerated_with_relationships(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            project_vendored = project / ".agents/skills"
+            user_vendored = home / ".agents/skills"
+            shutil.copytree(ROOT / "skills", project_vendored)
+            shutil.copytree(ROOT / "skills", user_vendored)
+
+            vendored = inspect_installations(project, home)["harnesses"]["codex"]
+
+            self.assertEqual(
+                {str(project_vendored), str(user_vendored)},
+                set(vendored["package_roots"]),
+            )
+            overlap = next(
+                finding
+                for finding in vendored["findings"]
+                if "accepted Crew skill roots" in finding["claim"]
+            )
+            self.assertIn("project/user vendored scopes overlap", overlap["claim"])
+            self.assertEqual(
+                {str(project_vendored), str(user_vendored)},
+                {item["source"] for item in overlap["evidence"]},
+            )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            vendored_root = project / ".agents/skills"
+            shutil.copytree(ROOT / "skills", vendored_root)
+            plugin_root = home / ".codex/plugins/cache/crew/crew/0.29.0"
+
+            mixed = inspect_installations(project, home)["harnesses"]["codex"]
+
+            self.assertEqual(
+                {str(plugin_root), str(vendored_root)},
+                set(mixed["package_roots"]),
+            )
+            coexistence = next(
+                finding
+                for finding in mixed["findings"]
+                if "accepted Crew skill roots" in finding["claim"]
+            )
+            self.assertIn("plugin and vendored catalogues coexist", coexistence["claim"])
+            self.assertEqual(
+                {str(plugin_root / "skills"), str(vendored_root)},
+                {item["source"] for item in coexistence["evidence"]},
+            )
 
     def test_pi_registration_requires_exact_supported_repository_identity(self) -> None:
         supported = (
