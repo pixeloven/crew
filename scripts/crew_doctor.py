@@ -106,6 +106,14 @@ def _manifest_version(root: pathlib.Path) -> ReadResult:
                 read.source,
                 "manifest version must be a valid SemVer string",
             )
+        skills = root / "skills"
+        if not skills.is_dir():
+            return ReadResult(
+                None,
+                "malformed",
+                str(skills),
+                "required skills directory is missing",
+            )
     return ReadResult(
         version,
         read.state,
@@ -643,6 +651,14 @@ def _record_capabilities(
                 "harness": harness,
                 "name": name,
                 "state": state,
+                "ownership": (
+                    "project"
+                    if any(
+                        _path_within(pathlib.Path(source), consumer_skill_root)
+                        for source in declaration_sources
+                    )
+                    else "package"
+                ),
                 "evidence": observation_evidence,
             }
         )
@@ -1426,48 +1442,38 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         (path for path in cache_base.glob("*") if path.is_dir()),
         key=lambda path: _version_tuple(path.name) or (0, 0, 0, 0, ()),
     )
-    cache_roots = discovered_cache_roots if crew_source_valid else []
+    cache_roots = discovered_cache_roots
     result["configured_version"] = (
         _semver(raw_ref, allow_v=True) if crew_source_valid else None
     )
     manifest_versions: dict[pathlib.Path, str | None] = {}
     directory_versions: dict[pathlib.Path, str | None] = {}
-    if crew_source_valid:
-        for root in cache_roots:
-            directory_version = _semver(root.name)
-            directory_versions[root] = directory_version
-            manifest_version = _record_manifest_read(result, _manifest_version(root))
-            manifest_versions[root] = manifest_version
-            if directory_version is None:
-                result["cache_reads"].append(
-                    {
-                        "label": "Codex plugin cache root",
-                        "state": "malformed",
-                        "source": str(root),
-                        "detail": "cache directory name must be a SemVer string",
-                    }
-                )
-            elif manifest_version and manifest_version != directory_version:
-                result["cache_reads"].append(
-                    {
-                        "label": "Codex plugin cache root",
-                        "state": "malformed",
-                        "source": str(root / ".claude-plugin/plugin.json"),
-                        "detail": (
-                            f"cache directory version {directory_version} differs from "
-                            f"manifest version {manifest_version}"
-                        ),
-                    }
-                )
-            if manifest_version and not (root / "skills").is_dir():
-                result["cache_reads"].append(
-                    {
-                        "label": "Codex plugin cache root",
-                        "state": "malformed",
-                        "source": str(root / "skills"),
-                        "detail": "required skills directory is missing",
-                    }
-                )
+    for root in cache_roots:
+        directory_version = _semver(root.name)
+        directory_versions[root] = directory_version
+        manifest_version = _record_manifest_read(result, _manifest_version(root))
+        manifest_versions[root] = manifest_version
+        if directory_version is None:
+            result["cache_reads"].append(
+                {
+                    "label": "Codex plugin cache root",
+                    "state": "malformed",
+                    "source": str(root),
+                    "detail": "cache directory name must be a SemVer string",
+                }
+            )
+        elif manifest_version and manifest_version != directory_version:
+            result["cache_reads"].append(
+                {
+                    "label": "Codex plugin cache root",
+                    "state": "malformed",
+                    "source": str(root / ".claude-plugin/plugin.json"),
+                    "detail": (
+                        f"cache directory version {directory_version} differs from "
+                        f"manifest version {manifest_version}"
+                    ),
+                }
+            )
     valid_cache_roots = [
         root
         for root in cache_roots
@@ -1497,17 +1503,16 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     matched_cache_roots = [root for root in valid_cache_roots if str(root) in runtime_root_matches]
     resolved_root = matched_cache_roots[0] if len(matched_cache_roots) == 1 else None
     if resolved_root is None and not result["runtime_paths"] and result["configured_version"]:
-        resolved_root = next(
-            (
-                root
-                for root in valid_cache_roots
-                if manifest_versions[root] == result["configured_version"]
-            ),
-            None,
-        )
+        configured_roots = [
+            root
+            for root in valid_cache_roots
+            if manifest_versions[root] == result["configured_version"]
+        ]
+        resolved_root = configured_roots[0] if len(configured_roots) == 1 else None
     if (
         resolved_root is None
         and not result["runtime_paths"]
+        and crew_source_valid
         and not result["configured_version"]
         and len(valid_cache_roots) == 1
     ):
@@ -2409,7 +2414,11 @@ def compose_doctor_report(
             }
         )
 
-    working = [item["name"] for item in capability_checks if item["state"] == "working"]
+    working = [
+        item["name"]
+        for item in capability_checks
+        if item["state"] == "working" and item.get("ownership") == "project"
+    ]
     report["profile"] = profile_for(working, persona_evidence)
     profile_fact = f"operating profile is {report['profile']}"
     if persona_evidence:
@@ -2418,7 +2427,7 @@ def compose_doctor_report(
         profile_sources = [
             evidence["source"]
             for item in capability_checks
-            if item["state"] == "working"
+            if item["state"] == "working" and item.get("ownership") == "project"
             for evidence in item["evidence"]
         ]
     checks.append(

@@ -34,6 +34,13 @@ def write_json(path: pathlib.Path, value: object) -> None:
         value = {"name": "crew", **value}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
+    if (
+        path.as_posix().endswith("/.claude-plugin/plugin.json")
+        and isinstance(value, dict)
+        and value.get("name") == "crew"
+        and isinstance(value.get("version"), str)
+    ):
+        (path.parent.parent / "skills").mkdir(exist_ok=True)
 
 
 def write_capability_skill(root: pathlib.Path, requirements: list[str]) -> None:
@@ -277,11 +284,24 @@ class InstallationTruthTests(unittest.TestCase):
                     },
                 ]
             }
-            capable = inspect_installations(project, home, capability_evidence=evidence)["harnesses"]["codex"]
+            installation = inspect_installations(project, home, capability_evidence=evidence)
+            capable = installation["harnesses"]["codex"]
             self.assertEqual("present", capable["capabilities"]["state"])
             self.assertNotIn(
                 "consumer:litellm", {item["name"] for item in capable["capability_checks"]}
             )
+            github = next(
+                item for item in capable["capability_checks"] if item["name"] == "external:github"
+            )
+            self.assertEqual("package", github["ownership"])
+            report = compose_doctor_report(
+                installation,
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=[],
+                persona_evidence=[],
+            )
+            self.assertEqual("portable", report["profile"])
 
             config = home / ".codex/config.toml"
             config.write_text(
@@ -440,7 +460,7 @@ class InstallationTruthTests(unittest.TestCase):
             project, home = self.make_install_tree(base)
             newer = home / ".codex/plugins/cache/crew/crew/0.36.0"
             write_json(newer / ".claude-plugin/plugin.json", {"name": "crew", "version": "0.36.0"})
-            (newer / "skills").mkdir()
+            (newer / "skills").mkdir(exist_ok=True)
             configured = inspect_installations(project, home)["harnesses"]["codex"]
             self.assertEqual("0.29.0", configured["resolved_version"])
             runtime = {
@@ -467,7 +487,7 @@ class InstallationTruthTests(unittest.TestCase):
             for version in ("0.35.0", "0.36.0"):
                 root = home / f".codex/plugins/cache/crew/crew/{version}"
                 write_json(root / ".claude-plugin/plugin.json", {"version": version})
-                (root / "skills").mkdir()
+                (root / "skills").mkdir(exist_ok=True)
                 roots[version] = root
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
@@ -512,7 +532,7 @@ class InstallationTruthTests(unittest.TestCase):
             for version in ("0.35.0", "0.36.0"):
                 root = home / f".codex/plugins/cache/crew/crew/{version}"
                 write_json(root / ".claude-plugin/plugin.json", {"version": version})
-                (root / "skills").mkdir()
+                (root / "skills").mkdir(exist_ok=True)
                 roots.append(root)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
@@ -708,7 +728,7 @@ class InstallationTruthTests(unittest.TestCase):
             for version in ("0.35.0", "0.36.0"):
                 root = base / f"home/.codex/plugins/cache/crew/crew/{version}"
                 write_json(root / ".claude-plugin/plugin.json", {"name": "crew", "version": version})
-                (root / "skills").mkdir()
+                (root / "skills").mkdir(exist_ok=True)
             write_codex_marketplace_identity(base / "home")
             codex = inspect_installations(base / "project", base / "home")["harnesses"]["codex"]
             self.assertEqual("present", codex["installation"]["state"])
@@ -895,7 +915,7 @@ class InstallationTruthTests(unittest.TestCase):
             for version in ("0.35.0", "0.36.0"):
                 root = home / f".codex/plugins/cache/crew/crew/{version}"
                 write_json(root / ".claude-plugin/plugin.json", {"version": version})
-                (root / "skills").mkdir()
+                (root / "skills").mkdir(exist_ok=True)
                 codex_roots.append(root)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
@@ -1119,7 +1139,7 @@ class InstallationTruthTests(unittest.TestCase):
                 manifest = root / ".claude-plugin/plugin.json"
                 payload = {} if version is None else {"version": version}
                 write_json(manifest, payload)
-                (root / "skills").mkdir()
+                (root / "skills").mkdir(exist_ok=True)
                 config = home / ".codex/config.toml"
                 config.parent.mkdir(parents=True, exist_ok=True)
                 config.write_text(
@@ -1184,7 +1204,7 @@ class InstallationTruthTests(unittest.TestCase):
                 codex_root / ".claude-plugin/plugin.json",
                 {"name": "other-plugin", "version": "0.36.0"},
             )
-            (codex_root / "skills").mkdir()
+            (codex_root / "skills").mkdir(exist_ok=True)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
@@ -1228,7 +1248,7 @@ class InstallationTruthTests(unittest.TestCase):
 
             codex_root = home / f".codex/plugins/cache/crew/crew/{version}"
             write_json(codex_root / ".claude-plugin/plugin.json", {"version": version})
-            (codex_root / "skills").mkdir()
+            (codex_root / "skills").mkdir(exist_ok=True)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
@@ -1619,7 +1639,7 @@ class InstallationTruthTests(unittest.TestCase):
             }
             self.assertTrue({str(settings), str(registry)} <= sources)
 
-    def test_codex_alias_cannot_attribute_an_unrelated_marketplace_to_crew(self) -> None:
+    def test_codex_invalid_alias_cannot_enable_or_resolve_crew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
             project, home = self.make_install_tree(base)
@@ -1632,7 +1652,7 @@ class InstallationTruthTests(unittest.TestCase):
 
             codex = inspect_installations(project, home)["harnesses"]["codex"]
 
-            self.assertEqual("unavailable", codex["installation"]["state"])
+            self.assertEqual("present", codex["installation"]["state"])
             self.assertEqual("unavailable", codex["enablement"]["state"])
             self.assertIsNone(codex["resolved_version"])
             read = next(
@@ -1681,8 +1701,9 @@ class InstallationTruthTests(unittest.TestCase):
 
             codex = inspect_installations(project, home)["harnesses"]["codex"]
 
-            self.assertEqual("unavailable", codex["installation"]["state"])
+            self.assertEqual("present", codex["installation"]["state"])
             self.assertEqual("unavailable", codex["enablement"]["state"])
+            self.assertIsNone(codex["resolved_version"])
             read = next(
                 item for item in codex["configuration_reads"] if item["source"] == str(config)
             )
@@ -1701,7 +1722,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home = base / "home"
                 root = home / f".codex/plugins/cache/crew/crew/{directory_version}"
                 write_json(root / ".claude-plugin/plugin.json", {"version": manifest_version})
-                (root / "skills").mkdir()
+                (root / "skills").mkdir(exist_ok=True)
                 config = home / ".codex/config.toml"
                 config.parent.mkdir(parents=True, exist_ok=True)
                 config.write_text(
@@ -1734,6 +1755,7 @@ class InstallationTruthTests(unittest.TestCase):
                 corrupt_root / ".claude-plugin/plugin.json",
                 {"name": "crew", "version": "0.30.0"},
             )
+            (corrupt_root / "skills").rmdir()
 
             codex = inspect_installations(project, home)["harnesses"]["codex"]
 
@@ -1743,7 +1765,7 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertNotIn(str(corrupt_root), codex["package_roots"])
             invalid_layout = next(
                 item
-                for item in codex["cache_reads"]
+                for item in codex["manifest_reads"]
                 if item["source"] == str(corrupt_root / "skills")
             )
             self.assertEqual("malformed", invalid_layout["state"])
@@ -1754,6 +1776,64 @@ class InstallationTruthTests(unittest.TestCase):
                 if "required skills directory is missing" in item["claim"]
             )
             self.assertEqual(str(corrupt_root / "skills"), finding["evidence"][0]["source"])
+
+    def test_codex_corrupt_cache_is_classified_without_valid_configuration(self) -> None:
+        for config_value in (None, "[marketplaces.crew]\nsource = 'someone/else'\n"):
+            with self.subTest(config=config_value), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                home = base / "home"
+                root = home / ".codex/plugins/cache/crew/crew/0.36.0"
+                write_json(
+                    root / ".claude-plugin/plugin.json",
+                    {"name": "crew", "version": "0.36.0"},
+                )
+                (root / "skills").rmdir()
+                if config_value is not None:
+                    config = home / ".codex/config.toml"
+                    config.parent.mkdir(parents=True, exist_ok=True)
+                    config.write_text(config_value, encoding="utf-8")
+
+                codex = inspect_installations(base / "project", home)["harnesses"]["codex"]
+
+                self.assertEqual([str(root)], codex["cache_roots"])
+                self.assertEqual("unavailable", codex["installation"]["state"])
+                self.assertEqual("DEGRADED", codex["status"])
+                invalid_layout = next(
+                    item
+                    for item in codex["manifest_reads"]
+                    if item["source"] == str(root / "skills")
+                )
+                self.assertEqual("malformed", invalid_layout["state"])
+
+    def test_manifest_valid_roots_without_skills_are_rejected_for_every_harness(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base, "v0.35.0")
+            roots = {
+                "pi": home / ".pi/agent/git/github.com/pixeloven/crew",
+                "claude-marketplace": home / ".claude/plugins/marketplaces/crew",
+                "claude-cache": home / ".claude/plugins/cache/crew/crew/0.30.0",
+                "codex": home / ".codex/plugins/cache/crew/crew/0.29.0",
+            }
+            for root in roots.values():
+                shutil.rmtree(root / "skills")
+
+            report = inspect_installations(project, home)
+
+            for harness in ("pi", "claude", "codex"):
+                result = report["harnesses"][harness]
+                self.assertEqual("unavailable", result["installation"]["state"])
+                self.assertEqual([], result["resolved_package_roots"])
+                self.assertEqual("DEGRADED", result["status"])
+            manifest_failures = {
+                item["source"]
+                for result in report["harnesses"].values()
+                for item in result["manifest_reads"]
+                if item["state"] == "malformed"
+            }
+            self.assertTrue(
+                {str(root / "skills") for root in roots.values()} <= manifest_failures
+            )
 
     def test_non_pi_version_fields_reject_package_spec_prefixes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1784,7 +1864,7 @@ class InstallationTruthTests(unittest.TestCase):
             home = base / "home"
             root = home / ".codex/plugins/cache/crew/crew/junk@0.36.0"
             write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
-            (root / "skills").mkdir()
+            (root / "skills").mkdir(exist_ok=True)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
@@ -1829,13 +1909,13 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual([], claude["installed_versions"])
             self.assertEqual("DEGRADED", claude["status"])
 
-    def test_invalid_codex_identity_cannot_attribute_alias_cache_state(self) -> None:
+    def test_invalid_codex_identity_cannot_enable_or_resolve_cache_state(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
             project, home = self.make_install_tree(base)
             other = home / ".codex/plugins/cache/crew/crew/0.36.0"
             write_json(other / ".claude-plugin/plugin.json", {"version": "0.36.0"})
-            (other / "skills").mkdir()
+            (other / "skills").mkdir(exist_ok=True)
             config = home / ".codex/config.toml"
             config.write_text(
                 "[marketplaces.crew]\nsource_type = 'git'\nsource = 'someone-else/crew'\n"
@@ -1846,12 +1926,17 @@ class InstallationTruthTests(unittest.TestCase):
             codex = inspect_installations(project, home)["harnesses"]["codex"]
 
             self.assertIsNone(codex["configured_version"])
-            self.assertEqual([], codex["cache_roots"])
-            self.assertEqual([], codex["package_roots"])
-            self.assertEqual("unavailable", codex["installation"]["state"])
-            self.assertFalse(
-                any("Crew skill roots" in finding["claim"] for finding in codex["findings"])
+            self.assertEqual(
+                {
+                    str(home / ".codex/plugins/cache/crew/crew/0.29.0"),
+                    str(other),
+                },
+                set(codex["cache_roots"]),
             )
+            self.assertEqual(set(codex["cache_roots"]), set(codex["package_roots"]))
+            self.assertEqual("present", codex["installation"]["state"])
+            self.assertEqual("unavailable", codex["enablement"]["state"])
+            self.assertIsNone(codex["resolved_version"])
 
     def test_unreadable_vendored_catalogue_is_degraded_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2189,7 +2274,7 @@ class InstallationTruthTests(unittest.TestCase):
                 codex_root / ".claude-plugin/plugin.json",
                 {"name": "crew", "version": "0.35.0"},
             )
-            (codex_root / "skills").mkdir()
+            (codex_root / "skills").mkdir(exist_ok=True)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
@@ -2381,7 +2466,7 @@ class InstallationTruthTests(unittest.TestCase):
             )
             codex_root = home / ".codex/plugins/cache/crew/crew/0.35.0"
             write_json(codex_root / ".claude-plugin/plugin.json", {"version": "0.35.0"})
-            (codex_root / "skills").mkdir()
+            (codex_root / "skills").mkdir(exist_ok=True)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
@@ -2491,7 +2576,7 @@ class InstallationTruthTests(unittest.TestCase):
                 codex_root / ".claude-plugin/plugin.json",
                 {"name": "crew", "version": "0.35.0"},
             )
-            (codex_root / "skills").mkdir()
+            (codex_root / "skills").mkdir(exist_ok=True)
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
@@ -3193,7 +3278,13 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual("DEGRADED", rows["failed"]["status"])
             self.assertTrue(rows["failed"]["recommendation"])
             self.assertEqual(("N/A", rows["skipped"]["fact"]), (rows["skipped"]["status"], rows["skipped"]["untested"]))
-            self.assertEqual("platform", report["profile"])
+            proven = next(
+                item
+                for item in installation["harnesses"]["codex"]["capability_checks"]
+                if item["name"] == "proven"
+            )
+            self.assertEqual("package", proven["ownership"])
+            self.assertEqual("portable", report["profile"])
 
     def test_role_readiness_requires_complete_expected_fleets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
