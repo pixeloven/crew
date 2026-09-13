@@ -379,11 +379,3 @@ def read_frontmatter(path: pathlib.Path) -> tuple[dict[str, Any] | None, str | N
         return parse_simple_mapping("\n".join(lines[1:end])), None
     except ScalarParseError as error:
         return None, f"invalid YAML frontmatter: {error}"
-
-
-def parse_inline_list(value: str) -> list[str]:
-    """Parse Crew's schema-v2 inline list form (`[one, two]`)."""
-    parsed = _scalar(value)
-    if not isinstance(parsed, list):
-        return []
-    return [item for item in parsed if isinstance(item, str)]
