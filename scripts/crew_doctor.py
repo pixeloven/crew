@@ -177,7 +177,10 @@ def _base_harness() -> dict[str, Any]:
         "capabilities": {"state": "not tested", "source": ""},
         "capability_checks": [],
         "capability_declaration_reads": [],
+        "capability_roots": [],
         "runtime_paths": [],
+        "runtime_root_matches": [],
+        "runtime_validation_failures": [],
         "configuration_reads": [],
         "manifest_reads": [],
         "catalogue_reads": [],
@@ -202,6 +205,8 @@ def _record_runtime(
     result: dict[str, Any],
     runtime: dict[str, Any] | None,
     validated_roots: list[pathlib.Path],
+    candidate_roots: list[pathlib.Path] | None = None,
+    root_versions: dict[pathlib.Path, str | None] | None = None,
 ) -> None:
     """Record only evidence supplied by this harness's capture."""
     if runtime is None or runtime.get("tested") is False:
@@ -227,6 +232,11 @@ def _record_runtime(
         state = captured_state
     else:
         skills = runtime.get("skills")
+        expected_names = {
+            path.name
+            for path in (pathlib.Path(__file__).resolve().parents[1] / "skills").iterdir()
+            if path.is_dir()
+        }
         crew_entries = (
             [
                 entry
@@ -236,22 +246,38 @@ def _record_runtime(
                     str(entry.get("name", "")).startswith("crew:")
                     or entry.get("namespace") == "crew"
                     or entry.get("source") in {"crew", "pixeloven/crew"}
-                    or any(
-                        _path_within(pathlib.Path(str(entry.get("path", ""))), root)
-                        for root in validated_roots
-                        if entry.get("path")
+                    or (
+                        isinstance(entry.get("path"), str)
+                        and pathlib.Path(entry["path"]).parent.name in expected_names
+                        and any(
+                            _path_within(pathlib.Path(entry["path"]), root)
+                            for root in validated_roots
+                        )
                     )
                 )
             ]
             if isinstance(skills, list)
             else []
         )
-        validated_runtime_root = any(
-            _path_within(path, root)
-            for path in _runtime_paths(runtime)
+        skill_roots = [
+            pathlib.Path(path)
+            for path in runtime.get("skill_roots", [])
+            if isinstance(path, str)
+        ]
+        validated_skill_roots = [
+            path
+            for path in skill_roots
             for root in validated_roots
-        )
-        if not crew_entries and not validated_runtime_root:
+            if _path_within(path, root)
+        ]
+        crew_paths = [
+            pathlib.Path(entry["path"])
+            for entry in crew_entries
+            if isinstance(entry.get("path"), str)
+        ]
+        crew_paths.extend(validated_skill_roots)
+        crew_paths = list(dict.fromkeys(crew_paths))
+        if not crew_entries and not validated_skill_roots:
             state = "omitted" if isinstance(skills, list) else "unavailable"
         elif captured_state in {"loaded-but-undiscoverable", "truncated"}:
             state = captured_state
@@ -263,13 +289,54 @@ def _record_runtime(
             state = "working"
     result["runtime"] = {"state": state, "source": runtime.get("source", "captured runtime")}
     if state in LOADED_RUNTIME_STATES:
-        result["runtime_paths"] = [str(path) for path in _runtime_paths(runtime)]
-        if runtime.get("version"):
-            result["loaded_version"] = runtime["version"]
+        result["runtime_paths"] = [str(path) for path in crew_paths]
+        resolution_roots = list(dict.fromkeys([*validated_roots, *(candidate_roots or [])]))
+        matched_roots = [
+            root
+            for root in resolution_roots
+            if any(_path_within(path, root) for path in crew_paths)
+        ]
+        result["runtime_root_matches"] = [str(root) for root in matched_roots]
+        raw_version = runtime.get("version")
+        captured_version = _semver(raw_version) if "version" in runtime else None
+        if "version" in runtime and captured_version is None:
+            claim = "captured Crew runtime version must be a pure SemVer string"
+            result["runtime_validation_failures"].append(claim)
+            _add_finding(result, claim, result["runtime"]["source"])
+        if len(matched_roots) > 1:
+            claim = "captured Crew runtime paths match multiple accepted roots"
+            result["runtime_validation_failures"].append(claim)
+            _add_finding(
+                result,
+                claim,
+                result["runtime"]["source"],
+                *(str(root) for root in matched_roots),
+            )
+        elif len(matched_roots) == 1:
+            selected_root = matched_roots[0]
+            expected_version = (root_versions or {}).get(selected_root)
+            if expected_version is None and selected_root in (candidate_roots or []):
+                claim = "loaded vendored Crew version is unknown because provenance is unverified"
+                result["runtime_validation_failures"].append(claim)
+                _add_finding(result, claim, result["runtime"]["source"], str(selected_root))
+            elif captured_version and expected_version and captured_version != expected_version:
+                claim = (
+                    f"captured Crew runtime version {captured_version} differs from "
+                    f"selected root version {expected_version}"
+                )
+                result["runtime_validation_failures"].append(claim)
+                _add_finding(result, claim, result["runtime"]["source"], str(selected_root))
+            elif captured_version:
+                result["loaded_version"] = captured_version
+                result["loaded_version_source"] = result["runtime"]["source"]
+        elif captured_version:
+            result["loaded_version"] = captured_version
             result["loaded_version_source"] = result["runtime"]["source"]
 
 
 def _degrade_for_runtime(result: dict[str, Any]) -> None:
+    if result["runtime_validation_failures"]:
+        result["status"] = "DEGRADED"
     state = result["runtime"]["state"]
     if state in {"unavailable", "loaded-but-undiscoverable", "truncated", "omitted"}:
         if result["status"] == "OK":
@@ -355,7 +422,9 @@ def _record_capabilities(
     consumer_skill_root: pathlib.Path,
 ) -> None:
     declared, declaration_failures = _declared_capabilities(
-        [pathlib.Path(root) for root in result["package_roots"]] + [consumer_skill_root]
+        [pathlib.Path(root) for root in result["package_roots"]]
+        + [pathlib.Path(root) for root in result["capability_roots"]]
+        + [consumer_skill_root]
     )
     result["capability_declaration_reads"] = declaration_failures
     for failure in declaration_failures:
@@ -558,26 +627,22 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         result,
         runtime,
         [pathlib.Path(item["root"]) for item in resolved],
+        root_versions={pathlib.Path(item["root"]): item["version"] for item in resolved},
     )
     result["resolved_installations"] = resolved
     primary = next(
         (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
         registrations[0] if registrations else None,
     )
-    runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
-    selected = next(
-        (
-            item for item in resolved
-            if any(_path_within(path, pathlib.Path(item["root"])) for path in runtime_paths)
-        ),
-        None,
-    )
-    if selected is None and primary and primary["version"]:
+    runtime_root_matches = set(result["runtime_root_matches"])
+    runtime_matches = [item for item in resolved if item["root"] in runtime_root_matches]
+    selected = runtime_matches[0] if len(runtime_matches) == 1 else None
+    if selected is None and not result["runtime_paths"] and primary and primary["version"]:
         selected = next(
             (item for item in resolved if item["version"] == primary["version"]),
             None,
         )
-    if selected is None and len(resolved) == 1:
+    if selected is None and not result["runtime_paths"] and len(resolved) == 1:
         selected = resolved[0]
     result["resolved_version"] = selected["version"] if selected else None
     result["resolved_version_source"] = (
@@ -907,15 +972,21 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     validated_roots = [pathlib.Path(record["root"]) for record in installed_records]
     if result["served_version"]:
         validated_roots.append(location)
-    _record_runtime(result, runtime, validated_roots)
-    runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
+    root_versions = {
+        pathlib.Path(record["root"]): record["version"]
+        for record in installed_records
+    }
+    if result["served_version"]:
+        root_versions[location] = result["served_version"]
+    _record_runtime(result, runtime, validated_roots, root_versions=root_versions)
+    runtime_root_matches = set(result["runtime_root_matches"])
     runtime_matches = [
         record
         for record in installed_records
-        if any(_path_within(path, pathlib.Path(record["root"])) for path in runtime_paths)
+        if record["root"] in runtime_root_matches
     ]
     selected_installed = runtime_matches[0] if len(runtime_matches) == 1 else None
-    if selected_installed is None and result["served_version"]:
+    if selected_installed is None and not result["runtime_paths"] and result["served_version"]:
         marketplace_matches = [
             record
             for record in installed_records
@@ -924,7 +995,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         ]
         if len(marketplace_matches) == 1:
             selected_installed = marketplace_matches[0]
-    if selected_installed is None:
+    if selected_installed is None and not result["runtime_paths"]:
         for scope in ("local", "project", "user"):
             scoped_roots = {
                 pathlib.Path(registration["installPath"]).resolve(strict=False)
@@ -964,6 +1035,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         result["package_roots"].append(str(location))
 
     if result["installation"]["state"] != "present":
+        _degrade_for_runtime(result)
         return result
     result["status"] = "OK" if result["enablement"]["state"] == "present" else "DEGRADED"
     if len(enabled_records) > 1:
@@ -1208,13 +1280,22 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         result["catalogue_reads"].extend(reads)
         if complete:
             vendored_catalogues.append(catalogue)
-    _record_runtime(result, runtime, [*valid_cache_roots, *vendored_catalogues])
-    runtime_paths = [pathlib.Path(path) for path in result["runtime_paths"]]
-    resolved_root = next(
-        (root for root in valid_cache_roots if any(_path_within(path, root) for path in runtime_paths)),
-        None,
+    result["vendored_catalogues"] = [
+        {"root": str(root), "capabilities": "present", "provenance": "unverified"}
+        for root in vendored_catalogues
+    ]
+    result["capability_roots"] = [str(root) for root in vendored_catalogues]
+    _record_runtime(
+        result,
+        runtime,
+        valid_cache_roots,
+        candidate_roots=vendored_catalogues,
+        root_versions={root: manifest_versions[root] for root in valid_cache_roots},
     )
-    if resolved_root is None and result["configured_version"]:
+    runtime_root_matches = set(result["runtime_root_matches"])
+    matched_cache_roots = [root for root in valid_cache_roots if str(root) in runtime_root_matches]
+    resolved_root = matched_cache_roots[0] if len(matched_cache_roots) == 1 else None
+    if resolved_root is None and not result["runtime_paths"] and result["configured_version"]:
         resolved_root = next(
             (
                 root
@@ -1223,13 +1304,17 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
             ),
             None,
         )
-    if resolved_root is None and not result["configured_version"] and len(valid_cache_roots) == 1:
+    if (
+        resolved_root is None
+        and not result["runtime_paths"]
+        and not result["configured_version"]
+        and len(valid_cache_roots) == 1
+    ):
         resolved_root = valid_cache_roots[0]
-    accepted_roots = [*valid_cache_roots, *vendored_catalogues]
+    accepted_roots = valid_cache_roots
     result["cache_roots"] = [str(path) for path in cache_roots]
     result["skill_roots"] = [
         *(str(path / "skills") for path in valid_cache_roots),
-        *(str(path) for path in vendored_catalogues),
     ]
     result["stale_cache_roots"] = [str(path) for path in valid_cache_roots if path != resolved_root]
     result["package_roots"] = [str(path) for path in accepted_roots]
@@ -1243,11 +1328,6 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         result["installation"] = {
             "state": "present",
             "source": "; ".join(result["skill_roots"]),
-        }
-    if vendored_catalogues:
-        result["enablement"] = {
-            "state": "present",
-            "source": "; ".join(str(path) for path in vendored_catalogues),
         }
     if raw_enabled is True and crew_source_valid:
         result["enablement"] = {"state": "present", "source": str(config_path)}
@@ -1267,19 +1347,19 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
                     str(config_path),
                 )
     if len(accepted_roots) > 1:
-        relationships = []
-        if len(valid_cache_roots) > 1:
-            relationships.append("plugin-cache versions are stale or duplicate")
-        if len(vendored_catalogues) > 1:
-            relationships.append("project/user vendored scopes overlap")
-        if valid_cache_roots and vendored_catalogues:
-            relationships.append("plugin and vendored catalogues coexist")
         result["status"] = "DEGRADED"
         _add_finding(
             result,
             f"Codex has {len(accepted_roots)} accepted Crew skill roots; "
-            + "; ".join(relationships),
+            "plugin-cache versions are stale or duplicate",
             *result["skill_roots"],
+        )
+    if vendored_catalogues:
+        result["status"] = "DEGRADED"
+        _add_finding(
+            result,
+            "vendored capabilities are present but PixelOven Crew provenance is unverified",
+            *(str(root) for root in vendored_catalogues),
         )
     if result.get("configured_version") and resolved_root is None:
         result["status"] = "DEGRADED"

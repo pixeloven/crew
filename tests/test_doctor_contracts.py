@@ -391,6 +391,160 @@ class InstallationTruthTests(unittest.TestCase):
             selected = inspect_installations(project, home, runtime)["harnesses"]["codex"]
             self.assertEqual("0.36.0", selected["resolved_version"])
 
+    def test_runtime_root_selection_uses_only_crew_attributed_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            roots = {}
+            for version in ("0.35.0", "0.36.0"):
+                root = home / f".codex/plugins/cache/crew/crew/{version}"
+                write_json(root / ".claude-plugin/plugin.json", {"version": version})
+                (root / "skills").mkdir()
+                roots[version] = root
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
+                "ref = 'v0.35.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            runtime = {
+                "codex": {
+                    "state": "working",
+                    "source": "captured Codex catalogue",
+                    "skills": [
+                        {
+                            "name": "crew:doctor",
+                            "description": "Crew Doctor.",
+                            "path": str(roots["0.36.0"] / "skills/doctor/SKILL.md"),
+                        },
+                        {
+                            "name": "unrelated",
+                            "description": "Unrelated.",
+                            "path": str(roots["0.35.0"] / "skills/unrelated/SKILL.md"),
+                        },
+                    ],
+                }
+            }
+
+            codex = inspect_installations(project, home, runtime)["harnesses"]["codex"]
+
+            self.assertEqual("0.36.0", codex["resolved_version"])
+            self.assertEqual(
+                [str(roots["0.36.0"] / "skills/doctor/SKILL.md")],
+                codex["runtime_paths"],
+            )
+
+    def test_multiple_runtime_roots_remain_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            roots = []
+            for version in ("0.35.0", "0.36.0"):
+                root = home / f".codex/plugins/cache/crew/crew/{version}"
+                write_json(root / ".claude-plugin/plugin.json", {"version": version})
+                (root / "skills").mkdir()
+                roots.append(root)
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
+                "ref = 'v0.35.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            runtime = {
+                "codex": {
+                    "state": "working",
+                    "source": "captured Codex catalogue",
+                    "skills": [
+                        {
+                            "name": f"crew:{name}",
+                            "description": name,
+                            "path": str(root / f"skills/{name}/SKILL.md"),
+                        }
+                        for name, root in zip(("doctor", "onboarding"), roots)
+                    ],
+                }
+            }
+
+            codex = inspect_installations(project, home, runtime)["harnesses"]["codex"]
+
+            self.assertIsNone(codex["resolved_version"])
+            self.assertEqual({str(root) for root in roots}, set(codex["runtime_root_matches"]))
+            self.assertTrue(
+                any("match multiple accepted roots" in finding["claim"] for finding in codex["findings"])
+            )
+
+    def test_loaded_vendored_root_blocks_configured_cache_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            vendored = project / ".agents/skills"
+            shutil.copytree(ROOT / "skills", vendored)
+            runtime = {
+                "codex": {
+                    "state": "working",
+                    "version": "0.29.0",
+                    "source": "captured Codex catalogue",
+                    "skills": [
+                        {
+                            "name": "crew:doctor",
+                            "description": "Crew Doctor.",
+                            "path": str(vendored / "doctor/SKILL.md"),
+                        }
+                    ],
+                }
+            }
+
+            codex = inspect_installations(project, home, runtime)["harnesses"]["codex"]
+
+            self.assertIsNone(codex["resolved_version"])
+            self.assertIsNone(codex["loaded_version"])
+            self.assertEqual([str(vendored)], codex["runtime_root_matches"])
+            self.assertTrue(
+                any("vendored Crew version is unknown" in finding["claim"] for finding in codex["findings"])
+            )
+
+    def test_captured_runtime_versions_are_validated_against_selected_root(self) -> None:
+        for captured_version, expected_claim in (
+            (["0.29.0"], "must be a pure SemVer string"),
+            ({"version": "0.29.0"}, "must be a pure SemVer string"),
+            ("v0.29.0", "must be a pure SemVer string"),
+            ("9.9.0", "differs from selected root version 0.29.0"),
+        ):
+            with self.subTest(captured_version=captured_version), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project, home = self.make_install_tree(base)
+                root = home / ".codex/plugins/cache/crew/crew/0.29.0"
+                runtime = {
+                    "codex": {
+                        "state": "working",
+                        "version": captured_version,
+                        "source": "captured Codex catalogue",
+                        "skills": [
+                            {
+                                "name": "crew:doctor",
+                                "description": "Crew Doctor.",
+                                "path": str(root / "skills/doctor/SKILL.md"),
+                            }
+                        ],
+                    }
+                }
+
+                codex = inspect_installations(project, home, runtime)["harnesses"]["codex"]
+
+                self.assertIsNone(codex["loaded_version"])
+                self.assertEqual("0.29.0", codex["resolved_version"])
+                self.assertEqual("DEGRADED", codex["status"])
+                finding = next(
+                    finding
+                    for finding in codex["findings"]
+                    if expected_claim in finding["claim"]
+                )
+                self.assertEqual("captured Codex catalogue", finding["evidence"][0]["source"])
+
     def test_codex_cache_is_installed_even_when_resolution_is_ambiguous(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -1364,7 +1518,7 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertIn("name must be doctor", read["detail"])
             self.assertEqual("DEGRADED", codex["status"])
 
-    def test_complete_vendored_catalogue_is_enabled_without_plugin_config(self) -> None:
+    def test_complete_vendored_catalogue_keeps_unverified_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
             project = base / "project"
@@ -1373,12 +1527,19 @@ class InstallationTruthTests(unittest.TestCase):
 
             codex = inspect_installations(project, base / "home")["harnesses"]["codex"]
 
-            self.assertEqual({"state": "present", "source": str(vendored)}, codex["installation"])
-            self.assertEqual({"state": "present", "source": str(vendored)}, codex["enablement"])
+            self.assertEqual("unavailable", codex["installation"]["state"])
+            self.assertEqual("unavailable", codex["enablement"]["state"])
+            self.assertEqual(
+                [{"root": str(vendored), "capabilities": "present", "provenance": "unverified"}],
+                codex["vendored_catalogues"],
+            )
+            self.assertEqual([str(vendored)], codex["capability_roots"])
             self.assertIsNone(codex["resolved_version"])
-            self.assertFalse(any("not enabled" in finding["claim"] for finding in codex["findings"]))
+            self.assertTrue(
+                any("provenance is unverified" in finding["claim"] for finding in codex["findings"])
+            )
 
-    def test_all_accepted_codex_roots_are_enumerated_with_relationships(self) -> None:
+    def test_all_vendored_candidates_are_enumerated_without_crew_attribution(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
             project = base / "project"
@@ -1390,19 +1551,19 @@ class InstallationTruthTests(unittest.TestCase):
 
             vendored = inspect_installations(project, home)["harnesses"]["codex"]
 
+            self.assertEqual([], vendored["package_roots"])
             self.assertEqual(
                 {str(project_vendored), str(user_vendored)},
-                set(vendored["package_roots"]),
+                {item["root"] for item in vendored["vendored_catalogues"]},
             )
-            overlap = next(
+            unverified = next(
                 finding
                 for finding in vendored["findings"]
-                if "accepted Crew skill roots" in finding["claim"]
+                if "provenance is unverified" in finding["claim"]
             )
-            self.assertIn("project/user vendored scopes overlap", overlap["claim"])
             self.assertEqual(
                 {str(project_vendored), str(user_vendored)},
-                {item["source"] for item in overlap["evidence"]},
+                {item["source"] for item in unverified["evidence"]},
             )
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -1414,19 +1575,19 @@ class InstallationTruthTests(unittest.TestCase):
 
             mixed = inspect_installations(project, home)["harnesses"]["codex"]
 
+            self.assertEqual([str(plugin_root)], mixed["package_roots"])
             self.assertEqual(
-                {str(plugin_root), str(vendored_root)},
-                set(mixed["package_roots"]),
+                [{"root": str(vendored_root), "capabilities": "present", "provenance": "unverified"}],
+                mixed["vendored_catalogues"],
             )
-            coexistence = next(
+            unverified = next(
                 finding
                 for finding in mixed["findings"]
-                if "accepted Crew skill roots" in finding["claim"]
+                if "provenance is unverified" in finding["claim"]
             )
-            self.assertIn("plugin and vendored catalogues coexist", coexistence["claim"])
             self.assertEqual(
-                {str(plugin_root / "skills"), str(vendored_root)},
-                {item["source"] for item in coexistence["evidence"]},
+                {str(vendored_root)},
+                {item["source"] for item in unverified["evidence"]},
             )
 
     def test_pi_registration_requires_exact_supported_repository_identity(self) -> None:
