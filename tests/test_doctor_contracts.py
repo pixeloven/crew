@@ -3254,7 +3254,7 @@ class DerivedContractTests(unittest.TestCase):
 
             slots = declared_local_slots(root)
 
-            self.assertEqual(["topology"], slots["declared"])
+            self.assertEqual([], slots["declared"])
             self.assertEqual("malformed", slots["reads"][0]["state"])
             self.assertEqual(str(skill), slots["reads"][0]["source"])
 
@@ -3271,10 +3271,67 @@ class DerivedContractTests(unittest.TestCase):
 
             slots = declared_local_slots(root)
 
-            self.assertEqual(["topology", "vault-ops"], slots["declared"])
+            self.assertEqual([], slots["declared"])
             self.assertEqual("malformed", slots["reads"][0]["state"])
             self.assertIn("accepted taxonomy", slots["reads"][0]["detail"])
             self.assertNotIn("topolgy", slots["declared"])
+
+    def test_non_list_local_slot_declarations_are_malformed(self) -> None:
+        declarations = (
+            '"[topology, 42]"',
+            "topology",
+            "{slot: topology}",
+            "null",
+        )
+        for declaration in declarations:
+            with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                skill = root / "skills/example/SKILL.md"
+                skill.parent.mkdir(parents=True)
+                skill.write_text(
+                    "---\nname: example\ndescription: Example.\n"
+                    f"expects-local: {declaration}\n---\n",
+                    encoding="utf-8",
+                )
+
+                slots = declared_local_slots(root)
+
+                self.assertEqual([], slots["declared"])
+                self.assertEqual([], slots["sources"])
+                self.assertEqual("malformed", slots["reads"][0]["state"])
+                self.assertEqual(str(skill), slots["reads"][0]["source"])
+
+    def test_mixed_type_local_slot_list_is_rejected_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            skill = root / "skills/example/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: example\ndescription: Example.\n"
+                "expects-local: [topology, 42]\n---\n",
+                encoding="utf-8",
+            )
+
+            slots = declared_local_slots(root)
+
+            self.assertEqual([], slots["declared"])
+            self.assertEqual([], slots["sources"])
+            self.assertEqual("malformed", slots["reads"][0]["state"])
+            self.assertEqual(str(skill), slots["reads"][0]["source"])
+
+    def test_unreadable_local_slot_source_retains_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            skill = root / "skills/example/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_bytes(b"\xff")
+
+            slots = declared_local_slots(root)
+
+            self.assertEqual([], slots["declared"])
+            self.assertEqual([], slots["sources"])
+            self.assertEqual("unreadable", slots["reads"][0]["state"])
+            self.assertEqual(str(skill), slots["reads"][0]["source"])
 
     def test_m7_profile_taxonomy_has_deterministic_persona_precedence(self) -> None:
         self.assertEqual("portable", profile_for([], persona_evidence=[]))

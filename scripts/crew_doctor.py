@@ -20,10 +20,10 @@ from typing import Any
 
 try:
     from .check_skills import LOCAL_SLOT_VOCABULARY
-    from .frontmatter import parse_inline_list, parse_simple_mapping, read_frontmatter
+    from .frontmatter import parse_simple_mapping, read_frontmatter
 except ImportError:  # Direct script execution.
     from check_skills import LOCAL_SLOT_VOCABULARY
-    from frontmatter import parse_inline_list, parse_simple_mapping, read_frontmatter
+    from frontmatter import parse_simple_mapping, read_frontmatter
 
 
 CREW_REPO = "pixeloven/crew"
@@ -2018,58 +2018,44 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
                 }
             )
             continue
-        raw_slots = frontmatter.get("expects-local", "")
-        if isinstance(raw_slots, list):
-            if any(not isinstance(slot, str) or not slot.strip() for slot in raw_slots):
-                reads.append(
-                    {
-                        "state": "malformed",
-                        "source": str(path),
-                        "detail": "expects-local entries must be non-empty strings",
-                    }
-                )
-            slots = [
-                slot.strip()
-                for slot in raw_slots
-                if isinstance(slot, str) and slot.strip()
-            ]
-        else:
-            if not isinstance(raw_slots, str):
-                reads.append(
-                    {
-                        "state": "malformed",
-                        "source": str(path),
-                        "detail": "expects-local must be a string sequence",
-                    }
-                )
-                continue
-            slots = parse_inline_list(raw_slots)
-            if raw_slots and not slots:
-                reads.append(
-                    {
-                        "state": "malformed",
-                        "source": str(path),
-                        "detail": "expects-local must be a string sequence",
-                    }
-                )
-                continue
+        if "expects-local" not in frontmatter:
+            continue
+        raw_slots = frontmatter["expects-local"]
+        if not isinstance(raw_slots, list):
+            reads.append(
+                {
+                    "state": "malformed",
+                    "source": str(path),
+                    "detail": "expects-local must be a list of strings",
+                }
+            )
+            continue
+        if any(not isinstance(slot, str) or not slot.strip() for slot in raw_slots):
+            reads.append(
+                {
+                    "state": "malformed",
+                    "source": str(path),
+                    "detail": "expects-local entries must be non-empty strings",
+                }
+            )
+            continue
+        slots = [slot.strip() for slot in raw_slots]
+        invalid_slots = sorted(set(slots) - LOCAL_SLOT_VOCABULARY)
+        if invalid_slots:
+            reads.append(
+                {
+                    "state": "malformed",
+                    "source": str(path),
+                    "detail": (
+                        "expects-local entries must use the accepted taxonomy: "
+                        + ", ".join(sorted(LOCAL_SLOT_VOCABULARY))
+                    ),
+                }
+            )
+            continue
         if slots:
-            invalid_slots = sorted(set(slots) - LOCAL_SLOT_VOCABULARY)
-            if invalid_slots:
-                reads.append(
-                    {
-                        "state": "malformed",
-                        "source": str(path),
-                        "detail": (
-                            "expects-local entries must use the accepted taxonomy: "
-                            + ", ".join(sorted(LOCAL_SLOT_VOCABULARY))
-                        ),
-                    }
-                )
-            valid_slots = set(slots) & LOCAL_SLOT_VOCABULARY
-            if valid_slots:
-                declared.update(valid_slots)
-                sources.append(str(path))
+            declared.update(slots)
+            sources.append(str(path))
     return {
         "declared": sorted(declared),
         "recommended_vocabulary": list(RECOMMENDED_LOCAL_VOCABULARY),
