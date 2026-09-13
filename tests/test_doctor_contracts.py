@@ -1125,29 +1125,58 @@ class InstallationTruthTests(unittest.TestCase):
                 "requires: [cli:local-platform]\n---\n",
                 encoding="utf-8",
             )
+            evidence = {
+                harness: [
+                    {
+                        "name": "cli:local-platform",
+                        "kind": "probe",
+                        "state": "working",
+                        "source": f"free {harness} local platform probe",
+                    }
+                ]
+                for harness in ("claude", "codex", "pi")
+            }
             installation = inspect_installations(
                 project,
                 base / "home",
-                capability_evidence={
-                    "codex": [
-                        {
-                            "name": "cli:local-platform",
-                            "kind": "probe",
-                            "state": "working",
-                            "source": "free local platform probe",
-                        }
-                    ]
+                capability_evidence=evidence,
+            )
+            for harness in ("codex", "pi"):
+                check = next(
+                    item
+                    for item in installation["harnesses"][harness]["capability_checks"]
+                    if item["name"] == "cli:local-platform"
+                )
+                self.assertEqual("working", check["state"])
+                self.assertEqual(
+                    {str(local_skill), f"free {harness} local platform probe"},
+                    {item["source"] for item in check["evidence"]},
+                )
+            self.assertNotIn(
+                "cli:local-platform",
+                {
+                    item["name"]
+                    for item in installation["harnesses"]["claude"]["capability_checks"]
                 },
             )
-            check = next(
+
+            claude_skill = project / ".claude/skills/local-platform/SKILL.md"
+            claude_skill.parent.mkdir(parents=True)
+            claude_skill.write_text(local_skill.read_text(encoding="utf-8"), encoding="utf-8")
+            installation = inspect_installations(
+                project,
+                base / "home",
+                capability_evidence=evidence,
+            )
+            claude_check = next(
                 item
-                for item in installation["harnesses"]["codex"]["capability_checks"]
+                for item in installation["harnesses"]["claude"]["capability_checks"]
                 if item["name"] == "cli:local-platform"
             )
-            self.assertEqual("working", check["state"])
+            self.assertEqual("working", claude_check["state"])
             self.assertEqual(
-                {str(local_skill), "free local platform probe"},
-                {item["source"] for item in check["evidence"]},
+                {str(claude_skill), "free claude local platform probe"},
+                {item["source"] for item in claude_check["evidence"]},
             )
 
             report = compose_doctor_report(
@@ -2536,6 +2565,13 @@ class RuntimeDiscoveryTests(unittest.TestCase):
 
     def test_runtime_fixture_rejects_malformed_collections_with_source(self) -> None:
         malformed = (
+            ({"schema_version": "1"}, "schema_version must be integer 1"),
+            ({"schema_version": True}, "schema_version must be integer 1"),
+            ({"schema_version": 2}, "schema_version must be integer 1"),
+            ({"harness": []}, "harness must be claude, codex, or pi"),
+            ({"harness": 7}, "harness must be claude, codex, or pi"),
+            ({"tested": None}, "tested must be boolean"),
+            ({"tested": "false"}, "tested must be boolean"),
             ({"state": None}, "state must be a supported string"),
             ({"state": []}, "state must be a supported string"),
             ({"state": "mystery"}, "state must be a supported string"),

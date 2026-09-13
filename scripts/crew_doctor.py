@@ -1477,11 +1477,14 @@ def inspect_installations(
     }
     for harness, result in harnesses.items():
         _degrade_for_read_failures(result)
+        consumer_skill_root = project_root / (
+            ".claude/skills" if harness == "claude" else ".agents/skills"
+        )
         _record_capabilities(
             result,
             harness,
             capability_evidence.get(harness, []),
-            project_root / ".agents/skills",
+            consumer_skill_root,
         )
     evidence: list[dict[str, str]] = []
     checks: list[dict[str, Any]] = []
@@ -1637,8 +1640,17 @@ def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
     fixture = _read_json(fixture_path, {}).value
     if not isinstance(fixture, dict):
         raise ValueError(f"invalid runtime fixture {fixture_path}: document must be a mapping")
-    if fixture.get("schema_version") != 1 or fixture.get("harness") not in {"claude", "codex", "pi"}:
-        raise ValueError(f"unsupported runtime fixture: {path}")
+    if type(fixture.get("schema_version")) is not int or fixture["schema_version"] != 1:
+        raise ValueError(
+            f"invalid runtime fixture {fixture_path}: schema_version must be integer 1"
+        )
+    harness = fixture.get("harness")
+    if not isinstance(harness, str) or harness not in {"claude", "codex", "pi"}:
+        raise ValueError(
+            f"invalid runtime fixture {fixture_path}: harness must be claude, codex, or pi"
+        )
+    if "tested" in fixture and not isinstance(fixture["tested"], bool):
+        raise ValueError(f"invalid runtime fixture {fixture_path}: tested must be boolean")
     supported_states = {
         "present",
         "working",
