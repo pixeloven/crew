@@ -738,7 +738,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     ]
     settings_records: list[dict[str, Any]] = []
     enabled_records: list[dict[str, Any]] = []
-    valid_settings_sources: list[str] = []
+    marketplace_records: list[dict[str, Any]] = []
     for scope, settings_path in settings_paths:
         settings = _record_config_read(
             result,
@@ -767,16 +767,18 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 if isinstance(crew_marketplace, dict)
                 else None
             )
-            if not isinstance(crew_marketplace, dict) or not _is_crew_marketplace_source(
+            source_valid = isinstance(crew_marketplace, dict) and _is_crew_marketplace_source(
                 source
-            ):
+            )
+            marketplace_records.append(
+                {"scope": scope, "path": str(settings_path), "valid": source_valid}
+            )
+            if not source_valid:
                 _mark_config_malformed(
                     result,
                     settings_path,
                     f"extraKnownMarketplaces.crew source must identify {CREW_REPO}",
                 )
-            else:
-                valid_settings_sources.append(str(settings_path))
         if "crew" in marketplaces or "crew@crew" in enabled:
             settings_records.append({"scope": scope, "path": str(settings_path)})
         if "crew@crew" in enabled:
@@ -814,13 +816,21 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 registry_path,
                 f"crew marketplace source must identify {CREW_REPO}",
             )
-    crew_identity_valid = registry_source_valid or (
-        not record and bool(valid_settings_sources)
-    )
-    if enabled_records and (crew_identity_valid or valid_settings_sources):
+    effective_marketplace = marketplace_records[0] if marketplace_records else None
+    if effective_marketplace:
+        crew_identity_valid = effective_marketplace["valid"] and (
+            registry_source_valid or not record
+        )
+    else:
+        crew_identity_valid = registry_source_valid
+    if enabled_records:
         selected_enablement = enabled_records[0]
         result["enablement"] = {
-            "state": "present" if selected_enablement["enabled"] else "unavailable",
+            "state": (
+                "present"
+                if selected_enablement["enabled"] and crew_identity_valid
+                else "unavailable"
+            ),
             "source": selected_enablement["path"],
         }
         result["enabled_scope"] = selected_enablement["scope"]
@@ -842,7 +852,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     location = pathlib.Path(raw_location) if raw_location else pathlib.Path()
     result["served_version"] = (
         _record_manifest_read(result, _manifest_version(location))
-        if registry_source_valid and str(location) not in {"", "."}
+        if crew_identity_valid and registry_source_valid and str(location) not in {"", "."}
         else None
     )
     result["served_version_source"] = (

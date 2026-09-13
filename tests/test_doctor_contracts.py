@@ -1699,6 +1699,61 @@ class InstallationTruthTests(unittest.TestCase):
                 [row["scope"] for row in local_enabled["enabled_scopes"]],
             )
 
+    def test_claude_invalid_local_alias_cannot_inherit_valid_user_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".claude/settings.local.json",
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {"source": "someone-else/crew"}
+                    },
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            write_json(
+                home / ".claude/settings.json",
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {"source": "pixeloven/crew"}
+                    },
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            root = home / ".claude/plugins/cache/crew/crew/0.36.0"
+            write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            write_json(
+                home / ".claude/plugins/installed_plugins.json",
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {
+                                "scope": "user",
+                                "installPath": str(root),
+                                "version": "0.36.0",
+                            }
+                        ]
+                    }
+                },
+            )
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual("unavailable", claude["enablement"]["state"])
+            self.assertEqual("local", claude["enabled_scope"])
+            self.assertTrue(claude["enabled_value"])
+            self.assertEqual("unavailable", claude["installation"]["state"])
+            self.assertEqual([], claude["installed_versions"])
+            read = next(
+                item
+                for item in claude["configuration_reads"]
+                if item["source"] == str(project / ".claude/settings.local.json")
+            )
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("source must identify pixeloven/crew", read["detail"])
+
     def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
