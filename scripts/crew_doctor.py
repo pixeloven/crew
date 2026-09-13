@@ -106,6 +106,13 @@ def _manifest_version(root: pathlib.Path) -> ReadResult:
                 read.source,
                 "manifest version must be a valid SemVer string",
             )
+        if read.value.get("skills") != "./skills":
+            return ReadResult(
+                None,
+                "malformed",
+                read.source,
+                "manifest skills must be the normalized relative path ./skills",
+            )
         skills = root / "skills"
         if not skills.is_dir():
             return ReadResult(
@@ -129,6 +136,14 @@ def _semver(value: Any, *, allow_v: bool = False) -> str | None:
     if allow_v and candidate.startswith("v"):
         candidate = candidate[1:]
     return candidate if SEMVER.fullmatch(candidate) else None
+
+
+def _lexically_within(path: pathlib.Path, root: pathlib.Path) -> bool:
+    try:
+        path.absolute().relative_to(root.absolute())
+        return True
+    except ValueError:
+        return False
 
 
 def _pi_package_version(value: str) -> str | None:
@@ -654,7 +669,7 @@ def _record_capabilities(
                 "ownership": (
                     "project"
                     if any(
-                        _path_within(pathlib.Path(source), consumer_skill_root)
+                        _lexically_within(pathlib.Path(source), consumer_skill_root)
                         for source in declaration_sources
                     )
                     else "package"

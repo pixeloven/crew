@@ -32,6 +32,13 @@ def write_json(path: pathlib.Path, value: object) -> None:
         and "name" not in value
     ):
         value = {"name": "crew", **value}
+    if (
+        path.as_posix().endswith("/.claude-plugin/plugin.json")
+        and isinstance(value, dict)
+        and value.get("name") == "crew"
+        and "skills" not in value
+    ):
+        value = {**value, "skills": "./skills"}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
     if (
@@ -1406,6 +1413,52 @@ class InstallationTruthTests(unittest.TestCase):
                 {item["source"] for item in pi["capability_checks"][0]["evidence"]},
             )
 
+    def test_claude_symlinked_project_skill_retains_project_ownership(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            target = project / ".agents/skills/local-platform"
+            skill = target / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(
+                "---\nname: local-platform\ndescription: Local platform capability.\n"
+                "requires: [cli:local-platform]\n---\n",
+                encoding="utf-8",
+            )
+            link = project / ".claude/skills/local-platform"
+            link.parent.mkdir(parents=True)
+            link.symlink_to(target, target_is_directory=True)
+
+            installation = inspect_installations(
+                project,
+                base / "home",
+                capability_evidence={
+                    "claude": [
+                        {
+                            "name": "cli:local-platform",
+                            "kind": "probe",
+                            "state": "working",
+                            "source": "free local platform probe",
+                        }
+                    ]
+                },
+            )
+            capability = next(
+                item
+                for item in installation["harnesses"]["claude"]["capability_checks"]
+                if item["name"] == "cli:local-platform"
+            )
+            self.assertEqual("project", capability["ownership"])
+            self.assertEqual(str(link / "SKILL.md"), capability["evidence"][0]["source"])
+            report = compose_doctor_report(
+                installation,
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=[],
+                persona_evidence=[],
+            )
+            self.assertEqual("platform", report["profile"])
+
     def test_malformed_capability_frontmatter_is_degraded_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -1834,6 +1887,52 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertTrue(
                 {str(root / "skills") for root in roots.values()} <= manifest_failures
             )
+
+    def test_manifest_skills_path_must_be_canonical_and_contained(self) -> None:
+        for declared_skills, valid in (
+            ("./skills", True),
+            ("./wrong", False),
+            ("../skills", False),
+            (None, False),
+        ):
+            with self.subTest(skills=declared_skills), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project = base / "project"
+                home = base / "home"
+                write_json(
+                    project / ".pi/settings.json",
+                    {"packages": ["git:github.com/pixeloven/crew@v0.36.0"]},
+                )
+                root = home / ".pi/agent/git/github.com/pixeloven/crew"
+                manifest = root / ".claude-plugin/plugin.json"
+                write_json(
+                    manifest,
+                    {"name": "crew", "version": "0.36.0", "skills": "./skills"},
+                )
+                payload = {"name": "crew", "version": "0.36.0"}
+                if declared_skills is not None:
+                    payload["skills"] = declared_skills
+                manifest.write_text(json.dumps(payload), encoding="utf-8")
+                if declared_skills == "./wrong":
+                    (root / "wrong").mkdir()
+                elif declared_skills == "../skills":
+                    (root.parent / "skills").mkdir()
+
+                pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+                if valid:
+                    self.assertEqual("present", pi["installation"]["state"])
+                    self.assertEqual("0.36.0", pi["resolved_version"])
+                else:
+                    self.assertEqual("unavailable", pi["installation"]["state"])
+                    self.assertIsNone(pi["resolved_version"])
+                    malformed = next(
+                        item
+                        for item in pi["manifest_reads"]
+                        if item["state"] == "malformed"
+                    )
+                    self.assertEqual(str(manifest), malformed["source"])
+                    self.assertIn("normalized relative path ./skills", malformed["detail"])
 
     def test_non_pi_version_fields_reject_package_spec_prefixes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
