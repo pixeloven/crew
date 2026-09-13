@@ -1968,14 +1968,66 @@ class InstallationTruthTests(unittest.TestCase):
                 [{"registration": registration, "source": str(installed_path)}],
                 claude["inapplicable_registrations"],
             )
-            finding = next(
-                item
-                for item in claude["findings"]
-                if "does not apply to the inspected project" in item["claim"]
+            self.assertFalse(
+                any(
+                    "does not apply to the inspected project" in item["claim"]
+                    for item in claude["findings"]
+                )
             )
+
+    def test_claude_unrelated_registration_does_not_degrade_current_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                home / ".claude/settings.json",
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {"source": "pixeloven/crew"}
+                    },
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            write_claude_marketplace_identity(home)
+            current_root = home / ".claude/plugins/cache/crew/crew/0.36.0"
+            unrelated_root = home / ".claude/plugins/cache/crew/crew/0.37.0"
+            write_json(current_root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            write_json(unrelated_root / ".claude-plugin/plugin.json", {"version": "0.37.0"})
+            installed_path = home / ".claude/plugins/installed_plugins.json"
+            unrelated = {
+                "scope": "project",
+                "projectPath": str(base / "other-project"),
+                "installPath": str(unrelated_root),
+                "version": "0.37.0",
+            }
+            write_json(
+                installed_path,
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {
+                                "scope": "user",
+                                "installPath": str(current_root),
+                                "version": "0.36.0",
+                            },
+                            unrelated,
+                        ]
+                    }
+                },
+            )
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual("OK", claude["status"])
+            self.assertEqual("0.36.0", claude["installed_version"])
+            self.assertEqual([str(current_root)], claude["package_roots"])
             self.assertEqual(
-                {str(installed_path), str(base / "other-project")},
-                {item["source"] for item in finding["evidence"]},
+                [{"registration": unrelated, "source": str(installed_path)}],
+                claude["inapplicable_registrations"],
+            )
+            self.assertFalse(
+                any("scope registrations" in item["claim"] for item in claude["findings"])
             )
 
     def test_claude_served_installed_disagreement_is_cross_harness_ambiguous(self) -> None:
@@ -2116,6 +2168,28 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual(forward["installed_versions"], reverse["installed_versions"])
             self.assertEqual(forward["installation"], reverse["installation"])
 
+            served_root = home / ".claude/plugins/marketplaces/crew"
+            write_json(served_root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            write_json(
+                home / ".claude/plugins/known_marketplaces.json",
+                {
+                    "crew": {
+                        "source": {"source": "github", "repo": "pixeloven/crew"},
+                        "installLocation": str(served_root),
+                    }
+                },
+            )
+            served_report = inspect_with(registrations)
+            served = served_report["harnesses"]["claude"]
+            self.assertEqual("0.36.0", served["served_version"])
+            self.assertIsNone(served["installed_version"])
+            self.assertFalse(
+                any(
+                    row["check"] == "cross-harness.version-skew"
+                    for row in served_report["checks"]
+                )
+            )
+
             project_registration = [
                 registrations[0],
                 {
@@ -2231,7 +2305,8 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("0.30.0", claude["loaded_version"])
             self.assertEqual("user", claude["enabled_scope"])
             self.assertEqual(4, len(claude["registrations"]))
-            self.assertEqual("DEGRADED", claude["status"])
+            self.assertEqual(3, len(claude["inapplicable_registrations"]))
+            self.assertEqual("OK", claude["status"])
             self.assertTrue(all("version" not in item for item in claude["marketplace_registry_records"]))
 
     def test_absent_harnesses_degrade_without_inventing_runtime_truth(self) -> None:

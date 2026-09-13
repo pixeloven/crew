@@ -902,7 +902,6 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         )
         registrations = []
     result["registrations"] = registrations
-    valid_registrations: list[dict[str, Any]] = []
     applicable_registrations: list[dict[str, Any]] = []
     inapplicable_registrations: list[dict[str, Any]] = []
     installed_records: list[dict[str, Any]] = []
@@ -968,7 +967,6 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             valid = False
         if not valid or not crew_identity_valid:
             continue
-        valid_registrations.append(registration)
         applicable = scope == "user" or (
             pathlib.Path(project_path).resolve(strict=False)
             == project.resolve(strict=False)
@@ -976,12 +974,6 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         if not applicable:
             inapplicable_registrations.append(
                 {"registration": registration, "source": str(installed_path)}
-            )
-            _add_finding(
-                result,
-                f"Claude {scope} registration does not apply to the inspected project",
-                str(installed_path),
-                project_path,
             )
             continue
         applicable_registrations.append(registration)
@@ -1119,11 +1111,11 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             result["installation"].get("source", ""),
             *(record["path"] for record in settings_records),
         )
-    if len(valid_registrations) > 1:
+    if len(applicable_registrations) > 1:
         result["status"] = "DEGRADED"
         _add_finding(
             result,
-            f"installed_plugins.json contains {len(valid_registrations)} Crew scope registrations",
+            f"installed_plugins.json contains {len(applicable_registrations)} Crew scope registrations",
             str(installed_path),
         )
     if len(installed_records) > 1:
@@ -1540,6 +1532,9 @@ def inspect_installations(
             )
     version_evidence: dict[str, tuple[str | None, str]] = {}
     for name, result in harnesses.items():
+        accepted_installed_versions = {
+            record["version"] for record in result.get("installed_versions", [])
+        }
         if result.get("loaded_version"):
             selected_version = result["loaded_version"]
             selected_source = result.get("loaded_version_source", "")
@@ -1548,9 +1543,22 @@ def inspect_installations(
             selected_source = result.get("resolved_version_source", "")
         elif (
             name == "claude"
+            and accepted_installed_versions
             and result.get("served_version")
-            and result.get("installed_version")
-            and result["served_version"] != result["installed_version"]
+            and (
+                (
+                    result.get("installed_version")
+                    and result["served_version"] != result["installed_version"]
+                    and not result.get("runtime_paths")
+                )
+                or (
+                    not result.get("installed_version")
+                    and (
+                        result.get("runtime_paths")
+                        or accepted_installed_versions != {result["served_version"]}
+                    )
+                )
+            )
         ):
             selected_version = None
             selected_source = ""
