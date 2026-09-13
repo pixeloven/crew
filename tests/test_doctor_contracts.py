@@ -522,6 +522,96 @@ class InstallationTruthTests(unittest.TestCase):
                 any("match multiple accepted roots" in finding["claim"] for finding in codex["findings"])
             )
 
+    def test_stale_or_ambiguous_roots_do_not_declare_active_capabilities(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            roots = {
+                version: home / f".codex/plugins/cache/crew/crew/{version}"
+                for version in ("0.35.0", "0.36.0")
+            }
+            for version, root in roots.items():
+                write_json(root / ".claude-plugin/plugin.json", {"version": version})
+                (root / "skills/doctor").mkdir(parents=True)
+            write_capability_skill(roots["0.35.0"], ["cli:local-platform"])
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
+                "ref = 'v0.36.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            evidence = {
+                "codex": [
+                    {
+                        "name": "cli:local-platform",
+                        "kind": "probe",
+                        "state": "working",
+                        "source": "free local platform probe",
+                    }
+                ]
+            }
+
+            resolved = inspect_installations(
+                project,
+                home,
+                runtime_fixtures={
+                    "codex": {
+                        "source": "captured Codex catalogue",
+                        "skills": [
+                            {
+                                "name": "crew:doctor",
+                                "description": "Doctor.",
+                                "path": str(
+                                    roots["0.36.0"] / "skills/doctor/SKILL.md"
+                                ),
+                            }
+                        ],
+                    }
+                },
+                capability_evidence=evidence,
+            )
+            codex = resolved["harnesses"]["codex"]
+            self.assertEqual([str(roots["0.36.0"])], codex["resolved_package_roots"])
+            self.assertNotIn(
+                "cli:local-platform",
+                {item["name"] for item in codex["capability_checks"]},
+            )
+            report = compose_doctor_report(
+                resolved,
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=[],
+                persona_evidence=[],
+            )
+            self.assertEqual("portable", report["profile"])
+
+            ambiguous = inspect_installations(
+                project,
+                home,
+                runtime_fixtures={
+                    "codex": {
+                        "source": "captured Codex catalogue",
+                        "skills": [
+                            {
+                                "name": f"crew:{name}",
+                                "description": name,
+                                "path": str(root / f"skills/{name}/SKILL.md"),
+                            }
+                            for name, root in zip(("doctor", "onboarding"), roots.values())
+                        ],
+                    }
+                },
+                capability_evidence=evidence,
+            )["harnesses"]["codex"]
+            self.assertEqual([], ambiguous["resolved_package_roots"])
+            self.assertNotIn(
+                "cli:local-platform",
+                {item["name"] for item in ambiguous["capability_checks"]},
+            )
+            self.assertEqual("DEGRADED", ambiguous["status"])
+
     def test_loaded_vendored_root_blocks_configured_cache_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -637,7 +727,12 @@ class InstallationTruthTests(unittest.TestCase):
                 "pi": {
                     "state": "working",
                     "source": "captured Pi catalogue",
-                    "skills": [{"path": str(roots["b"] / "skills/doctor/SKILL.md")}],
+                    "skills": [
+                        {
+                            "name": "doctor",
+                            "path": str(roots["b"] / "skills/doctor/SKILL.md"),
+                        }
+                    ],
                 }
             }
             pi = inspect_installations(project, home, runtime)["harnesses"]["pi"]
@@ -2601,6 +2696,29 @@ class RuntimeDiscoveryTests(unittest.TestCase):
 
                 self.assertIn(str(path), str(raised.exception))
                 self.assertIn(detail, str(raised.exception))
+
+    def test_public_runtime_capture_boundaries_reject_malformed_mappings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            with self.assertRaises(ValueError) as installation_error:
+                inspect_installations(
+                    base / "project",
+                    base / "home",
+                    runtime_fixtures={"codex": {"skill_roots": None}},
+                )
+            self.assertIn("codex runtime capture", str(installation_error.exception))
+            self.assertIn(
+                "skill_roots must be a string sequence",
+                str(installation_error.exception),
+            )
+
+        with self.assertRaises(ValueError) as comparison_error:
+            compare_runtime_catalog(
+                self.disk,
+                {"harness": "codex", "skills": None},
+            )
+        self.assertIn("runtime catalogue capture", str(comparison_error.exception))
+        self.assertIn("skills must be a sequence", str(comparison_error.exception))
 
     def test_generic_foundation_source_does_not_establish_crew_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

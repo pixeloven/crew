@@ -204,6 +204,7 @@ def _base_harness() -> dict[str, Any]:
         "cache_reads": [],
         "inspection_paths": [],
         "package_roots": [],
+        "resolved_package_roots": [],
         "findings": [],
     }
 
@@ -216,6 +217,84 @@ def _add_finding(result: dict[str, Any], claim: str, *sources: str) -> None:
     result["findings"].append(
         {"claim": claim, "evidence": evidence or [{"claim": claim, "source": ""}]}
     )
+
+
+def _validate_runtime_capture(
+    runtime: Any,
+    source: str,
+    *,
+    expected_harness: str | None = None,
+    require_schema: bool = False,
+    require_harness: bool = False,
+) -> dict[str, Any]:
+    if not isinstance(runtime, dict):
+        raise ValueError(f"invalid runtime capture {source}: document must be a mapping")
+    if require_schema or "schema_version" in runtime:
+        if type(runtime.get("schema_version")) is not int or runtime["schema_version"] != 1:
+            raise ValueError(
+                f"invalid runtime capture {source}: schema_version must be integer 1"
+            )
+    harness = runtime.get("harness")
+    if require_harness or harness is not None:
+        if not isinstance(harness, str) or harness not in {"claude", "codex", "pi"}:
+            raise ValueError(
+                f"invalid runtime capture {source}: harness must be claude, codex, or pi"
+            )
+        if expected_harness and harness != expected_harness:
+            raise ValueError(
+                f"invalid runtime capture {source}: harness must be {expected_harness}"
+            )
+    if "tested" in runtime and not isinstance(runtime["tested"], bool):
+        raise ValueError(f"invalid runtime capture {source}: tested must be boolean")
+    supported_states = {
+        "present",
+        "working",
+        "unavailable",
+        "loaded-but-undiscoverable",
+        "truncated",
+        "omitted",
+        "not-tested",
+        "not tested",
+    }
+    if "state" in runtime and (
+        not isinstance(runtime["state"], str) or runtime["state"] not in supported_states
+    ):
+        raise ValueError(
+            f"invalid runtime capture {source}: state must be a supported string"
+        )
+    if "source" in runtime and (
+        not isinstance(runtime["source"], str) or not runtime["source"].strip()
+    ):
+        raise ValueError(
+            f"invalid runtime capture {source}: source must be a non-empty string"
+        )
+    if "skills" in runtime:
+        skills = runtime["skills"]
+        if not isinstance(skills, list):
+            raise ValueError(f"invalid runtime capture {source}: skills must be a sequence")
+        for index, entry in enumerate(skills):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"invalid runtime capture {source}: skills entry {index} must be a mapping"
+                )
+            if not isinstance(entry.get("name"), str) or not entry["name"].strip():
+                raise ValueError(
+                    f"invalid runtime capture {source}: skills entry {index} name must be a non-empty string"
+                )
+            for field in ("description", "path", "namespace", "source"):
+                if field in entry and entry[field] is not None and not isinstance(entry[field], str):
+                    raise ValueError(
+                        f"invalid runtime capture {source}: skills entry {index} {field} must be a string"
+                    )
+    if "skill_roots" in runtime:
+        skill_roots = runtime["skill_roots"]
+        if not isinstance(skill_roots, list) or any(
+            not isinstance(root, str) or not root.strip() for root in skill_roots
+        ):
+            raise ValueError(
+                f"invalid runtime capture {source}: skill_roots must be a string sequence"
+            )
+    return runtime
 
 
 def _record_runtime(
@@ -450,7 +529,7 @@ def _record_capabilities(
     consumer_skill_root: pathlib.Path,
 ) -> None:
     declared, declaration_failures = _declared_capabilities(
-        [pathlib.Path(root) for root in result["package_roots"]]
+        [pathlib.Path(root) for root in result["resolved_package_roots"]]
         + [pathlib.Path(root) for root in result["capability_roots"]]
         + [consumer_skill_root]
     )
@@ -681,6 +760,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
     result["package_roots"] = (
         [selected["root"]] if selected else [item["root"] for item in resolved]
     )
+    result["resolved_package_roots"] = [selected["root"]] if selected else []
     if resolved:
         source = selected["root"] if selected else "; ".join(item["root"] for item in resolved)
         result["installation"] = {"state": "present", "source": source}
@@ -1094,6 +1174,12 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     result["package_roots"] = [record["root"] for record in installed_records]
     if result.get("served_version") and location not in by_root:
         result["package_roots"].append(str(location))
+    if len(runtime_root_matches) == 1:
+        result["resolved_package_roots"] = list(runtime_root_matches)
+    elif selected_installed:
+        result["resolved_package_roots"] = [selected_installed["root"]]
+    elif not result["runtime_paths"] and result["served_version"] and len(validated_roots) == 1:
+        result["resolved_package_roots"] = [str(location)]
 
     if len(marketplace_records) > 1:
         result["status"] = "DEGRADED"
@@ -1391,6 +1477,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     ]
     result["stale_cache_roots"] = [str(path) for path in valid_cache_roots if path != resolved_root]
     result["package_roots"] = [str(path) for path in accepted_roots]
+    result["resolved_package_roots"] = [str(resolved_root)] if resolved_root else []
     if resolved_root:
         result["resolved_version"] = manifest_versions[resolved_root]
         result["resolved_version_source"] = str(resolved_root / ".claude-plugin/plugin.json")
@@ -1468,7 +1555,21 @@ def inspect_installations(
     """Reconcile configured, installed, enabled, runtime, and grant state."""
     project_root = pathlib.Path(project_root)
     home = pathlib.Path(home)
-    runtime_fixtures = runtime_fixtures or {}
+    if runtime_fixtures is None:
+        runtime_fixtures = {}
+    if not isinstance(runtime_fixtures, dict):
+        raise ValueError("invalid runtime captures: collection must be a mapping")
+    unsupported_harnesses = set(runtime_fixtures) - {"claude", "codex", "pi"}
+    if unsupported_harnesses:
+        harness = sorted(str(item) for item in unsupported_harnesses)[0]
+        raise ValueError(f"invalid runtime captures: unsupported harness {harness}")
+    for harness, runtime in runtime_fixtures.items():
+        if runtime is not None:
+            _validate_runtime_capture(
+                runtime,
+                f"{harness} runtime capture",
+                expected_harness=harness,
+            )
     capability_evidence = capability_evidence or {}
     harnesses = {
         "pi": _inspect_pi(project_root, home, runtime_fixtures.get("pi")),
@@ -1638,68 +1739,12 @@ def inspect_installations(
 def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
     fixture_path = pathlib.Path(path)
     fixture = _read_json(fixture_path, {}).value
-    if not isinstance(fixture, dict):
-        raise ValueError(f"invalid runtime fixture {fixture_path}: document must be a mapping")
-    if type(fixture.get("schema_version")) is not int or fixture["schema_version"] != 1:
-        raise ValueError(
-            f"invalid runtime fixture {fixture_path}: schema_version must be integer 1"
-        )
-    harness = fixture.get("harness")
-    if not isinstance(harness, str) or harness not in {"claude", "codex", "pi"}:
-        raise ValueError(
-            f"invalid runtime fixture {fixture_path}: harness must be claude, codex, or pi"
-        )
-    if "tested" in fixture and not isinstance(fixture["tested"], bool):
-        raise ValueError(f"invalid runtime fixture {fixture_path}: tested must be boolean")
-    supported_states = {
-        "present",
-        "working",
-        "unavailable",
-        "loaded-but-undiscoverable",
-        "truncated",
-        "omitted",
-        "not-tested",
-        "not tested",
-    }
-    if "state" in fixture and (
-        not isinstance(fixture["state"], str) or fixture["state"] not in supported_states
-    ):
-        raise ValueError(
-            f"invalid runtime fixture {fixture_path}: state must be a supported string"
-        )
-    if "source" in fixture and (
-        not isinstance(fixture["source"], str) or not fixture["source"].strip()
-    ):
-        raise ValueError(
-            f"invalid runtime fixture {fixture_path}: source must be a non-empty string"
-        )
-    if "skills" in fixture:
-        skills = fixture["skills"]
-        if not isinstance(skills, list):
-            raise ValueError(f"invalid runtime fixture {fixture_path}: skills must be a sequence")
-        for index, entry in enumerate(skills):
-            if not isinstance(entry, dict):
-                raise ValueError(
-                    f"invalid runtime fixture {fixture_path}: skills entry {index} must be a mapping"
-                )
-            if not isinstance(entry.get("name"), str) or not entry["name"].strip():
-                raise ValueError(
-                    f"invalid runtime fixture {fixture_path}: skills entry {index} name must be a non-empty string"
-                )
-            for field in ("description", "path", "namespace", "source"):
-                if field in entry and entry[field] is not None and not isinstance(entry[field], str):
-                    raise ValueError(
-                        f"invalid runtime fixture {fixture_path}: skills entry {index} {field} must be a string"
-                    )
-    if "skill_roots" in fixture:
-        skill_roots = fixture["skill_roots"]
-        if not isinstance(skill_roots, list) or any(
-            not isinstance(root, str) or not root.strip() for root in skill_roots
-        ):
-            raise ValueError(
-                f"invalid runtime fixture {fixture_path}: skill_roots must be a string sequence"
-            )
-    return fixture
+    return _validate_runtime_capture(
+        fixture,
+        str(fixture_path),
+        require_schema=True,
+        require_harness=True,
+    )
 
 
 def parse_codex_prompt_capture(path: pathlib.Path) -> dict[str, Any]:
@@ -1788,9 +1833,12 @@ def compare_runtime_catalog(
     runtime_fixture: dict[str, Any],
 ) -> dict[str, Any]:
     """Compare one harness's disk and runtime catalogues in both directions."""
+    runtime_fixture = _validate_runtime_capture(
+        runtime_fixture,
+        "runtime catalogue capture",
+        require_harness=True,
+    )
     harness = runtime_fixture.get("harness")
-    if harness not in {"claude", "codex", "pi"}:
-        raise ValueError("runtime fixture must name exactly one supported harness")
     expected = _expected_catalog(disk_entries, harness)
     if runtime_fixture.get("tested") is False:
         return {
