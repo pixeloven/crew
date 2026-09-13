@@ -219,11 +219,14 @@ def _record_runtime(
     """Record only evidence supplied by this harness's capture."""
     if runtime is None or runtime.get("tested") is False:
         return
+    runtime_source = runtime.get("source", "captured runtime")
+    if not isinstance(runtime_source, str) or not runtime_source.strip():
+        runtime_source = "captured runtime"
     captured_state = runtime.get("state")
     if captured_state in {"not-tested", "not tested"}:
         result["runtime"] = {
             "state": "not tested",
-            "source": runtime.get("source", "captured runtime"),
+            "source": runtime_source,
         }
         return
     if captured_state not in {
@@ -295,7 +298,7 @@ def _record_runtime(
             state = "present"
         else:
             state = "working"
-    result["runtime"] = {"state": state, "source": runtime.get("source", "captured runtime")}
+    result["runtime"] = {"state": state, "source": runtime_source}
     if state in LOADED_RUNTIME_STATES:
         result["runtime_paths"] = [str(path) for path in crew_paths]
         resolution_roots = list(dict.fromkeys([*validated_roots, *(candidate_roots or [])]))
@@ -1627,6 +1630,12 @@ def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
         raise ValueError(f"invalid runtime fixture {fixture_path}: document must be a mapping")
     if fixture.get("schema_version") != 1 or fixture.get("harness") not in {"claude", "codex", "pi"}:
         raise ValueError(f"unsupported runtime fixture: {path}")
+    if "source" in fixture and (
+        not isinstance(fixture["source"], str) or not fixture["source"].strip()
+    ):
+        raise ValueError(
+            f"invalid runtime fixture {fixture_path}: source must be a non-empty string"
+        )
     if "skills" in fixture:
         skills = fixture["skills"]
         if not isinstance(skills, list):

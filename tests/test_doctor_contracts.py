@@ -2456,6 +2456,9 @@ class RuntimeDiscoveryTests(unittest.TestCase):
 
     def test_runtime_fixture_rejects_malformed_collections_with_source(self) -> None:
         malformed = (
+            ({"source": None}, "source must be a non-empty string"),
+            ({"source": ["capture"]}, "source must be a non-empty string"),
+            ({"source": "   "}, "source must be a non-empty string"),
             ({"skill_roots": None}, "skill_roots must be a string sequence"),
             ({"skill_roots": [7]}, "skill_roots must be a string sequence"),
             ({"skills": {}}, "skills must be a sequence"),
