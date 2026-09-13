@@ -2103,6 +2103,39 @@ class InstallationTruthTests(unittest.TestCase):
                 any(row["check"] == "cross-harness.version-skew" for row in report["checks"])
             )
 
+            runtime_report = inspect_installations(
+                project,
+                home,
+                {
+                    "claude": {
+                        "state": "working",
+                        "source": "captured Claude catalogue",
+                        "skills": [
+                            {
+                                "name": "crew:doctor",
+                                "description": "Crew Doctor.",
+                                "path": str(served_root / "skills/doctor/SKILL.md"),
+                            }
+                        ],
+                    }
+                },
+            )
+            runtime_claude = runtime_report["harnesses"]["claude"]
+            self.assertEqual("0.36.0", runtime_claude["loaded_version"])
+            self.assertIn(
+                str(served_root / ".claude-plugin/plugin.json"),
+                runtime_claude["loaded_version_source"],
+            )
+            skew = next(
+                row
+                for row in runtime_report["checks"]
+                if row["check"] == "cross-harness.version-skew"
+            )
+            claude_evidence = next(
+                item for item in skew["evidence"] if item["claim"].startswith("claude ")
+            )
+            self.assertEqual("claude selected Crew version is 0.36.0", claude_evidence["claim"])
+
     def test_claude_duplicate_roots_are_order_independent_and_ambiguous(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -2420,6 +2453,32 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertNotIn("claude", result)
         self.assertNotIn("pi", result)
         self.assertEqual("DEGRADED", result["status"])
+
+    def test_runtime_fixture_rejects_malformed_collections_with_source(self) -> None:
+        malformed = (
+            ({"skill_roots": None}, "skill_roots must be a string sequence"),
+            ({"skill_roots": [7]}, "skill_roots must be a string sequence"),
+            ({"skills": {}}, "skills must be a sequence"),
+            ({"skills": [None]}, "skills entry 0 must be a mapping"),
+            ({"skills": [{}]}, "skills entry 0 name must be a non-empty string"),
+            (
+                {"skills": [{"name": "doctor", "path": []}]},
+                "skills entry 0 path must be a string",
+            ),
+        )
+        for fields, detail in malformed:
+            with self.subTest(fields=fields), tempfile.TemporaryDirectory() as tmp:
+                path = pathlib.Path(tmp) / "runtime.json"
+                write_json(
+                    path,
+                    {"schema_version": 1, "harness": "codex", **fields},
+                )
+
+                with self.assertRaises(ValueError) as raised:
+                    load_runtime_fixture(path)
+
+                self.assertIn(str(path), str(raised.exception))
+                self.assertIn(detail, str(raised.exception))
 
     def test_generic_foundation_source_does_not_establish_crew_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

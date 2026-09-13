@@ -337,6 +337,14 @@ def _record_runtime(
             elif captured_version:
                 result["loaded_version"] = captured_version
                 result["loaded_version_source"] = result["runtime"]["source"]
+            elif expected_version and "version" not in runtime:
+                result["loaded_version"] = expected_version
+                result["loaded_version_source"] = "; ".join(
+                    (
+                        result["runtime"]["source"],
+                        str(selected_root / ".claude-plugin/plugin.json"),
+                    )
+                )
         elif captured_version:
             result["loaded_version"] = captured_version
             result["loaded_version_source"] = result["runtime"]["source"]
@@ -1613,9 +1621,38 @@ def inspect_installations(
 
 
 def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
-    fixture = _read_json(pathlib.Path(path), {}).value
+    fixture_path = pathlib.Path(path)
+    fixture = _read_json(fixture_path, {}).value
+    if not isinstance(fixture, dict):
+        raise ValueError(f"invalid runtime fixture {fixture_path}: document must be a mapping")
     if fixture.get("schema_version") != 1 or fixture.get("harness") not in {"claude", "codex", "pi"}:
         raise ValueError(f"unsupported runtime fixture: {path}")
+    if "skills" in fixture:
+        skills = fixture["skills"]
+        if not isinstance(skills, list):
+            raise ValueError(f"invalid runtime fixture {fixture_path}: skills must be a sequence")
+        for index, entry in enumerate(skills):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"invalid runtime fixture {fixture_path}: skills entry {index} must be a mapping"
+                )
+            if not isinstance(entry.get("name"), str) or not entry["name"].strip():
+                raise ValueError(
+                    f"invalid runtime fixture {fixture_path}: skills entry {index} name must be a non-empty string"
+                )
+            for field in ("description", "path", "namespace", "source"):
+                if field in entry and entry[field] is not None and not isinstance(entry[field], str):
+                    raise ValueError(
+                        f"invalid runtime fixture {fixture_path}: skills entry {index} {field} must be a string"
+                    )
+    if "skill_roots" in fixture:
+        skill_roots = fixture["skill_roots"]
+        if not isinstance(skill_roots, list) or any(
+            not isinstance(root, str) or not root.strip() for root in skill_roots
+        ):
+            raise ValueError(
+                f"invalid runtime fixture {fixture_path}: skill_roots must be a string sequence"
+            )
     return fixture
 
 
