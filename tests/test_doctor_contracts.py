@@ -1933,6 +1933,124 @@ class InstallationTruthTests(unittest.TestCase):
                 {item["source"] for item in mismatch["evidence"]},
             )
 
+    def test_claude_other_project_registration_is_not_an_installation_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                home / ".claude/settings.json",
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {"source": "pixeloven/crew"}
+                    },
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            write_claude_marketplace_identity(home)
+            root = home / ".claude/plugins/cache/crew/crew/0.36.0"
+            write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            installed_path = home / ".claude/plugins/installed_plugins.json"
+            registration = {
+                "scope": "project",
+                "projectPath": str(base / "other-project"),
+                "installPath": str(root),
+                "version": "0.36.0",
+            }
+            write_json(installed_path, {"plugins": {"crew@crew": [registration]}})
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual("unavailable", claude["installation"]["state"])
+            self.assertEqual([], claude["installed_versions"])
+            self.assertEqual([], claude["package_roots"])
+            self.assertEqual(
+                [{"registration": registration, "source": str(installed_path)}],
+                claude["inapplicable_registrations"],
+            )
+            finding = next(
+                item
+                for item in claude["findings"]
+                if "does not apply to the inspected project" in item["claim"]
+            )
+            self.assertEqual(
+                {str(installed_path), str(base / "other-project")},
+                {item["source"] for item in finding["evidence"]},
+            )
+
+    def test_claude_served_installed_disagreement_is_cross_harness_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.35.0"]},
+            )
+            write_json(
+                home / ".pi/agent/git/github.com/pixeloven/crew/.claude-plugin/plugin.json",
+                {"version": "0.35.0"},
+            )
+            codex_root = home / ".codex/plugins/cache/crew/crew/0.35.0"
+            write_json(codex_root / ".claude-plugin/plugin.json", {"version": "0.35.0"})
+            (codex_root / "skills").mkdir()
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
+                "ref = 'v0.35.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+            write_json(
+                home / ".claude/settings.json",
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {"source": "pixeloven/crew"}
+                    },
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            served_root = home / ".claude/plugins/marketplaces/crew"
+            write_json(served_root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+            write_json(
+                home / ".claude/plugins/known_marketplaces.json",
+                {
+                    "crew": {
+                        "source": {"source": "github", "repo": "pixeloven/crew"},
+                        "installLocation": str(served_root),
+                    }
+                },
+            )
+            installed_root = home / ".claude/plugins/cache/crew/crew/0.35.0"
+            write_json(installed_root / ".claude-plugin/plugin.json", {"version": "0.35.0"})
+            write_json(
+                home / ".claude/plugins/installed_plugins.json",
+                {
+                    "plugins": {
+                        "crew@crew": [
+                            {
+                                "scope": "user",
+                                "installPath": str(installed_root),
+                                "version": "0.35.0",
+                            }
+                        ]
+                    }
+                },
+            )
+
+            report = inspect_installations(project, home)
+            claude = report["harnesses"]["claude"]
+
+            self.assertEqual("0.36.0", claude["served_version"])
+            self.assertEqual("0.35.0", claude["installed_version"])
+            self.assertIsNone(claude["loaded_version"])
+            self.assertTrue(
+                any("served/installed/loaded versions disagree" in item["claim"] for item in claude["findings"])
+            )
+            self.assertFalse(
+                any(row["check"] == "cross-harness.version-skew" for row in report["checks"])
+            )
+
     def test_claude_duplicate_roots_are_order_independent_and_ambiguous(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)

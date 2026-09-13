@@ -903,6 +903,8 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         registrations = []
     result["registrations"] = registrations
     valid_registrations: list[dict[str, Any]] = []
+    applicable_registrations: list[dict[str, Any]] = []
+    inapplicable_registrations: list[dict[str, Any]] = []
     installed_records: list[dict[str, Any]] = []
     by_root: dict[pathlib.Path, dict[str, Any]] = {}
     if registrations and not crew_identity_valid:
@@ -967,6 +969,22 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         if not valid or not crew_identity_valid:
             continue
         valid_registrations.append(registration)
+        applicable = scope == "user" or (
+            pathlib.Path(project_path).resolve(strict=False)
+            == project.resolve(strict=False)
+        )
+        if not applicable:
+            inapplicable_registrations.append(
+                {"registration": registration, "source": str(installed_path)}
+            )
+            _add_finding(
+                result,
+                f"Claude {scope} registration does not apply to the inspected project",
+                str(installed_path),
+                project_path,
+            )
+            continue
+        applicable_registrations.append(registration)
         root = pathlib.Path(install_path)
         manifest_version = _record_manifest_read(result, _manifest_version(root))
         if not manifest_version:
@@ -999,6 +1017,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             set(installed_record["registration_versions"])
         )
     result["installed_versions"] = installed_records
+    result["inapplicable_registrations"] = inapplicable_registrations
     validated_roots = [pathlib.Path(record["root"]) for record in installed_records]
     if result["served_version"]:
         validated_roots.append(location)
@@ -1029,7 +1048,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         for scope in ("local", "project", "user"):
             scoped_roots = {
                 pathlib.Path(registration["installPath"]).resolve(strict=False)
-                for registration in valid_registrations
+                for registration in applicable_registrations
                 if registration["scope"] == scope
                 and (
                     scope == "user"
@@ -1118,7 +1137,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         )
     registration_versions = {
         _semver(registration.get("version"))
-        for registration in valid_registrations
+        for registration in applicable_registrations
         if registration.get("version")
     }
     manifest_versions = {record["version"] for record in installed_records}
@@ -1527,12 +1546,20 @@ def inspect_installations(
         elif result.get("resolved_version"):
             selected_version = result["resolved_version"]
             selected_source = result.get("resolved_version_source", "")
+        elif (
+            name == "claude"
+            and result.get("served_version")
+            and result.get("installed_version")
+            and result["served_version"] != result["installed_version"]
+        ):
+            selected_version = None
+            selected_source = ""
         else:
-            selected_version = result.get("served_version") or result.get("installed_version")
+            selected_version = result.get("installed_version") or result.get("served_version")
             selected_source = (
-                result.get("served_version_source", "")
-                if result.get("served_version")
-                else result.get("installed_version_source", "")
+                result.get("installed_version_source", "")
+                if result.get("installed_version")
+                else result.get("served_version_source", "")
             )
         version_evidence[name] = (selected_version, selected_source)
     versions = {name: value for name, (value, _) in version_evidence.items()}
