@@ -87,16 +87,25 @@ def _read_toml(path: pathlib.Path) -> ReadResult:
 
 def _manifest_version(root: pathlib.Path) -> ReadResult:
     read = _read_json(root / ".claude-plugin/plugin.json", {})
-    version = read.value.get("version") if isinstance(read.value, dict) else None
-    if read.state == "present" and (
-        not isinstance(version, str) or not SEMVER.fullmatch(version)
-    ):
-        return ReadResult(
-            None,
-            "malformed",
-            read.source,
-            "manifest version must be a valid SemVer string",
-        )
+    version = None
+    if read.state == "present":
+        if not isinstance(read.value, dict):
+            return ReadResult(None, "malformed", read.source, "manifest must be a mapping")
+        if read.value.get("name") != "crew":
+            return ReadResult(
+                None,
+                "malformed",
+                read.source,
+                "manifest name must identify Crew",
+            )
+        version = read.value.get("version")
+        if not isinstance(version, str) or not SEMVER.fullmatch(version):
+            return ReadResult(
+                None,
+                "malformed",
+                read.source,
+                "manifest version must be a valid SemVer string",
+            )
     return ReadResult(
         version,
         read.state,
@@ -1630,6 +1639,22 @@ def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
         raise ValueError(f"invalid runtime fixture {fixture_path}: document must be a mapping")
     if fixture.get("schema_version") != 1 or fixture.get("harness") not in {"claude", "codex", "pi"}:
         raise ValueError(f"unsupported runtime fixture: {path}")
+    supported_states = {
+        "present",
+        "working",
+        "unavailable",
+        "loaded-but-undiscoverable",
+        "truncated",
+        "omitted",
+        "not-tested",
+        "not tested",
+    }
+    if "state" in fixture and (
+        not isinstance(fixture["state"], str) or fixture["state"] not in supported_states
+    ):
+        raise ValueError(
+            f"invalid runtime fixture {fixture_path}: state must be a supported string"
+        )
     if "source" in fixture and (
         not isinstance(fixture["source"], str) or not fixture["source"].strip()
     ):

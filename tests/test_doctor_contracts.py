@@ -25,6 +25,13 @@ FIXTURES = ROOT / "tests" / "fixtures"
 
 
 def write_json(path: pathlib.Path, value: object) -> None:
+    if (
+        path.as_posix().endswith("/.claude-plugin/plugin.json")
+        and isinstance(value, dict)
+        and "version" in value
+        and "name" not in value
+    ):
+        value = {"name": "crew", **value}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value), encoding="utf-8")
 
@@ -972,6 +979,79 @@ class InstallationTruthTests(unittest.TestCase):
                     if "manifest is malformed" in finding["claim"]
                 )
                 self.assertEqual(str(manifest), failure["evidence"][0]["source"])
+
+    def test_non_crew_manifests_cannot_establish_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.36.0"]},
+            )
+            pi_root = home / ".pi/agent/git/github.com/pixeloven/crew"
+            write_json(
+                pi_root / ".claude-plugin/plugin.json",
+                {"name": "other-plugin", "version": "0.36.0"},
+            )
+
+            write_json(
+                home / ".claude/settings.json",
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {"source": "pixeloven/crew"}
+                    },
+                    "enabledPlugins": {"crew@crew": True},
+                },
+            )
+            claude_root = home / ".claude/plugins/marketplaces/crew"
+            write_json(
+                claude_root / ".claude-plugin/plugin.json",
+                {"name": "other-plugin", "version": "0.36.0"},
+            )
+            write_json(
+                home / ".claude/plugins/known_marketplaces.json",
+                {
+                    "crew": {
+                        "source": {"source": "github", "repo": "pixeloven/crew"},
+                        "installLocation": str(claude_root),
+                    }
+                },
+            )
+
+            codex_root = home / ".codex/plugins/cache/crew/crew/0.36.0"
+            write_json(
+                codex_root / ".claude-plugin/plugin.json",
+                {"name": "other-plugin", "version": "0.36.0"},
+            )
+            (codex_root / "skills").mkdir()
+            config = home / ".codex/config.toml"
+            config.parent.mkdir(parents=True, exist_ok=True)
+            config.write_text(
+                "[marketplaces.crew]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
+                "ref = 'v0.36.0'\n[plugins.\"crew@crew\"]\nenabled = true\n",
+                encoding="utf-8",
+            )
+
+            report = inspect_installations(project, home)
+
+            for harness, root in (
+                ("pi", pi_root),
+                ("claude", claude_root),
+                ("codex", codex_root),
+            ):
+                with self.subTest(harness=harness):
+                    result = report["harnesses"][harness]
+                    self.assertEqual("unavailable", result["installation"]["state"])
+                    self.assertEqual([], result["package_roots"])
+                    self.assertEqual("DEGRADED", result["status"])
+                    read = next(
+                        item
+                        for item in result["manifest_reads"]
+                        if item["source"] == str(root / ".claude-plugin/plugin.json")
+                    )
+                    self.assertEqual("malformed", read["state"])
+                    self.assertIn("name must identify Crew", read["detail"])
 
     def test_prerelease_and_build_versions_remain_exact_across_selection(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2456,6 +2536,9 @@ class RuntimeDiscoveryTests(unittest.TestCase):
 
     def test_runtime_fixture_rejects_malformed_collections_with_source(self) -> None:
         malformed = (
+            ({"state": None}, "state must be a supported string"),
+            ({"state": []}, "state must be a supported string"),
+            ({"state": "mystery"}, "state must be a supported string"),
             ({"source": None}, "source must be a non-empty string"),
             ({"source": ["capture"]}, "source must be a non-empty string"),
             ({"source": "   "}, "source must be a non-empty string"),
