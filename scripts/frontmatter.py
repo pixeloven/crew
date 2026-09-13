@@ -136,10 +136,9 @@ def _flow_sequence(value: str) -> list[Any]:
             quote = character
         elif character == ",":
             item = content[start:index].strip()
-            if item:
-                items.append(item)
-            elif not (index == len(content) - 1 and start < index):
+            if not item:
                 raise ScalarParseError("empty flow-sequence entry")
+            items.append(item)
             start = index + 1
         elif character == "#" and (index == 0 or content[index - 1].isspace()):
             raise ScalarParseError("comments in flow sequences are unsupported")

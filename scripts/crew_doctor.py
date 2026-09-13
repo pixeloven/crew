@@ -591,12 +591,28 @@ def _record_capabilities(
     supplied: list[dict[str, str]],
     consumer_skill_root: pathlib.Path,
 ) -> None:
+    resolved_package_roots = [
+        pathlib.Path(root) for root in result["resolved_package_roots"]
+    ]
+    vendored_roots = [pathlib.Path(root) for root in result["capability_roots"]]
     declared, declaration_failures = _declared_capabilities(
-        [pathlib.Path(root) for root in result["resolved_package_roots"]]
-        + [pathlib.Path(root) for root in result["capability_roots"]]
-        + [consumer_skill_root],
+        resolved_package_roots + vendored_roots + [consumer_skill_root],
         resolve_flat_overlays=harness == "pi",
     )
+    distributed = pathlib.Path(__file__).resolve().parents[1] / "skills"
+    foundation_skill_names, _ = _catalogue_skill_names(distributed)
+    package_catalogues = [
+        root if root.name == "skills" else root / "skills"
+        for root in resolved_package_roots
+    ]
+
+    def package_declaration(source: str) -> bool:
+        path = pathlib.Path(source)
+        return any(_lexically_within(path, root) for root in package_catalogues) or any(
+            _lexically_within(path, root) and path.parent.name in foundation_skill_names
+            for root in vendored_roots
+        )
+
     result["capability_declaration_reads"] = declaration_failures
     for failure in declaration_failures:
         result["status"] = "DEGRADED"
@@ -669,7 +685,8 @@ def _record_capabilities(
                 "ownership": (
                     "project"
                     if any(
-                        _lexically_within(pathlib.Path(source), consumer_skill_root)
+                        not package_declaration(source)
+                        and _lexically_within(pathlib.Path(source), consumer_skill_root)
                         for source in declaration_sources
                     )
                     else "package"

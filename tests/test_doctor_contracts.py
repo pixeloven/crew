@@ -1459,6 +1459,71 @@ class InstallationTruthTests(unittest.TestCase):
             )
             self.assertEqual("platform", report["profile"])
 
+    def test_vendored_foundation_and_local_capability_origins_remain_distinct(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            vendored = project / ".agents/skills"
+            shutil.copytree(ROOT / "skills", vendored)
+            evidence = {
+                "codex": [
+                    {
+                        "name": "external:github",
+                        "kind": "probe",
+                        "state": "working",
+                        "source": "free GitHub probe",
+                    }
+                ]
+            }
+
+            foundation_installation = inspect_installations(
+                project,
+                base / "home",
+                capability_evidence=evidence,
+            )
+            github = next(
+                item
+                for item in foundation_installation["harnesses"]["codex"]["capability_checks"]
+                if item["name"] == "external:github"
+            )
+            self.assertEqual("package", github["ownership"])
+            foundation_report = compose_doctor_report(
+                foundation_installation,
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=[],
+                persona_evidence=[],
+            )
+            self.assertEqual("portable", foundation_report["profile"])
+
+            local_skill = vendored / "local-platform/SKILL.md"
+            local_skill.parent.mkdir()
+            local_skill.write_text(
+                "---\nname: local-platform\ndescription: Local capability.\n"
+                "requires: [external:github]\n---\n",
+                encoding="utf-8",
+            )
+            local_installation = inspect_installations(
+                project,
+                base / "home",
+                capability_evidence=evidence,
+            )
+            local = next(
+                item
+                for item in local_installation["harnesses"]["codex"]["capability_checks"]
+                if item["name"] == "external:github"
+            )
+            self.assertEqual("project", local["ownership"])
+            self.assertIn(str(local_skill), {item["source"] for item in local["evidence"]})
+            local_report = compose_doctor_report(
+                local_installation,
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=[],
+                persona_evidence=[],
+            )
+            self.assertEqual("platform", local_report["profile"])
+
     def test_malformed_capability_frontmatter_is_degraded_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -3318,6 +3383,35 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual([], slots["sources"])
             self.assertEqual("malformed", slots["reads"][0]["state"])
             self.assertEqual(str(skill), slots["reads"][0]["source"])
+
+    def test_flow_sequence_trailing_comma_and_empty_entries(self) -> None:
+        cases = (
+            ("[topology,]", ["topology"], None),
+            ("[topology, , protected-seams]", [], "malformed"),
+            ("[, topology]", [], "malformed"),
+            ("[topology,,]", [], "malformed"),
+            ("[,]", [], "malformed"),
+        )
+        for declaration, expected, read_state in cases:
+            with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                skill = root / "skills/example/SKILL.md"
+                skill.parent.mkdir(parents=True)
+                skill.write_text(
+                    "---\nname: example\ndescription: Example.\n"
+                    f"expects-local: {declaration}\n---\n",
+                    encoding="utf-8",
+                )
+
+                slots = declared_local_slots(root)
+
+                self.assertEqual(expected, slots["declared"])
+                if read_state is None:
+                    self.assertEqual([], slots["reads"])
+                    self.assertEqual([str(skill)], slots["sources"])
+                else:
+                    self.assertEqual(read_state, slots["reads"][0]["state"])
+                    self.assertEqual(str(skill), slots["reads"][0]["source"])
 
     def test_unreadable_local_slot_source_retains_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
