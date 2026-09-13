@@ -320,6 +320,28 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("unavailable", unavailable["capabilities"]["state"])
             self.assertEqual("DEGRADED", unavailable["status"])
 
+    def test_capability_evidence_boundary_rejects_malformed_shapes(self) -> None:
+        malformed = (
+            ([], "collection must be a mapping"),
+            ({"codxe": []}, "unsupported harness codxe"),
+            ({"codex": None}, "observations must be a sequence"),
+            ({"codex": [None]}, "observation 0 must be a mapping"),
+            (
+                {"codex": [{"name": "cli:gh", "kind": "probe", "state": "working"}]},
+                "observation 0 must be source-bearing",
+            ),
+        )
+        for evidence, detail in malformed:
+            with self.subTest(evidence=evidence), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                with self.assertRaises(ValueError) as raised:
+                    inspect_installations(
+                        base / "project",
+                        base / "home",
+                        capability_evidence=evidence,
+                    )
+                self.assertIn(detail, str(raised.exception))
+
     def test_installed_but_disabled_codex_is_degraded_not_missing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, home = self.make_install_tree(pathlib.Path(tmp))
@@ -740,6 +762,49 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual(str(roots["b"]), pi["installation"]["source"])
             self.assertEqual([str(roots["a"])], [item["root"] for item in pi["stale_resolved_installations"]])
             self.assertFalse(any("differs from resolved" in item["claim"] for item in pi["findings"]))
+
+    def test_pi_duplicate_configured_versions_remain_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": ["git:github.com/pixeloven/crew@v0.36.0"]},
+            )
+            roots = []
+            for agent in ("a", "b"):
+                root = home / f".pi/{agent}/git/github.com/pixeloven/crew"
+                write_json(
+                    root / ".claude-plugin/plugin.json",
+                    {"name": "crew", "version": "0.36.0"},
+                )
+                roots.append(root)
+            write_capability_skill(roots[0], ["cli:local-platform"])
+
+            pi = inspect_installations(
+                project,
+                home,
+                capability_evidence={
+                    "pi": [
+                        {
+                            "name": "cli:local-platform",
+                            "kind": "probe",
+                            "state": "working",
+                            "source": "free local platform probe",
+                        }
+                    ]
+                },
+            )["harnesses"]["pi"]
+
+            self.assertIsNone(pi["resolved_version"])
+            self.assertEqual([], pi["resolved_package_roots"])
+            self.assertEqual({str(root) for root in roots}, set(pi["package_roots"]))
+            self.assertNotIn(
+                "cli:local-platform",
+                {item["name"] for item in pi["capability_checks"]},
+            )
+            self.assertEqual("DEGRADED", pi["status"])
 
     def test_version_skew_sources_follow_selected_version_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2614,6 +2679,27 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertIn(str(base / "home/.codex/config.toml"), sources)
             self.assertIn(str(base / "home/.codex/plugins/cache/crew/crew"), sources)
 
+    def test_top_action_does_not_mislabel_runtime_degradation_as_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
+            report = inspect_installations(
+                project,
+                home,
+                runtime_fixtures={
+                    "codex": {
+                        "state": "unavailable",
+                        "source": "codex debug prompt-input capture",
+                    }
+                },
+            )
+
+            self.assertEqual("present", report["harnesses"]["codex"]["installation"]["state"])
+            self.assertEqual("unavailable", report["harnesses"]["codex"]["runtime"]["state"])
+            self.assertEqual(
+                ["Resolve the codex health findings, then rerun the free checks"],
+                report["top_actions"],
+            )
+
 
 class RuntimeDiscoveryTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -2752,6 +2838,17 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         states = {row["runtime_name"]: row["state"] for row in result["entries"]}
         self.assertEqual("working", states["crew:doctor"])
         self.assertEqual("truncated", states["crew:onboarding"])
+
+    def test_raw_codex_prompt_parser_rejects_malformed_message_content(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "codex-prompt.json"
+            write_json(path, [{"role": "user", "content": None}])
+
+            with self.assertRaises(ValueError) as raised:
+                parse_codex_prompt_capture(path)
+
+            self.assertIn(str(path), str(raised.exception))
+            self.assertIn("message 0 content must be a sequence", str(raised.exception))
 
     def test_namespaced_claude_collision_counts_as_two_entries(self) -> None:
         fixture = load_runtime_fixture(FIXTURES / "runtime/claude-catalog-capture.json")

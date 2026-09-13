@@ -297,6 +297,41 @@ def _validate_runtime_capture(
     return runtime
 
 
+def _validate_capability_evidence(evidence: Any) -> dict[str, list[dict[str, str]]]:
+    if not isinstance(evidence, dict):
+        raise ValueError("invalid capability evidence: collection must be a mapping")
+    unsupported_harnesses = set(evidence) - {"claude", "codex", "pi"}
+    if unsupported_harnesses:
+        harness = sorted(str(item) for item in unsupported_harnesses)[0]
+        raise ValueError(f"invalid capability evidence: unsupported harness {harness}")
+    for harness, observations in evidence.items():
+        if not isinstance(observations, list):
+            raise ValueError(
+                f"invalid capability evidence for {harness}: observations must be a sequence"
+            )
+        for index, observation in enumerate(observations):
+            if not isinstance(observation, dict):
+                raise ValueError(
+                    f"invalid capability evidence for {harness}: observation {index} must be a mapping"
+                )
+            values = tuple(
+                observation.get(field) for field in ("name", "kind", "state", "source")
+            )
+            if not all(isinstance(value, str) and value for value in values):
+                raise ValueError(
+                    f"invalid capability evidence for {harness}: observation {index} must be source-bearing"
+                )
+            kind = observation["kind"]
+            state = observation["state"]
+            if kind == "grant" and state != "present":
+                raise ValueError("grant evidence can only establish present")
+            if kind == "probe" and state not in {"working", "unavailable"}:
+                raise ValueError("probe evidence must establish working or unavailable")
+            if kind not in {"grant", "probe"}:
+                raise ValueError(f"unsupported capability evidence kind: {kind}")
+    return evidence
+
+
 def _record_runtime(
     result: dict[str, Any],
     runtime: dict[str, Any] | None,
@@ -543,18 +578,10 @@ def _record_capabilities(
 
     observations: dict[str, dict[str, list[dict[str, str]]]] = {}
     for observation in supplied:
-        name = observation.get("name")
-        kind = observation.get("kind")
-        state = observation.get("state")
-        source = observation.get("source")
-        if not all(isinstance(value, str) and value for value in (name, kind, state, source)):
-            raise ValueError(f"{harness} capability evidence must be source-bearing")
-        if kind == "grant" and state != "present":
-            raise ValueError("grant evidence can only establish present")
-        if kind == "probe" and state not in {"working", "unavailable"}:
-            raise ValueError("probe evidence must establish working or unavailable")
-        if kind not in {"grant", "probe"}:
-            raise ValueError(f"unsupported capability evidence kind: {kind}")
+        name = observation["name"]
+        kind = observation["kind"]
+        state = observation["state"]
+        source = observation["source"]
         normalized_observation = {
             "name": name,
             "kind": kind,
@@ -746,10 +773,10 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
     runtime_matches = [item for item in resolved if item["root"] in runtime_root_matches]
     selected = runtime_matches[0] if len(runtime_matches) == 1 else None
     if selected is None and not result["runtime_paths"] and primary and primary["version"]:
-        selected = next(
-            (item for item in resolved if item["version"] == primary["version"]),
-            None,
-        )
+        configured_matches = [
+            item for item in resolved if item["version"] == primary["version"]
+        ]
+        selected = configured_matches[0] if len(configured_matches) == 1 else None
     if selected is None and not result["runtime_paths"] and len(resolved) == 1:
         selected = resolved[0]
     result["resolved_version"] = selected["version"] if selected else None
@@ -1570,7 +1597,9 @@ def inspect_installations(
                 f"{harness} runtime capture",
                 expected_harness=harness,
             )
-    capability_evidence = capability_evidence or {}
+    if capability_evidence is None:
+        capability_evidence = {}
+    capability_evidence = _validate_capability_evidence(capability_evidence)
     harnesses = {
         "pi": _inspect_pi(project_root, home, runtime_fixtures.get("pi")),
         "claude": _inspect_claude(project_root, home, runtime_fixtures.get("claude")),
@@ -1730,7 +1759,7 @@ def inspect_installations(
     if missing:
         top = f"Install or locate Crew for {missing[0]}, then rerun the free checks"
     elif degraded:
-        top = f"Resolve the {degraded[0]} installation finding, then rerun the free checks"
+        top = f"Resolve the {degraded[0]} health findings, then rerun the free checks"
     else:
         top = "Healthy installation evidence; run only authorized runtime probes still marked untested"
     return {"harnesses": harnesses, "checks": checks, "evidence": evidence, "top_actions": [top]}
@@ -1749,14 +1778,22 @@ def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
 
 def parse_codex_prompt_capture(path: pathlib.Path) -> dict[str, Any]:
     """Parse the free `codex debug prompt-input` JSON protocol into a fixture."""
-    payload = _read_json(pathlib.Path(path), None).value
+    capture_path = pathlib.Path(path)
+    payload = _read_json(capture_path, None).value
     if not isinstance(payload, list):
-        raise ValueError("Codex prompt capture must be the top-level JSON message array")
+        raise ValueError(
+            f"invalid Codex prompt capture {capture_path}: document must be a message sequence"
+        )
     source_text = None
-    for message in payload:
+    for index, message in enumerate(payload):
         if not isinstance(message, dict):
             continue
-        for part in message.get("content", []):
+        content = message.get("content", [])
+        if not isinstance(content, list):
+            raise ValueError(
+                f"invalid Codex prompt capture {capture_path}: message {index} content must be a sequence"
+            )
+        for part in content:
             if not isinstance(part, dict):
                 continue
             text = part.get("text")
