@@ -47,7 +47,7 @@ SEMVER = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 PI_CREW_PACKAGE = re.compile(
-    r"^(?:(?:git:)?github\.com/|github:)?pixeloven/crew(?:@[^@/\s]+)?$"
+    r"^(?:(?:git:)?github\.com/|github:)?pixeloven/crew(?:@[^@\s]+)?$"
 )
 
 
@@ -115,7 +115,15 @@ def _semver(value: Any, *, allow_v: bool = False) -> str | None:
 
 
 def _pi_package_version(value: str) -> str | None:
-    return _semver(value.rsplit("@", 1)[-1], allow_v=True)
+    _, separator, ref = value.rpartition("@")
+    if not separator or not ref.startswith("v"):
+        return None
+    return _semver(ref[1:])
+
+
+def _pi_package_ref(value: str) -> str | None:
+    _, separator, ref = value.rpartition("@")
+    return ref if separator else None
 
 
 def _version_tuple(
@@ -613,6 +621,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
                     {
                         "settings": str(settings_path),
                         "package": item,
+                        "ref": _pi_package_ref(item),
                         "version": _pi_package_version(item),
                     }
                 )
@@ -658,6 +667,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
 
     if primary:
         result["enablement"] = {"state": "present", "source": str(primary["settings"])}
+    result["configured_ref"] = primary["ref"] if primary else None
     result["configured_version"] = primary["version"] if primary else None
 
     if resolved and not registrations:
@@ -680,6 +690,15 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         _degrade_for_runtime(result)
         return result
 
+    non_release_pins = [item for item in registrations if item["version"] is None]
+    if non_release_pins:
+        result["status"] = "DEGRADED"
+        displayed_ref = non_release_pins[0]["ref"] or "unpinned"
+        _add_finding(
+            result,
+            f"configured Pi package ref {displayed_ref} is not a published v-prefixed SemVer tag",
+            *(str(item["settings"]) for item in non_release_pins),
+        )
     stale_pins = [
         item for item in registrations
         if _version_tuple(item["version"]) and _version_tuple(item["version"]) < FIRST_PI_ROLE_DISCOVERY_VERSION
@@ -692,7 +711,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
             "the Pi role fleet is silently invisible below v0.35.0",
             str(stale_pins[0]["settings"]),
         )
-    elif result["resolved_version"]:
+    if result["resolved_version"]:
         if result["status"] != "DEGRADED":
             result["status"] = "OK"
     else:
@@ -795,6 +814,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 )
     result["settings_records"] = settings_records
     result["enabled_scopes"] = enabled_records
+    result["marketplace_scopes"] = marketplace_records
     registry = _record_config_read(
         result,
         "Claude marketplace registry configuration",
@@ -1044,10 +1064,22 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if result.get("served_version") and location not in by_root:
         result["package_roots"].append(str(location))
 
+    if len(marketplace_records) > 1:
+        result["status"] = "DEGRADED"
+        _add_finding(
+            result,
+            f"Crew marketplace is declared in multiple Claude settings scopes; "
+            f"{marketplace_records[0]['scope']} precedence selected",
+            *(record["path"] for record in marketplace_records),
+        )
     if result["installation"]["state"] != "present":
         _degrade_for_runtime(result)
         return result
-    result["status"] = "OK" if result["enablement"]["state"] == "present" else "DEGRADED"
+    result["status"] = (
+        "OK"
+        if result["enablement"]["state"] == "present" and result["status"] != "DEGRADED"
+        else "DEGRADED"
+    )
     if len(enabled_records) > 1:
         result["status"] = "DEGRADED"
         _add_finding(

@@ -171,6 +171,44 @@ class InstallationTruthTests(unittest.TestCase):
             stale = next(item for item in pi["findings"] if "predates v0.35.0" in item["claim"])
             self.assertEqual(str(project / ".pi/settings.json"), stale["evidence"][0]["source"])
 
+    def test_pi_requires_a_v_prefixed_semver_release_tag_for_healthy_reconciliation(self) -> None:
+        for package, configured_ref in (
+            ("git:github.com/pixeloven/crew", None),
+            ("git:github.com/pixeloven/crew@main", "main"),
+            ("git:github.com/pixeloven/crew@release/next", "release/next"),
+            ("git:github.com/pixeloven/crew@0.36.0", "0.36.0"),
+        ):
+            with self.subTest(package=package), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project = base / "project"
+                home = base / "home"
+                settings = project / ".pi/settings.json"
+                write_json(settings, {"packages": [package]})
+                root = home / ".pi/agent/git/github.com/pixeloven/crew"
+                write_json(root / ".claude-plugin/plugin.json", {"version": "0.36.0"})
+
+                pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+                self.assertEqual("present", pi["enablement"]["state"])
+                self.assertEqual(configured_ref, pi["configured_ref"])
+                self.assertIsNone(pi["configured_version"])
+                self.assertEqual("0.36.0", pi["resolved_version"])
+                self.assertEqual("DEGRADED", pi["status"])
+                self.assertEqual(package, pi["registrations"][0]["package"])
+                finding = next(
+                    item
+                    for item in pi["findings"]
+                    if "not a published v-prefixed SemVer tag" in item["claim"]
+                )
+                self.assertEqual(str(settings), finding["evidence"][0]["source"])
+
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+            self.assertEqual("v0.35.0", pi["configured_ref"])
+            self.assertEqual("0.35.0", pi["configured_version"])
+            self.assertEqual("OK", pi["status"])
+
     def test_pi_checkout_without_registration_is_installed_but_disabled(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -1664,6 +1702,51 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual(
                 {str(project / ".claude/settings.json"), str(home / ".claude/settings.json")},
                 {item["source"] for item in duplicate["evidence"]},
+            )
+
+    def test_claude_duplicate_marketplace_scopes_report_selected_precedence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base)
+            write_json(
+                project / ".claude/settings.json",
+                {
+                    "extraKnownMarketplaces": {
+                        "crew": {"source": "pixeloven/crew"}
+                    }
+                },
+            )
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual(
+                ["project", "user"],
+                [record["scope"] for record in claude["marketplace_scopes"]],
+            )
+            self.assertEqual("DEGRADED", claude["status"])
+            duplicate = next(
+                item
+                for item in claude["findings"]
+                if "marketplace is declared in multiple Claude settings scopes" in item["claim"]
+            )
+            self.assertIn("project precedence selected", duplicate["claim"])
+            self.assertEqual(
+                {str(project / ".claude/settings.json"), str(home / ".claude/settings.json")},
+                {item["source"] for item in duplicate["evidence"]},
+            )
+
+    def test_claude_single_marketplace_scope_has_no_duplicate_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp))
+
+            claude = inspect_installations(project, home)["harnesses"]["claude"]
+
+            self.assertEqual(["user"], [row["scope"] for row in claude["marketplace_scopes"]])
+            self.assertFalse(
+                any(
+                    "marketplace is declared in multiple Claude settings scopes" in item["claim"]
+                    for item in claude["findings"]
+                )
             )
 
     def test_claude_enablement_resolves_local_project_user_true_and_false(self) -> None:
