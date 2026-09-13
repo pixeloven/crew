@@ -253,7 +253,6 @@ def _validate_runtime_capture(
         "loaded-but-undiscoverable",
         "truncated",
         "omitted",
-        "not-tested",
         "not tested",
     }
     if "state" in runtime and (
@@ -346,7 +345,7 @@ def _record_runtime(
     if not isinstance(runtime_source, str) or not runtime_source.strip():
         runtime_source = "captured runtime"
     captured_state = runtime.get("state")
-    if captured_state in {"not-tested", "not tested"}:
+    if captured_state == "not tested":
         result["runtime"] = {
             "state": "not tested",
             "source": runtime_source,
@@ -492,62 +491,68 @@ def _degrade_for_runtime(result: dict[str, Any]) -> None:
 
 def _declared_capabilities(
     roots: list[pathlib.Path],
+    resolve_flat_overlays: bool = False,
 ) -> tuple[dict[str, list[str]], list[dict[str, str]]]:
     declared: dict[str, list[str]] = {}
     failures: list[dict[str, str]] = []
-    for root in dict.fromkeys(roots):
-        catalogue = root if root.name == "skills" else root / "skills"
-        for skill in sorted(catalogue.glob("*/SKILL.md")):
-            try:
-                metadata, error = read_frontmatter(skill)
-            except (UnicodeDecodeError, OSError) as read_error:
-                failures.append(
-                    {
-                        "state": "unreadable",
-                        "source": str(skill),
-                        "detail": str(read_error),
-                    }
-                )
-                continue
-            if error or not metadata:
-                failures.append(
-                    {
-                        "state": "malformed",
-                        "source": str(skill),
-                        "detail": error or "empty frontmatter",
-                    }
-                )
-                continue
-            requirements = metadata.get("requires", [])
-            if isinstance(requirements, str):
-                failures.append(
-                    {
-                        "state": "malformed",
-                        "source": str(skill),
-                        "detail": "requires must be a string sequence",
-                    }
-                )
-                continue
-            if not isinstance(requirements, list):
-                failures.append(
-                    {
-                        "state": "malformed",
-                        "source": str(skill),
-                        "detail": "requires must be a string sequence",
-                    }
-                )
-                continue
-            if any(not isinstance(requirement, str) or not requirement for requirement in requirements):
-                failures.append(
-                    {
-                        "state": "malformed",
-                        "source": str(skill),
-                        "detail": "requires entries must be non-empty strings",
-                    }
-                )
-                continue
-            for requirement in requirements:
-                declared.setdefault(requirement, []).append(str(skill))
+    catalogues = [
+        root if root.name == "skills" else root / "skills"
+        for root in dict.fromkeys(roots)
+    ]
+    if resolve_flat_overlays:
+        effective_skills: dict[str, pathlib.Path] = {}
+        for catalogue in catalogues:
+            for skill in sorted(catalogue.glob("*/SKILL.md")):
+                effective_skills[skill.parent.name] = skill
+        skills = sorted(effective_skills.values())
+    else:
+        skills = [
+            skill
+            for catalogue in catalogues
+            for skill in sorted(catalogue.glob("*/SKILL.md"))
+        ]
+    for skill in skills:
+        try:
+            metadata, error = read_frontmatter(skill)
+        except (UnicodeDecodeError, OSError) as read_error:
+            failures.append(
+                {
+                    "state": "unreadable",
+                    "source": str(skill),
+                    "detail": str(read_error),
+                }
+            )
+            continue
+        if error or not metadata:
+            failures.append(
+                {
+                    "state": "malformed",
+                    "source": str(skill),
+                    "detail": error or "empty frontmatter",
+                }
+            )
+            continue
+        requirements = metadata.get("requires", [])
+        if isinstance(requirements, str) or not isinstance(requirements, list):
+            failures.append(
+                {
+                    "state": "malformed",
+                    "source": str(skill),
+                    "detail": "requires must be a string sequence",
+                }
+            )
+            continue
+        if any(not isinstance(requirement, str) or not requirement for requirement in requirements):
+            failures.append(
+                {
+                    "state": "malformed",
+                    "source": str(skill),
+                    "detail": "requires entries must be non-empty strings",
+                }
+            )
+            continue
+        for requirement in requirements:
+            declared.setdefault(requirement, []).append(str(skill))
     unique_failures = list(
         {
             (failure["state"], failure["source"], failure["detail"]): failure
@@ -566,7 +571,8 @@ def _record_capabilities(
     declared, declaration_failures = _declared_capabilities(
         [pathlib.Path(root) for root in result["resolved_package_roots"]]
         + [pathlib.Path(root) for root in result["capability_roots"]]
-        + [consumer_skill_root]
+        + [consumer_skill_root],
+        resolve_flat_overlays=harness == "pi",
     )
     result["capability_declaration_reads"] = declaration_failures
     for failure in declaration_failures:
@@ -1451,6 +1457,15 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
                             f"cache directory version {directory_version} differs from "
                             f"manifest version {manifest_version}"
                         ),
+                    }
+                )
+            if manifest_version and not (root / "skills").is_dir():
+                result["cache_reads"].append(
+                    {
+                        "label": "Codex plugin cache root",
+                        "state": "malformed",
+                        "source": str(root / "skills"),
+                        "detail": "required skills directory is missing",
                     }
                 )
     valid_cache_roots = [

@@ -824,7 +824,7 @@ class InstallationTruthTests(unittest.TestCase):
     def test_non_loading_runtime_states_cannot_establish_loaded_versions(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
-            for state in ("omitted", "unavailable", "not-tested"):
+            for state in ("omitted", "unavailable", "not tested"):
                 with self.subTest(state=state):
                     report = inspect_installations(
                         project,
@@ -915,7 +915,7 @@ class InstallationTruthTests(unittest.TestCase):
                         "skill_roots": [str(claude_roots[1])],
                     },
                     "codex": {
-                        "state": "not-tested",
+                        "state": "not tested",
                         "skill_roots": [str(codex_roots[1])],
                     },
                 },
@@ -1348,6 +1348,44 @@ class InstallationTruthTests(unittest.TestCase):
             )
             self.assertEqual("platform", report["profile"])
 
+    def test_pi_project_overlay_replaces_package_capability_declarations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = self.make_install_tree(base, "v0.35.0")
+            package_root = home / ".pi/agent/git/github.com/pixeloven/crew"
+            write_capability_skill(package_root, ["cli:package-only"])
+            overlay = project / ".agents/skills/capability-fixture/SKILL.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: capability-fixture\ndescription: Project capability override.\n"
+                "requires: [cli:project-only]\n---\n",
+                encoding="utf-8",
+            )
+            pi = inspect_installations(
+                project,
+                home,
+                capability_evidence={
+                    "pi": [
+                        {
+                            "name": name,
+                            "kind": "probe",
+                            "state": "working",
+                            "source": f"free {name} probe",
+                        }
+                        for name in ("cli:package-only", "cli:project-only")
+                    ]
+                },
+            )["harnesses"]["pi"]
+
+            self.assertEqual(
+                {"cli:project-only"},
+                {item["name"] for item in pi["capability_checks"]},
+            )
+            self.assertEqual(
+                {str(overlay), "free cli:project-only probe"},
+                {item["source"] for item in pi["capability_checks"][0]["evidence"]},
+            )
+
     def test_malformed_capability_frontmatter_is_degraded_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -1687,6 +1725,35 @@ class InstallationTruthTests(unittest.TestCase):
                         if "Codex plugin cache root is malformed" in finding["claim"]
                     ),
                 )
+
+    def test_codex_cache_missing_skills_is_reported_alongside_healthy_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp))
+            corrupt_root = home / ".codex/plugins/cache/crew/crew/0.30.0"
+            write_json(
+                corrupt_root / ".claude-plugin/plugin.json",
+                {"name": "crew", "version": "0.30.0"},
+            )
+
+            codex = inspect_installations(project, home)["harnesses"]["codex"]
+
+            self.assertEqual("0.29.0", codex["resolved_version"])
+            self.assertEqual("DEGRADED", codex["status"])
+            self.assertIn(str(corrupt_root), codex["cache_roots"])
+            self.assertNotIn(str(corrupt_root), codex["package_roots"])
+            invalid_layout = next(
+                item
+                for item in codex["cache_reads"]
+                if item["source"] == str(corrupt_root / "skills")
+            )
+            self.assertEqual("malformed", invalid_layout["state"])
+            self.assertEqual("required skills directory is missing", invalid_layout["detail"])
+            finding = next(
+                item
+                for item in codex["findings"]
+                if "required skills directory is missing" in item["claim"]
+            )
+            self.assertEqual(str(corrupt_root / "skills"), finding["evidence"][0]["source"])
 
     def test_non_pi_version_fields_reject_package_spec_prefixes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2753,6 +2820,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
             ({"harness": 7}, "harness must be claude, codex, or pi"),
             ({"tested": None}, "tested must be boolean"),
             ({"tested": "false"}, "tested must be boolean"),
+            ({"state": "not-tested"}, "state must be a supported string"),
             ({"state": None}, "state must be a supported string"),
             ({"state": []}, "state must be a supported string"),
             ({"state": "mystery"}, "state must be a supported string"),
