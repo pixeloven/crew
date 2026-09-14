@@ -4124,7 +4124,9 @@ class DerivedContractTests(unittest.TestCase):
                 "    - matcher: Bash\n"
                 "      hooks:\n"
                 "        - type: command\n"
-                "          command: ./scripts/check-command.sh\n"
+                "          command: |\n"
+                "            ./scripts/check-command.sh\n"
+                "            ./scripts/report-result.sh\n"
                 "---\n",
                 encoding="utf-8",
             )
@@ -4151,6 +4153,43 @@ class DerivedContractTests(unittest.TestCase):
             role.write_text(
                 "---\nname: reviewer\ndescription: Invalid hook metadata.\n"
                 "tools: Read, Grep\nhooks:\n [unterminated\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row
+                for row in rows
+                if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+            unresolved = next(row for row in rows if row["source"] == str(role))
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertEqual("crew", reviewer["scope"])
+            self.assertIsNone(unresolved["name"])
+            self.assertFalse(unresolved["role_valid"])
+            self.assertIn(
+                "invalid YAML frontmatter",
+                " ".join(unresolved["validation_errors"]),
+            )
+
+    def test_hook_block_scalar_dedent_cannot_suppress_packaged_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/reviewer.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: reviewer\ndescription: Invalid hook metadata.\n"
+                "tools: Read, Grep\n"
+                "hooks:\n"
+                "  PreToolUse:\n"
+                "    - matcher: Bash\n"
+                "      hooks:\n"
+                "        - type: command\n"
+                "          command: |\n"
+                "              ./scripts/check-command.sh\n"
+                "            ./scripts/report-result.sh\n"
+                "---\n",
                 encoding="utf-8",
             )
 

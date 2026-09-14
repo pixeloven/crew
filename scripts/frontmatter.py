@@ -314,6 +314,19 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
         except ScalarParseError as error:
             raise ScalarParseError(f"{error} on line {line_number}") from error
 
+    def block_scalar(position: int, parent_indentation: int) -> int:
+        content_indentation: int | None = None
+        while position < len(tokens) and tokens[position][0] > parent_indentation:
+            current, _, line_number = tokens[position]
+            if content_indentation is None:
+                content_indentation = current
+            elif current < content_indentation:
+                raise ScalarParseError(
+                    f"invalid block indentation on line {line_number}"
+                )
+            position += 1
+        return position
+
     def mapping(
         position: int,
         indentation: int,
@@ -337,8 +350,7 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             keys.add(key)
             position += 1
             if raw in FOLDED_MARKERS:
-                while position < len(tokens) and tokens[position][0] > indentation:
-                    position += 1
+                position = block_scalar(position, indentation)
             elif raw:
                 scalar(raw, line_number)
             elif position < len(tokens) and tokens[position][0] > indentation:
@@ -371,8 +383,7 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             key, raw = match.groups()
             item_indentation = indentation + 2
             if raw in FOLDED_MARKERS:
-                while position < len(tokens) and tokens[position][0] > item_indentation:
-                    position += 1
+                position = block_scalar(position, item_indentation)
             elif raw:
                 scalar(raw, line_number)
             elif position < len(tokens) and tokens[position][0] > item_indentation:
