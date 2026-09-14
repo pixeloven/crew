@@ -3768,6 +3768,96 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual(["read", "bash", "web"], librarian["allowed_tools"])
             self.assertIn("read, bash, web", librarian["write_effect"])
 
+    def test_claude_consumer_posture_composes_both_tool_fields(self) -> None:
+        cases = (
+            (
+                "tools: Read, Grep\n",
+                ["Read", "Grep"],
+                [],
+                "Bash is unavailable",
+                "effective write tools: none",
+            ),
+            (
+                "disallowedTools: Write, Edit, NotebookEdit\n",
+                [],
+                ["Write", "Edit", "NotebookEdit"],
+                "Bash is available",
+                "effective write tools: none",
+            ),
+            (
+                "tools: Read, Bash, Write\ndisallowedTools: Grep\n",
+                ["Read", "Bash", "Write"],
+                ["Grep"],
+                "Bash is available",
+                "effective write tools: Write",
+            ),
+            (
+                "disallowedTools: Bash\n",
+                [],
+                ["Bash"],
+                "Bash is unavailable",
+                "effective write tools: Write, Edit, NotebookEdit",
+            ),
+        )
+        for fields, allowed, denied, bash_state, write_state in cases:
+            with self.subTest(fields=fields), tempfile.TemporaryDirectory() as tmp:
+                consumer = pathlib.Path(tmp) / "consumer"
+                role = consumer / ".claude/agents/librarian.md"
+                role.parent.mkdir(parents=True)
+                role.write_text(
+                    "---\nname: librarian\ndescription: Claude consumer role.\n"
+                    f"{fields}---\n",
+                    encoding="utf-8",
+                )
+
+                rows = inspect_role_postures(ROOT, consumer)
+                librarian = next(
+                    row
+                    for row in rows
+                    if row["name"] == "librarian" and row["harness"] == "claude"
+                )
+
+                self.assertTrue(librarian["role_valid"])
+                self.assertEqual(allowed, librarian["allowed_tools"])
+                self.assertEqual(denied, librarian["denied_tools"])
+                self.assertIn(bash_state, librarian["caveat"])
+                self.assertIn(write_state, librarian["write_effect"])
+                self.assertIn(write_state, librarian["caveat"])
+
+    def test_malformed_claude_consumer_tool_fields_retain_source_evidence(self) -> None:
+        fields = (
+            "tools: {Read: true}\ndisallowedTools: [Write, 1]\n",
+            "tools: Read, , Bash\ndisallowedTools: Write, , Edit\n",
+        )
+        for declarations in fields:
+            with self.subTest(declarations=declarations), tempfile.TemporaryDirectory() as tmp:
+                consumer = pathlib.Path(tmp) / "consumer"
+                role = consumer / ".claude/agents/librarian.md"
+                role.parent.mkdir(parents=True)
+                role.write_text(
+                    "---\nname: librarian\ndescription: Broken Claude consumer role.\n"
+                    f"{declarations}---\n",
+                    encoding="utf-8",
+                )
+
+                rows = inspect_role_postures(ROOT, consumer)
+                librarian = next(
+                    row
+                    for row in rows
+                    if row["name"] == "librarian" and row["harness"] == "claude"
+                )
+
+                self.assertFalse(librarian["role_valid"])
+                self.assertEqual(str(role), librarian["source"])
+                self.assertIn(
+                    "tools must be a string sequence",
+                    librarian["validation_errors"],
+                )
+                self.assertIn(
+                    "disallowedTools must be a string sequence",
+                    librarian["validation_errors"],
+                )
+
     def test_malformed_consumer_tool_posture_retains_source_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             consumer = pathlib.Path(tmp) / "consumer"

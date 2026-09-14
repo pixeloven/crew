@@ -2101,28 +2101,61 @@ def profile_for(working_capabilities: list[str], persona_evidence: list[str]) ->
 
 def _role_string_list(value: Any) -> list[str] | None:
     if isinstance(value, str):
-        return [item.strip() for item in value.split(",") if item.strip()]
-    if isinstance(value, list) and all(isinstance(item, str) for item in value):
-        return value
+        if not value.strip():
+            return []
+        items = value.split(",")
+        if any(not item.strip() for item in items):
+            return None
+        return [item.strip() for item in items]
+    if isinstance(value, list) and all(
+        isinstance(item, str) and item.strip() for item in value
+    ):
+        return [item.strip() for item in value]
     return None
 
 
-def _consumer_role_posture(harness: str, tools: list[str]) -> dict[str, Any]:
+def _consumer_role_posture(
+    harness: str,
+    allowed: list[str],
+    denied: list[str],
+    *,
+    allowlist_declared: bool,
+    denylist_declared: bool,
+) -> dict[str, Any]:
     if harness == "claude":
-        allowed: list[str] = []
-        denied = tools
-        effect = f"declared denied tools: {', '.join(denied) or 'none'}"
+        def available(tool: str) -> bool:
+            return (not allowlist_declared or tool in allowed) and tool not in denied
+
+        effective_writes = [
+            tool for tool in ("Write", "Edit", "NotebookEdit") if available(tool)
+        ]
+        effect = (
+            f"declared allowlist: {', '.join(allowed) if allowlist_declared else 'unrestricted'}; "
+            f"declared denylist: {', '.join(denied) if denylist_declared else 'none'}; "
+            f"effective write tools: {', '.join(effective_writes) or 'none'}"
+        )
+        shell = (
+            "Bash is available; shell access makes the write posture advisory "
+            "unless the host sandbox enforces it"
+            if available("Bash")
+            else "Bash is unavailable; shell access is unavailable under the declared tool constraints"
+        )
+        caveat = (
+            f"{shell}; effective write tools: "
+            f"{', '.join(effective_writes) or 'none'}"
+        )
     else:
-        allowed = tools
-        denied = []
         effect = f"declared allowed tools: {', '.join(allowed) or 'none'}"
+        caveat = "shell access makes the frontmatter posture advisory unless the host sandbox enforces it"
     return {
         "writes": "custom",
         "harness": harness,
         "allowed_tools": allowed,
         "denied_tools": denied,
+        "allowlist_declared": allowlist_declared,
+        "denylist_declared": denylist_declared,
         "write_effect": effect,
-        "caveat": "shell access makes the frontmatter posture advisory unless the host sandbox enforces it",
+        "caveat": caveat,
     }
 
 
@@ -2188,16 +2221,34 @@ def inspect_role_postures(
         if harness == "neutral":
             writes = "neutral"
         elif harness == "claude":
-            denied = _role_string_list(metadata.get("disallowedTools", ""))
-            if denied is None:
-                errors.append("disallowedTools must be a string sequence")
-            elif is_consumer_role:
-                writes = "custom"
+            if is_consumer_role:
+                allowlist_declared = "tools" in metadata
+                denylist_declared = "disallowedTools" in metadata
+                allowed = (
+                    _role_string_list(metadata["tools"])
+                    if allowlist_declared
+                    else []
+                )
+                denied = (
+                    _role_string_list(metadata["disallowedTools"])
+                    if denylist_declared
+                    else []
+                )
+                if allowed is None:
+                    errors.append("tools must be a string sequence")
+                if denied is None:
+                    errors.append("disallowedTools must be a string sequence")
+                if allowed is not None and denied is not None:
+                    writes = "custom"
             else:
+                denied = _role_string_list(metadata.get("disallowedTools", ""))
+                if denied is None:
+                    errors.append("disallowedTools must be a string sequence")
                 matches = [
                     mode
                     for mode, contract in WRITE_POSTURES.items()
-                    if set(denied) == set(contract["claude"]["denied"])
+                    if denied is not None
+                    and set(denied) == set(contract["claude"]["denied"])
                 ]
                 writes = matches[0] if len(matches) == 1 else None
         else:
@@ -2244,11 +2295,24 @@ def inspect_role_postures(
                     }
                 )
                 continue
-            posture = (
-                _consumer_role_posture(harness, denied if harness == "claude" else allowed)
-                if is_consumer_role
-                else effective_posture(writes, harness)
-            )
+            if is_consumer_role and harness == "claude":
+                posture = _consumer_role_posture(
+                    harness,
+                    allowed,
+                    denied,
+                    allowlist_declared=allowlist_declared,
+                    denylist_declared=denylist_declared,
+                )
+            elif is_consumer_role:
+                posture = _consumer_role_posture(
+                    harness,
+                    allowed,
+                    [],
+                    allowlist_declared=True,
+                    denylist_declared=False,
+                )
+            else:
+                posture = effective_posture(writes, harness)
             rows.append(
                 {
                     "name": name,
@@ -2287,7 +2351,9 @@ def _complete_role_posture(posture: dict[str, Any], harness: str, name: str) -> 
             and all(isinstance(tool, str) and tool for tool in allowed)
             and isinstance(denied, list)
             and all(isinstance(tool, str) and tool for tool in denied)
-            and (not denied if harness == "pi" else not allowed)
+            and isinstance(posture.get("allowlist_declared"), bool)
+            and isinstance(posture.get("denylist_declared"), bool)
+            and (harness != "pi" or not denied)
             and isinstance(posture.get("write_effect"), str)
             and bool(posture["write_effect"])
             and isinstance(posture.get("caveat"), str)
