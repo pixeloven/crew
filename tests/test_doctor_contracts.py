@@ -3108,6 +3108,69 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual([command], [item["source"] for item in runtime_check["evidence"]])
             self.assertIn(f"source: {command}", render_doctor_report(report))
 
+    def test_runtime_recording_preserves_tested_and_untested_fixture_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            tested_fixture = load_runtime_fixture(
+                FIXTURES / "runtime/claude-catalog-capture.json"
+            )
+            tested_comparison = compare_runtime_catalog([], tested_fixture)
+            tested_report = inspect_installations(
+                project,
+                home,
+                runtime_fixtures={"claude": tested_fixture},
+            )
+            tested_check = next(
+                row
+                for row in tested_report["checks"]
+                if row["check"] == "claude.runtime"
+            )
+
+            self.assertEqual(
+                tested_comparison["capture"]["sources"],
+                [item["source"] for item in tested_check["evidence"]],
+            )
+            self.assertEqual(
+                str(FIXTURES / "runtime/claude-catalog-capture.json"),
+                tested_report["harnesses"]["claude"]["runtime"]["source"],
+            )
+
+            capture_path = base / "untested-runtime.json"
+            write_json(
+                capture_path,
+                {
+                    "schema_version": 1,
+                    "harness": "codex",
+                    "tested": False,
+                    "source_command": "captured skipped catalogue",
+                },
+            )
+            untested_fixture = load_runtime_fixture(capture_path)
+            untested_comparison = compare_runtime_catalog([], untested_fixture)
+            untested_report = inspect_installations(
+                project,
+                home,
+                runtime_fixtures={"codex": untested_fixture},
+            )
+            untested_check = next(
+                row
+                for row in untested_report["checks"]
+                if row["check"] == "codex.runtime"
+            )
+            untested_sources = [item["source"] for item in untested_check["evidence"]]
+
+            self.assertEqual("N/A", untested_check["status"])
+            self.assertEqual(
+                untested_comparison["capture"]["sources"],
+                untested_sources[:2],
+            )
+            self.assertEqual(
+                str(capture_path),
+                untested_report["harnesses"]["codex"]["runtime"]["source"],
+            )
+
     def test_top_action_does_not_mislabel_runtime_degradation_as_installation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
@@ -3243,7 +3306,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                ["captured session catalogue", str(capture_path)],
+                [str(capture_path), "captured session catalogue"],
                 [item["source"] for item in observed_check["evidence"]],
             )
             self.assertIn(

@@ -356,6 +356,20 @@ def _validate_capability_evidence(evidence: Any) -> dict[str, list[dict[str, str
     return evidence
 
 
+def _runtime_capture_sources(runtime: dict[str, Any]) -> list[str]:
+    return list(
+        dict.fromkeys(
+            source
+            for source in (
+                runtime.get("source_path"),
+                runtime.get("source_command"),
+                runtime.get("source"),
+            )
+            if isinstance(source, str) and source.strip()
+        )
+    )
+
+
 def _record_runtime(
     result: dict[str, Any],
     runtime: dict[str, Any] | None,
@@ -364,16 +378,23 @@ def _record_runtime(
     root_versions: dict[pathlib.Path, str | None] | None = None,
 ) -> None:
     """Record only evidence supplied by this harness's capture."""
-    if runtime is None or runtime.get("tested") is False:
+    if runtime is None:
         return
-    runtime_source = runtime.get("source_command") or runtime.get("source")
-    if not isinstance(runtime_source, str) or not runtime_source.strip():
-        runtime_source = "captured runtime"
+    runtime_sources = _runtime_capture_sources(runtime) or ["captured runtime"]
+    runtime_source = runtime_sources[0]
+    if runtime.get("tested") is False:
+        result["runtime"] = {
+            "state": "not tested",
+            "source": runtime_source,
+            "sources": runtime_sources,
+        }
+        return
     captured_state = runtime.get("state")
     if captured_state == "not tested":
         result["runtime"] = {
             "state": "not tested",
             "source": runtime_source,
+            "sources": runtime_sources,
         }
         return
     if captured_state not in {
@@ -445,7 +466,11 @@ def _record_runtime(
             state = "present"
         else:
             state = "working"
-    result["runtime"] = {"state": state, "source": runtime_source}
+    result["runtime"] = {
+        "state": state,
+        "source": runtime_source,
+        "sources": runtime_sources,
+    }
     if state in LOADED_RUNTIME_STATES:
         result["runtime_paths"] = [str(path) for path in crew_paths]
         resolution_roots = list(dict.fromkeys([*validated_roots, *(candidate_roots or [])]))
@@ -1699,11 +1724,13 @@ def inspect_installations(
             recommendation = ""
             if status in {"MISSING", "DEGRADED"}:
                 recommendation = f"Resolve or verify {harness} {dimension}"
-            observation_source = observation.get("source", "")
+            observation_sources = observation.get("sources") or [
+                observation.get("source", "")
+            ]
             sources = (
-                [observation_source, *inspected_sources]
+                [*observation_sources, *inspected_sources]
                 if state in {"unavailable", "not tested"}
-                else [observation_source]
+                else list(observation_sources)
             )
             sources = [source for source in dict.fromkeys(sources) if source]
             row_evidence = [
@@ -1944,17 +1971,7 @@ def compare_runtime_catalog(
     )
     harness = runtime_fixture.get("harness")
     expected = _expected_catalog(disk_entries, harness)
-    capture_sources = list(
-        dict.fromkeys(
-            source
-            for source in (
-                runtime_fixture.get("source_command"),
-                runtime_fixture.get("source"),
-                runtime_fixture.get("source_path"),
-            )
-            if isinstance(source, str) and source.strip()
-        )
-    )
+    capture_sources = _runtime_capture_sources(runtime_fixture)
     if not capture_sources:
         raise ValueError(
             "invalid runtime catalogue capture: source_command, source, or source_path is required"
