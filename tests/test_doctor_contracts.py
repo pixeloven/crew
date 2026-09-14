@@ -4143,6 +4143,34 @@ class DerivedContractTests(unittest.TestCase):
                 any(row["name"] is None and row["source"] == str(role) for row in rows)
             )
 
+    def test_malformed_nested_hook_cannot_suppress_packaged_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/reviewer.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: reviewer\ndescription: Invalid hook metadata.\n"
+                "tools: Read, Grep\nhooks:\n [unterminated\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row
+                for row in rows
+                if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+            unresolved = next(row for row in rows if row["source"] == str(role))
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertEqual("crew", reviewer["scope"])
+            self.assertIsNone(unresolved["name"])
+            self.assertFalse(unresolved["role_valid"])
+            self.assertIn(
+                "invalid YAML frontmatter",
+                " ".join(unresolved["validation_errors"]),
+            )
+
     def test_malformed_claude_consumer_tool_fields_retain_source_evidence(self) -> None:
         fields = (
             "tools: {Read: true}\ndisallowedTools: [Write, 1]\n",

@@ -296,6 +296,106 @@ def _scalar(value: str) -> Any:
     return value
 
 
+def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
+    tokens: list[tuple[int, str, int]] = []
+    for offset, line in enumerate(lines):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        prefix = line[: len(line) - len(line.lstrip(" \t"))]
+        if "\t" in prefix:
+            raise ScalarParseError(f"tab indentation on line {line_offset + offset}")
+        tokens.append((len(prefix), line[len(prefix) :], line_offset + offset))
+    if not tokens:
+        return
+
+    def scalar(raw: str, line_number: int) -> None:
+        try:
+            _scalar(raw)
+        except ScalarParseError as error:
+            raise ScalarParseError(f"{error} on line {line_number}") from error
+
+    def mapping(
+        position: int,
+        indentation: int,
+        initial_keys: set[str] | None = None,
+    ) -> int:
+        keys = set(initial_keys or ())
+        while position < len(tokens):
+            current, text, line_number = tokens[position]
+            if current < indentation:
+                return position
+            if current > indentation:
+                raise ScalarParseError(f"unexpected indentation on line {line_number}")
+            if text == "-" or text.startswith("- "):
+                raise ScalarParseError(f"mixed mapping and sequence on line {line_number}")
+            match = FIELD.fullmatch(text)
+            if not match:
+                raise ScalarParseError(f"invalid mapping entry on line {line_number}")
+            key, raw = match.groups()
+            if key in keys:
+                raise ScalarParseError(f"duplicate mapping key {key!r}")
+            keys.add(key)
+            position += 1
+            if raw in FOLDED_MARKERS:
+                while position < len(tokens) and tokens[position][0] > indentation:
+                    position += 1
+            elif raw:
+                scalar(raw, line_number)
+            elif position < len(tokens) and tokens[position][0] > indentation:
+                position = node(position, tokens[position][0])
+        return position
+
+    def sequence(position: int, indentation: int) -> int:
+        while position < len(tokens):
+            current, text, line_number = tokens[position]
+            if current < indentation:
+                return position
+            if current > indentation:
+                raise ScalarParseError(f"unexpected indentation on line {line_number}")
+            if text != "-" and not text.startswith("- "):
+                raise ScalarParseError(f"mixed sequence and mapping on line {line_number}")
+            raw_item = text[1:].strip()
+            position += 1
+            if not raw_item:
+                if position < len(tokens) and tokens[position][0] > indentation:
+                    position = node(position, tokens[position][0])
+                continue
+            match = FIELD.fullmatch(raw_item)
+            if not match:
+                scalar(raw_item, line_number)
+                if position < len(tokens) and tokens[position][0] > indentation:
+                    raise ScalarParseError(
+                        f"unexpected indentation on line {tokens[position][2]}"
+                    )
+                continue
+            key, raw = match.groups()
+            item_indentation = indentation + 2
+            if raw in FOLDED_MARKERS:
+                while position < len(tokens) and tokens[position][0] > item_indentation:
+                    position += 1
+            elif raw:
+                scalar(raw, line_number)
+            elif position < len(tokens) and tokens[position][0] > item_indentation:
+                position = node(position, tokens[position][0])
+            if position < len(tokens) and tokens[position][0] == item_indentation:
+                position = mapping(position, item_indentation, {key})
+            elif position < len(tokens) and tokens[position][0] > indentation:
+                raise ScalarParseError(
+                    f"unexpected indentation on line {tokens[position][2]}"
+                )
+        return position
+
+    def node(position: int, indentation: int) -> int:
+        text = tokens[position][1]
+        if text == "-" or text.startswith("- "):
+            return sequence(position, indentation)
+        return mapping(position, indentation)
+
+    position = node(0, tokens[0][0])
+    if position != len(tokens):
+        raise ScalarParseError(f"invalid nested mapping on line {tokens[position][2]}")
+
+
 def parse_simple_mapping(text: str) -> dict[str, Any]:
     """Parse top-level scalar/folded fields from a YAML mapping."""
     lines = text.splitlines()
@@ -349,6 +449,7 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
                     continuation.append(lines[cursor])
                     cursor += 1
                 if any(line.strip() and not line.lstrip().startswith("#") for line in continuation):
+                    _validate_nested_mapping(continuation, index + 2)
                     values[key] = "\n".join(continuation)
                     index = cursor
                     continue
