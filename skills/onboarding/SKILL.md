@@ -140,11 +140,11 @@ runbook pointers. When moving detail, establish and validate the destination
 first, retain an actionable pointer, then remove source text only if that
 specific removal is authorized.
 
-After edits, run the package layout/frontmatter validators and the project's own
-focused checks. Onboarding does not own implementation delivery: hand validation,
-review, commit, push, PR, and CI to the host project's established workflow. Do
-not declare the wider change delivered merely because the onboarding edit or
-Doctor report looks correct.
+After edits, stop at the implementation handoff. Do not run layout/frontmatter
+validators or project checks from Onboarding; hand validation, review, commit,
+push, PR, and CI to the host project's established workflow. Do not declare the
+wider change delivered merely because the onboarding edit or Doctor report looks
+correct.
 
 ## Re-audit
 

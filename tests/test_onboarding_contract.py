@@ -58,6 +58,18 @@ class OnboardingLifecycleTests(unittest.TestCase):
         self.assertEqual("host project workflow", contract.implementation_validation_owner)
         self.assertFalse(contract.may_declare_delivery_complete)
 
+    def test_apply_hands_implementation_validation_to_host_workflow(self) -> None:
+        signal = HostApplyAuthorizationSignal(invocation_id="run-42", host_verified=True)
+        contract = resolve_mode(
+            explicit_apply=True,
+            invocation_id="run-42",
+            authorization=signal,
+        )
+
+        self.assertEqual("implementation handed to host workflow", contract.stop_boundary)
+        self.assertEqual("host project workflow", contract.implementation_validation_owner)
+        self.assertFalse(contract.may_declare_delivery_complete)
+
     def test_doctor_profile_handoff_has_one_shared_type(self) -> None:
         for profile in ("portable", "platform", "personas"):
             self.assertEqual(profile, consume_doctor_profile(profile))

@@ -415,6 +415,43 @@ class LayoutContractTests(unittest.TestCase):
             self.assertIn(".claude/agents/reviewer.md", output)
             self.assertIn("invalid YAML frontmatter", output)
 
+    def test_nested_hook_distinguishes_content_and_indentation_tabs(self) -> None:
+        cases = (
+            ("            \tprintf valid\\n\n", True),
+            ("          \tprintf invalid\\n\n", False),
+        )
+        for command, valid in cases:
+            with self.subTest(valid=valid), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".claude/agents/reviewer.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    "---\nname: reviewer\ndescription: Reviews changes.\n"
+                    "hooks:\n"
+                    "  PreToolUse:\n"
+                    "    - matcher: Bash\n"
+                    "      hooks:\n"
+                    "        - type: command\n"
+                    "          command: |2\n"
+                    f"{command}"
+                    "---\n",
+                    encoding="utf-8",
+                )
+
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                output = completed.stdout + completed.stderr
+                self.assertEqual(valid, completed.returncode == 0, output)
+                if not valid:
+                    self.assertIn(".claude/agents/reviewer.md", output)
+                    self.assertIn("invalid YAML frontmatter", output)
+
     def test_claude_duplicate_resolved_role_identities_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

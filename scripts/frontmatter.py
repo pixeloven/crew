@@ -312,9 +312,7 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
     for offset, line in enumerate(lines):
         if not line.strip():
             continue
-        prefix = line[: len(line) - len(line.lstrip(" \t"))]
-        if "\t" in prefix:
-            raise ScalarParseError(f"tab indentation on line {line_offset + offset}")
+        prefix = line[: len(line) - len(line.lstrip(" "))]
         tokens.append((len(prefix), line[len(prefix) :], line_offset + offset))
     if not tokens:
         return
@@ -366,6 +364,8 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             if position >= len(tokens):
                 return position
             current, text, line_number = tokens[position]
+            if text.startswith("\t"):
+                raise ScalarParseError(f"tab indentation on line {line_number}")
             if current < indentation:
                 return position
             if current > indentation:
@@ -397,6 +397,8 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             if position >= len(tokens):
                 return position
             current, text, line_number = tokens[position]
+            if text.startswith("\t"):
+                raise ScalarParseError(f"tab indentation on line {line_number}")
             if current < indentation:
                 return position
             if current > indentation:
