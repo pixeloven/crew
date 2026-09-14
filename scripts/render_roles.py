@@ -29,6 +29,11 @@ Usage:
 import pathlib
 import sys
 
+try:
+    from .role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES
+except ImportError:  # Direct script execution.
+    from role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NOTICE = "<!-- GENERATED from roles/{role}/ — edit there and run scripts/render_roles.py -->"
 
@@ -36,23 +41,18 @@ NOTICE = "<!-- GENERATED from roles/{role}/ — edit there and run scripts/rende
 ALLOWED = {"name", "description", "writes", "dispatch"}
 
 # Runtime knobs that belong to whoever dispatches the role, not to the role.
-FORBIDDEN = {
-    "model": "the dispatcher's choice — both harnesses inherit the session model",
-    "thinking": "reasoning depth is the dispatcher's choice",
-    "effort": "reasoning depth is the dispatcher's choice",
-    "model_reasoning_effort": "reasoning depth is the dispatcher's choice",
-    "turnBudget": "blast radius is the dispatcher's choice",
-    "maxTurns": "blast radius is the dispatcher's choice",
-}
+FORBIDDEN = FORBIDDEN_RUNTIME_KEYS
 
 # One capability posture per role, spoken in each harness's dialect.
 #   none   — reads and reports; produces no files
-#   drafts — may create files (plans, drafts); may not edit existing ones
+#   drafts — may create and overwrite files; may not use surgical edit tools
 #   full   — unrestricted write path
 WRITES = {
-    "none": {"claude": ["Write", "Edit", "NotebookEdit"], "pi": ["read", "bash", "grep", "find"]},
-    "drafts": {"claude": ["Edit", "NotebookEdit"], "pi": ["read", "write", "bash", "grep", "find"]},
-    "full": {"claude": [], "pi": ["read", "write", "edit", "bash", "grep", "find"]},
+    posture: {
+        "claude": values["claude"]["denied"],
+        "pi": values["pi"]["allowed"],
+    }
+    for posture, values in WRITE_POSTURES.items()
 }
 
 

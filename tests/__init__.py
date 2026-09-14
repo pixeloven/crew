@@ -1,0 +1,1 @@
+"""Crew contract regression tests."""

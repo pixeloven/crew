@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - name: Validate plugin manifests (JSON) + SKILL.md schema-v2 frontmatter
+      - name: Validate manifests, frontmatter, and description budget
         run: python3 scripts/check_skills.py
 
       # Layout, separately from the catalogue schema above. Frontmatter can be
@@ -28,6 +28,9 @@ jobs:
         run: |
           python3 scripts/check_skill_layout.py --selftest
           python3 scripts/check_skill_layout.py .
+
+      - name: Fixture-driven Doctor and Onboarding contracts
+        run: python3 -m unittest discover -s tests -v
 
   roles-rendered:
     name: agents/ + pi-agents/ rendered from roles/

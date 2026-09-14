@@ -1,6 +1,6 @@
 ---
 name: activation-contracts
-description: How an agent role gets woken — the trigger interface (event → dispatch → output), which roles are dispatched interactively versus triggered autonomously, and reference wiring for issue events and scheduled sweeps. Load when a role should run without someone asking it to, when wiring CI or a scheduler to an agent, or when deciding whether work belongs to a triggered role instead of the session you are in.
+description: Use when a role must run without an interactive request, when wiring CI or a scheduler to an agent, or when choosing triggered versus interactive dispatch. Defines the event → dispatch → output contract.
 tier: concept
 requires: [external:github]
 ---

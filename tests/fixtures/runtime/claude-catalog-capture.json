@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "harness": "claude",
+  "captured_at": "2026-09-07T00:00:00Z",
+  "source_command": "captured session catalogue",
+  "cost": "captured",
+  "skills": [
+    {
+      "name": "crew:doctor",
+      "description": "Use when checking Crew health. Report install and runtime truth.",
+      "path": "/fixture/cache/crew/crew/0.35.0/skills/doctor/SKILL.md"
+    },
+    {
+      "name": "doctor",
+      "description": "Use when checking this project's custom doctor.",
+      "path": "/fixture/project/.agents/skills/doctor/SKILL.md"
+    }
+  ],
+  "telemetry": {}
+}

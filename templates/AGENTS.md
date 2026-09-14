@@ -1,5 +1,5 @@
 <!--
-harmony-crew onboarding scaffold — the standard agent behavioral contract.
+Crew onboarding scaffold — the standard agent behavioral contract.
 
 HOW TO USE
   1. Copy this file to your repo root as AGENTS.md.
@@ -12,8 +12,6 @@ This is the merge-don't-replace seam: foundation behavior (the spine) + your pro
 specifics (the ▸ Fill blocks and your local skills). Keep this file BEHAVIORAL — facts,
 conventions, and credentials live in SKILLS, never here.
 
-Worked example (Harmony, the platform's first consumer):
-  https://github.com/ductiletoaster/harmony/blob/main/AGENTS.md
 -->
 
 # AGENTS.md — Agent Behavioral Contract
@@ -73,7 +71,7 @@ Planning is conversational and agent-mediated, not document-driven. Plans are de
 
 ## Memory protocol
 
-Follow **Pre-Task Recall** before starting and **Post-Session Persistence** after, per the the project's knowledge-capture local skill skill, with a `source_agent` set to your harness (or the dispatched agent's id). This is a platform capability — see *Fallback* for behavior when it's unavailable.
+Follow **Pre-Task Recall** before starting and **Post-Session Persistence** after, per the project's knowledge-capture local skill, with a `source_agent` set to your harness (or the dispatched agent's id). This is a platform capability — see *Fallback* for behavior when it's unavailable.
 
 ## Tools — the live catalogue is authoritative
 
@@ -89,7 +87,7 @@ Pick the class by *who the primary caller is* and *whose credentials the capabil
 
 **Platform skills** (shared, from the foundation) teach *general patterns*. **This project's specific values and policies** live in **local skills** in `.agents/skills/`. When you apply a platform pattern, consult the matching local skill for this deployment's specifics. A consumer that isn't the platform's origin supplies its **own** equivalents of these local skills; the platform skills and this contract stay the same.
 
-> **▸ Fill for your project:** a table mapping each kind of project-specific concern → the local skill that holds it. (Harmony's, for reference: infrastructure/access → `homelab-topology`; platform conventions → `harmony-platform-conventions`; secrets → the project's secret-paths local skill.)
+> **▸ Fill for your project:** a table mapping each kind of project-specific concern → the local skill that holds it, such as infrastructure/access → the topology owner, platform policy → the conventions owner, and credential references → the secret-paths owner.
 
 ## Work quality
 
@@ -120,7 +118,7 @@ failures — the fourth. Bias toward caution over speed; use judgement on trivia
 
 Most conventions are reference detail — load them as soon as the task touches their domain, per *Autonomy & posture*. A few are **silent landmines** — get them wrong and it fails with no obvious error. For these, load the named skill *before* the action, every time. The skill carries the detail; this is just the trigger.
 
-> **▸ Fill for your project:** your silent landmines, each as *action → load this skill → one-line consequence*. (Harmony's, for reference: authoring a workload → `harmony-platform-conventions` → a missing control-plane toleration means the Pod never schedules, just `Pending`; editing an ExternalSecret → the project's secret-paths local skill → `refreshInterval:"0"` means a new key won't sync.)
+> **▸ Fill for your project:** your silent landmines, each as *action → load this skill → one-line consequence*, for example authoring a workload → the conventions skill → a missing required toleration leaves the Pod `Pending` without an obvious configuration error.
 
 ## Fallback — when the platform is unavailable
 
@@ -136,7 +134,7 @@ Every role keeps its core value on a bare repo — `reviewer` reviews the diff, 
 
 ## Skills — how agents find them
 
-Your harness lists every installed skill, with its description, before the first turn — foundation skills and this repo's own, together. **That listing is the discovery mechanism**, so there is no index to write or maintain here: put a skill where the harness looks and agents can find it. Load one the moment the work touches its domain; loading is cheap, re-deriving conventions is not. Where a local skill shares a name with a foundation one, what happens depends on the harness: in a flat namespace (pi) the local copy shadows the foundation's outright; Claude Code namespaces the plugin copy as `plugin:skill`, so both stay visible and you pick. Don't rely on shadowing to disable a foundation skill.
+Your harness lists every installed skill, with its description, before the first turn — foundation skills and this repo's own, together. **That listing is the discovery mechanism**, so there is no index to write or maintain here: put a skill where the harness looks and agents can find it. Load one the moment the work touches its domain; loading is cheap, re-deriving conventions is not. Where a local skill shares a name with a foundation one, what happens depends on the harness: in pi's flat namespace the local copy shadows the foundation's outright; Claude Code and Codex namespace the plugin copy as `crew:skill`, so both stay visible and you pick. Don't rely on shadowing to disable a foundation skill.
 
 The concern → local skill mapping under *Applying platform skills to local specifics* above is the only routing worth writing down, because it encodes a judgement the descriptions can't make for you. Don't restate the catalogue here — it goes stale the day someone adds a skill.
 
@@ -157,7 +155,9 @@ ln -s ../../.agents/skills/<name> .claude/skills/<name> # Claude Code
 
 Claude Code is the only harness that does not read `.agents/`, and it requires the **directory** form — a flat `.claude/skills/<name>.md` is invisible to it with no error. That is easy to get wrong because flat files *do* work for `.claude/agents/` and `.claude/commands/`, and pi accepts them too. One consumer ran 26 local skills flat for months; every one was absent from every Claude Code session, including the sessions that wrote the tripwires telling agents to load them.
 
-**Verify against the running harness, not the file tree** — the tree looks right in exactly the case that fails. For Claude Code that means a separate process (`claude -p`), because skills load at session start and a session cannot observe its own change. For Codex, `codex debug prompt-input` renders the model-visible prompt with no API call. Run `doctor` to compare what actually loaded against what's on disk.
+**Verify against the running harness, not the file tree** — the tree looks right in exactly the case that fails. For Codex, `codex debug prompt-input` renders the model-visible prompt with no API call. A fresh `claude -p`, `pi -p`, or `codex exec` process is billed and requires explicit approval. Run `doctor` to compare what this harness actually loaded against what's on disk and to mark other harnesses untested.
+
+Run layout validation from the absolute resolved Crew package root, never a consumer-relative `scripts/` path: `python3 /absolute/resolved/crew/root/scripts/check_skill_layout.py /absolute/consumer/repo`.
 
 Because discovery runs entirely on descriptions, a skill's `description` is its whole interface: say what it's for and when to reach for it, and front-load the discriminating words. A skill nothing matches against is a skill nobody loads.
 

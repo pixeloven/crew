@@ -1,6 +1,6 @@
 ---
 name: github-repo-workflow
-description: Clone, edit, commit, push, and PR-create against any GitHub repo using git and gh. Auth is already wired via GH_TOKEN + gh credential helper — no setup required. Load when a task involves editing files in a GitHub repo, opening or reviewing a PR, or operating on issues.
+description: Use when editing a GitHub repository, opening or reviewing a PR, or operating on issues. Covers clone → branch → edit → commit → push → PR using pre-wired GH_TOKEN and git credentials.
 tier: subject
 requires: [external:github]
 ---
@@ -20,7 +20,7 @@ You don't need to set up credentials. The environment provides:
 
 Plain `git clone https://github.com/...` and `gh repo clone owner/repo` both authenticate transparently. Never embed tokens in remote URLs.
 
-The GH_TOKEN's scope determines which repos you can reach (read/write). In a deployment's worker images, the token is typically an operator PAT (e.g. Harmony's pi-web/pi-worker) sourced from 1Password (concrete `op://<vault>/<item>/<field>` path in the consumer's secret-management local skill) — scoped to push/issue/PR on the deployment's GitHub org (`<org>/*`).
+The GH_TOKEN's scope determines which repos you can reach (read/write). In a deployment's worker images, the token is typically an operator PAT sourced from the deployment's secret manager (the concrete reference belongs in its secret-paths local skill) and scoped to push/issue/PR only for the intended organization.
 
 ## When the repo isn't on disk
 

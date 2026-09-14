@@ -7,7 +7,7 @@
 #
 # Claude Code re-fetches a plugin only when plugin.json's `version` changes, so the
 # in-PR bump is what actually ships to consumers tracking main; this workflow just
-# creates the matching immutable tag that pinned consumers (pi images, OpenClaw)
+# creates the matching immutable tag that pinned consumers (Pi and Codex)
 # reference.
 name: Release (tag on version change)
 

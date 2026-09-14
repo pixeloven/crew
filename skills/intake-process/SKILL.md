@@ -1,6 +1,6 @@
 ---
 name: intake-process
-description: How to classify incoming issues and pull requests — domain labels, work type, complexity, and the routing decision. Load when triaging new issues or PRs, deciding who or what should handle an item, labelling an unsorted backlog, or setting up an intake convention.
+description: Use when triaging issues or PRs, labeling an unsorted backlog, choosing a handler, or defining intake conventions. Classifies domain, work type, complexity, and routing decision.
 tier: concept
 requires: [external:github]
 ---

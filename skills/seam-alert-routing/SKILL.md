@@ -1,6 +1,6 @@
 ---
 name: seam-alert-routing
-description: How to route a detected seam crossing — who decides, through which channel, what happens while it waits, and the escalation format for a PR comment, an execution pause, or a filed issue. Load when a change needs sign-off before it can proceed, or when deciding how to surface a risky finding rather than silently blocking on it.
+description: Use when a protected change needs sign-off or a risky finding must be surfaced. Defines who decides, the host escalation channel, waiting behavior, and formats for PR comments, pauses, or filed issues.
 tier: concept
 requires: [external:github]
 expects-local: [protected-seams]
@@ -8,7 +8,7 @@ expects-local: [protected-seams]
 
 ## Who owns seam decisions
 
-**The project approver** (named in the project's protected-seams registry, e.g. Harmony's `harmony-protected-seams`) — primary owner. Holds final decision on all seam crossings.
+**The project approver** (named in the project's protected-seams registry) — primary owner. Holds final decision on all seam crossings.
 **Lead** — co-enforcement. Flags seam crossings in diffs and during agent execution. Does not unilaterally approve crossings.
 
 Neither Reviewer nor Implementer has authority to approve a seam crossing. They detect and flag; humans decide.

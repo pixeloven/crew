@@ -1,6 +1,6 @@
 ---
 name: mcp-server-design
-description: Designing and implementing MCP servers with FastMCP — tool design, description quality, structured error handling, failure semantics, registration, and the three-class surface decision (MCP vs AXI vs CLI). Load when building new MCP tools or servers.
+description: Use when building MCP tools or servers with FastMCP. Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision.
 tier: subject
 requires: []
 ---

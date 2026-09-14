@@ -1,6 +1,6 @@
 ---
 name: delta-handling
-description: How to propose, evaluate, and record a change to a plan already in progress. Defines the two delta classes — auto-approvable versus human-escalated — and the recording format. Load when a worker proposes deviating from the plan, when deciding whether a change needs sign-off before continuing, or when writing down what changed mid-execution and why.
+description: Use when a worker proposes deviating from an active plan, when deciding whether a change needs sign-off, or when recording a mid-execution change. Defines auto-approvable vs human-escalated deltas.
 tier: concept
 requires: []
 expects-local: [protected-seams]
@@ -34,7 +34,7 @@ Lead may auto-approve without pausing execution. Record the decision.
 |---|---|
 | Scope expansion | Tasks or deliverables not in the original plan. Even if beneficial, a human decides. |
 | Rollback | Reverting work already completed. High risk of data loss or state divergence. |
-| Seam crossing | A registry seam touched without prior flagging. See the project's protected-seams registry skill (e.g. Harmony's `harmony-protected-seams`). |
+| Seam crossing | A registry seam touched without prior flagging. See the project's protected-seams registry skill. |
 | Risk or auth change | The change alters the risk profile, or brings secrets/auth surfaces into scope. |
 | Downstream impact | Changes that affect another agent's assigned task or expected input. |
 | Exit/completion criteria change | The definition of "done" for the plan or a phase is being altered. |

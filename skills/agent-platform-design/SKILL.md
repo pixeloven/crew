@@ -1,6 +1,6 @@
 ---
 name: agent-platform-design
-description: Designing agent capabilities and surfaces — the three interface classes (MCP, AXI, CLI) and which one a capability belongs in, skill vs agent tradeoffs, surface naming, and the operator-layer vs autonomous-runtime scope distinction. Load when designing a new agent capability, deciding whether a tool federates through the gateway or stays local to one machine, or evaluating platform options.
+description: Use when designing an agent capability, choosing MCP vs AXI vs CLI, deciding skill vs agent, or placing a surface at operator or autonomous-runtime scope. Covers naming and federation boundaries.
 tier: concept
 requires: []
 ---
@@ -10,7 +10,7 @@ requires: []
 | Surface | Primary caller | Scope |
 |---|---|---|
 | **Scope 1 — operator layer** | Operators working ON the platform (interactive harness sessions) | Agents, skills, dispatch patterns in the harness config (e.g. `.claude/`) |
-| **Scope 2 — autonomous runtime** | The project's in-cluster orchestrator running against external repos | Workflow engine, orchestrator, webhook dispatch (e.g. Harmony's Argo Workflows + Pydantic AI orchestrator) |
+| **Scope 2 — autonomous runtime** | The project's in-cluster orchestrator running against external repos | Workflow engine, orchestrator, webhook dispatch |
 
 Requirements diverge between surfaces. Design decisions made for Scope 1 don't automatically apply to Scope 2. Establish clear surface naming conventions early so discussions don't conflate the two.
 
@@ -151,7 +151,7 @@ A skill documenting how code behaves — a label format, an exit-code contract, 
 
 ## Platform tenets (durable bets)
 
-Design new capabilities against the project's durable bets. Each consumer declares its own tenet list (in its local architecture skill or entry file); Harmony's, for example:
+Design new capabilities against the project's durable bets. Each consumer declares its own tenet list in its local architecture skill or entry file. A representative set is:
 - Kubernetes as the delivery strategy
 - Talos Linux / Sidero Omni on Proxmox as the substrate
 - Agent-oriented platform direction (implementations reshape; direction holds)

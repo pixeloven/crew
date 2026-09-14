@@ -1,6 +1,6 @@
 ---
 name: github-actions-conventions
-description: GitHub Actions workflow conventions — workflow structure, secret access, gh CLI usage, uv-based Python CI, gitleaks scanning, and automated-commit patterns. Load when writing or reviewing GitHub Actions workflows or CI pipelines.
+description: Use when writing or reviewing GitHub Actions workflows or CI. Covers workflow structure, secret access, gh CLI usage, uv-based Python jobs, gitleaks scanning, and automated-commit patterns.
 tier: subject
 requires: [external:github]
 ---

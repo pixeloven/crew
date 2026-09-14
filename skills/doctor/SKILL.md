@@ -1,96 +1,196 @@
 ---
 name: doctor
-description: Health-check this project's agent-foundation install and report what actually works — package present, roles resolvable, which capabilities this session can genuinely reach, unfilled local-skill slots, whether a local copy is silently shadowing a plugin one, and whether every skill on disk actually loaded into this runtime. Load when asked to run the doctor, verify or debug the install, check onboarding status, diagnose a skill that seems to be ignored or missing, or answer "what can I actually reach here".
+description: Use when asked to run Crew Doctor, verify installation or onboarding, debug missing roles/skills, or report what this session can reach. Separates installed, enabled, runtime-loaded, granted, degraded, and untested evidence.
 tier: concept
 requires: []
 ---
 
 # Doctor
 
-Run the checks below in order, then produce the report. Absence of a platform is a **profile**, not a failure — this skill never treats "no cluster, no gateway" as an error; it records what's reachable and recommends the matching posture. The foundation itself needs nothing but a repo.
+Crew Doctor is fully read-only. Never install, enable, update, delete, edit, or
+restart anything while running it. Absence is evidence, not permission to repair.
+Run free checks first and report only the current harness's runtime as runtime
+truth; one harness cannot verify another.
 
-## The checks
+## Evidence vocabulary
 
-**1. Installation.**
-- Claude Code: `.claude/settings.json` (project or user) has the `crew` marketplace + `enabledPlugins` entry. pi.dev: `.pi/settings.json` packages include `harmony-crew` (note the pinned tag — report if it lags the installed catalog's version). OpenAI Codex: the catalog is present in the repo's `.agents/skills/` or `~/.agents/skills/` (report which, and the pinned tag if recorded), and `config.toml` has an `mcp_servers` entry for the LiteLLM gateway with a `bearer_token_env_var`.
-- The seven roles resolve: the harness's agent list contains `lead`, `triage`, `investigator`, `researcher`, `responder`, `reviewer`, `implementer` — the same seven names on Claude Code and pi. If skills load but agents don't (or vice versa), the install is partial — say which half. On **Codex**, the foundation does not yet render `.codex/agents/*.toml`, so report the roles as *not yet rendered for this harness* (a known gap, not a broken install) and confirm instead that the `AGENTS.md` routing table is present — that table is what triggers Codex's delegation.
+Keep these dimensions separate:
 
-**2. Entry file.**
-- A repo-root `AGENTS.md` exists. Claude Code repos also want a `CLAUDE.md` containing `@AGENTS.md`.
-- It is *behavioral*: short, with the routing table, and no fact-stuffing (infra tables, credential paths, command catalogs). If facts have accreted, recommend re-running `onboarding`.
-- The ▸ Fill blocks are actually filled (ask-list, verification commands, local-skills map, tripwires) — an unfilled template is a half-onboarded project.
+- **installation** — package/catalogue files exist at a declared install root;
+- **enablement** — settings select that installation;
+- **resolved runtime** — this harness actually loaded it in this session;
+- **capability grant** — the session was given a tool or credential surface.
 
-**3. Capability probe.** The foundation's own skills need only `external:github` — check `gh auth status`. Beyond that, probe whatever **the project's local skills** declare they need: if the overlay ships knowledge-base, gateway, or cluster skills, confirm the corresponding tools are actually in this session's tool list and say which are reachable. Present = granted; absent = not granted, which is a fact to report rather than an error.
+For observations use exactly: **present** (visible, not exercised), **working**
+(a read-only probe succeeded), **unavailable** (absent or a probe proved unusable),
+**not tested** (deliberately unprobed), **loaded-but-undiscoverable** (loaded but
+its description is absent), **truncated**, and **omitted**. A config claim is
+never `working`. Label every report item as **fact**, **inference**,
+**recommendation**, or **untested** and retain the command/path that produced it.
 
-**3b. Plugin install state — three registries that disagree.** Claude Code keeps the
-answer in three places and only one is what a session loads:
+## Probe cost and order
 
-    known_marketplaces.json   what the marketplace last served
-    settings.json             what is ENABLED
-    installed_plugins.json    what a session ACTUALLY loads
+Run these free, read-only checks before considering inference calls:
 
-`marketplace update` refreshes the first and leaves the third pointing at the old
-version — so `plugin details` reports the new one while sessions get the old one.
-Report all three, and flag any disagreement. Note the record reconciles only on
-the NEXT session start: mid-reinstall a session reports zero skills, which looks
-like a break and is not.
+1. inspect settings, manifests, registries, caches, and the session's supplied
+   tool/skill/agent catalogues;
+2. `claude plugin validate <absolute-crew-root> --strict` and
+   `claude --plugin-dir <absolute-crew-root> plugin details crew`;
+3. `codex debug prompt-input "hi"` for Codex's model-visible catalogue — this
+   is native introspection and makes no model call;
+4. the distributed validators under the resolved Crew package root.
 
-**3c. Scope.** A capability applied to THE WORK belongs at user scope; knowledge
-about a SPECIFIC ARTIFACT FORMAT belongs to the project. Flag anything registered
-at both — duplicate registration is how one stale version gets three entries — and
-anything universal declared in a project file.
+`claude -p`, `pi -p`, `codex exec`, and equivalent prompt-mediated probes are
+**billed**. Never run one without explicit approval for that probe. State what
+the billed run would establish and leave it `not tested` when approval is absent.
+A fresh session is sometimes the only runtime proof after an install change;
+that does not make it free or implicitly authorized.
 
-**3d. Description budget.** Descriptions are always-on; bodies are not. Report the
-total description bytes, because Codex caps its listing (~21.5 KB) and past that
-truncates EVERY description rather than dropping a skill — the discovery mechanism
-degrades catalogue-wide while everything still appears present. `claude --plugin-dir
-<path> plugin details <name>` gives real per-component token cost.
+`scripts/crew_doctor.py` contains the fixture-tested evidence rules and probe
+ledger. It starts no model processes. Locate it from the **resolved package
+root**, never from the consumer's `scripts/` directory:
 
-**4. Local slots.** For each slot the installed skills declare in `expects-local:` (`platform-conventions`, `topology`, `protected-seams`, `litellm-access-map`, `secret-paths`, `vault-ops`, `agent-runtime`): does the project's overlay (`.agents/skills/`, `.claude/skills/`) or its `AGENTS.md` local-skills map name a skill filling it? Only flag slots that matter for the project's profile — a portable-profile repo doesn't need `topology`. Starter stubs: the foundation's `templates/local-skills/`.
+- Pi git package: the checkout containing `.claude-plugin/plugin.json`;
+- Claude: the marketplace/cache `installLocation` or `installPath` root;
+- Codex: the parent of the `/skills` root shown by `codex debug prompt-input`.
 
-**5. Intake prerequisites** (only if the project routes work through Triage): `gh label list` shows the `domain:*` labels (and `agent:queued` / `triage:needs-clarification` if used). Missing labels mean Triage's routing silently no-ops.
+Run `python3 /absolute/resolved/crew/root/scripts/check_skill_layout.py
+/absolute/consumer/repo`. Both paths must be absolute. This prevents a consumer's
+same-named script from being invoked. If the installed root lacks the validator,
+report that installed version as unable to perform the gate; do not fall back to
+an incidental source clone.
 
-**6. Shadowing** — the check that catches silent staleness. In pi's flat namespace a project-level skill **overrides** the plugin's version of the same name. Claude Code namespaces plugin skills as `plugin:skill`, so there the two coexist under different names rather than shadowing — a stale local copy hides in plain sight instead of winning outright. List any collisions and say which copy wins, because a stale local copy makes foundation updates invisible with no error. If a local copy is an old snapshot rather than a deliberate override, that's the finding.
+## Checks
 
-**7. Discovery — does the runtime see every skill on disk?** This is the check nothing else can do, because it compares what the harness *actually loaded* against what exists.
+### 1. Reconcile installation, enablement, and version
 
-Agents find skills because the harness lists them, with their descriptions, before the first turn. That listing is the discovery mechanism — so a skill the runtime didn't load is invisible no matter how correctly it sits on disk, and nothing errors.
+**Pi.** In applicable project/user `.pi/settings.json`, find the current git
+identity `git:github.com/pixeloven/crew@vX.Y.Z`. Report the configured pin and
+the resolved checkout separately. Read the resolved version from that checkout's
+`.claude-plugin/plugin.json`; never use `git describe`. A pin below `v0.35.0` is
+**DEGRADED**, not missing: pi-subagents silently drops roles without frontmatter
+`name:`, so the Crew fleet is invisible below the first role-discoverable
+release. Also report duplicate project/user scopes and which scope the current
+runtime actually resolved, if this Pi session exposes it.
 
-- **What you see.** Your own context already holds the list — the skills available to you, each with its description. That is the authoritative side of this comparison; read it from what you were given, not from a file. On Codex, `skills.list` returns the same set on demand.
-**Verify by running a session, never by reading a registry.** Every registry above
-lied at some point in a real diagnosis: the marketplace said 0.29.0, the record said
-0.25.0, the settings said enabled, and the session loaded nothing. `claude -p` in a
-separate process is the only answer that counts — skills load at session start, so a
-session cannot observe its own change.
+**Claude Code.** Reconcile four distinct facts:
 
-- **Use the harnesses' own tools first** — they are maintained alongside the
-  runtimes that read these files, and they see things no external check can:
+1. settings declare marketplace `crew` and enable `crew@crew`;
+2. `known_marketplaces.json` records source, install location, and timestamp —
+   it does **not** carry a served version;
+3. the marketplace clone's `.claude-plugin/plugin.json` carries the served
+   version;
+4. `installed_plugins.json` records installed paths/versions/scopes. Enumerate
+   every `plugins["crew@crew"][]` record and flag stale or duplicate scopes.
 
-      claude plugin validate <path> --strict          manifests, frontmatter, and
-                                                      the rule that plugin
-                                                      components are read WITHOUT
-                                                      following symlinks
-      claude --plugin-dir <path> plugin details <n>   component inventory and
-                                                      projected token cost
-      codex debug prompt-input "hi"                   the model-visible skill
-                                                      listing, no API call
+Only this Claude session's catalogue can prove its loaded version. Registry
+agreement is installation evidence, not runtime proof.
 
-  Then `scripts/check_skill_layout.py <repo-root>` for what they miss: verified
-  that `plugin validate --strict` PASSES both a flat `skills/<name>.md` and a
-  `name:` disagreeing with its directory — the two faults that actually shipped.
-  It takes a path, and `--selftest` proves it can still fail. Only then read
-  trees by hand.
-- **What's on disk.** Enumerate the overlay directories — `.agents/skills/*/SKILL.md` (pi and Codex) and `.claude/skills/*/SKILL.md` (Claude Code, usually symlinks into the former) — plus the installed foundation catalogue. A flat `.claude/skills/*.md` is a **finding, not a layout**: report every one.
-- **Report the difference in both directions.** On disk but not loaded is the serious one: name each and give the likely cause — wrong layout — **every harness wants `<name>/SKILL.md` directories**, and a flat `.claude/skills/<name>.md` is invisible to Claude Code with no error — or unparseable YAML frontmatter, a dangling symlink, or a `name:` that disagrees with the directory name. Loaded but not on disk means it came from a different install path — say which.
-- **Codex only:** its skills listing is **budgeted**. Over budget, it truncates descriptions and omits skills entirely, and it counts what it dropped (`omitted_skills`, `truncated_skill_descriptions`). If skills are missing from your listing on Codex, suspect the budget before suspecting the files, and report catalogue size as the cause — the fix is fewer or tighter skills, not a bigger index.
+**Codex.** Check the marketplace pin and `plugins."crew@crew".enabled` in
+`config.toml`, then inspect
+`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/skills` and the exact
+skill-root paths from free `codex debug prompt-input`. A repo/user
+`.agents/skills/` copy remains a supported vendored alternative. Report every
+root and version; duplicate/stale roots are findings. An absent `mcp_servers`
+entry belongs only to the capability-grant check below, never installation.
 
-A count matching on both sides is the pass condition. Say the number.
+After all three, report cross-harness version skew as an observed comparison,
+without claiming that any one harness loaded another harness's files.
 
-## The report
+### 2. Validate entry files without judging by size
 
-A table — one row per check: **check | status (OK / MISSING / DEGRADED / N/A) | evidence | next action**. Then two closing lines:
+Confirm the repo-root `AGENTS.md`; Claude projects normally have a `CLAUDE.md`
+importing it. Audit behavior, filled placeholders, delegation, tripwires,
+delivery contracts, and runbook pointers. Facts may merit an Onboarding
+recommendation, but a mature or long file is not inherently degraded.
 
-- **Profile:** `portable` (the foundation's catalogue alone — its skills need nothing but a repo and, for a few, GitHub) or `platform` (the project's overlay adds capability skills whose tools this session can reach — name which). This is the input `onboarding` uses to tailor its recommendations.
-- **Top action:** the single highest-leverage fix (or "healthy — nothing to do").
+### 3. Separate capability declarations from working probes
 
-Keep it honest: report what you *verified*, not what config files claim. A tool listed but never probed is "present", not "working".
+Derive foundation requirements from installed `requires:` frontmatter and local
+requirements from the consumer overlay. A listed tool/grant is `present`; call
+only safe read-only probes and promote it to `working` on success. A failed probe
+is `unavailable`; an intentionally skipped or billed probe is `not tested`.
+Inspecting an MCP config proves configuration only. Record shell/CLI fallback as
+a separate capability, not MCP parity.
+
+### 4. Derive local slots and profile
+
+Union the installed catalogue's actual `expects-local:` declarations. Today the
+declared set is `platform-conventions`, `topology`, `protected-seams`,
+`secret-paths`, and `agent-runtime`; derive rather than hard-code it in a report.
+`litellm-access-map` and `vault-ops` are recommended vocabulary, not declared
+slots, and must never appear as unfilled unless a future installed skill actually
+declares them.
+
+Emit exactly one profile using this shared taxonomy:
+
+- `personas` when repository evidence declares an OpenClaw/persona runtime;
+- otherwise `platform` when at least one project capability is **working**;
+- otherwise `portable`.
+
+Persona evidence takes precedence; list working platform capabilities separately.
+Onboarding consumes this exact value and rule.
+
+### 5. Validate role files and effective posture
+
+Validate package roles plus consumer `agents/*.md`, `.claude/agents/**/*.md`, and
+`.pi/agents/**/*.md` with the absolute package-root layout validator. Require YAML
+frontmatter `name` and `description`. Neutral and Pi role names must match their
+filenames; a Claude consumer role's frontmatter `name` owns its resolved identity
+and may differ from its filename. Claude role names use lowercase letters and
+hyphens. Reject missing, malformed, or duplicate resolved identities. A missing
+Pi name is a silent-drop finding. Reject `model`, `thinking`,
+`effort`, `model_reasoning_effort`, `turnBudget`, and `maxTurns`: dispatch owns them.
+
+Report every resolved role's effective tools, not only its declared posture.
+`drafts` on Claude denies surgical `Edit`/`NotebookEdit` but retains `Write`, so
+it can create **and overwrite** files. All shipped roles retain shell access;
+therefore frontmatter write restrictions are advisory unless the host sandbox or
+permission system enforces them.
+
+Package-role runtime expectations are harness-specific: Claude and Pi should
+resolve the seven rendered roles; Codex plugins do not carry them, so confirm the
+project's routing contract and available Codex dispatch primitives instead.
+
+### 6. Check intake and collisions
+
+If Triage is routed, read the repository's label taxonomy and verify it through
+the configured GitHub interface. Do not create labels. For collisions, Pi's flat
+namespace lets the nearest project entry win; Claude and Codex namespace plugin
+skills (`crew:name`) so plugin and bare project entries coexist. Name both copies,
+their roots, and whether the local copy appears stale. Counts are per resolved
+runtime name, so a namespaced collision counts as two.
+
+### 7. Compare disk and runtime in both directions
+
+Enumerate directory-form skill files in the resolved foundation root and local
+overlay. Compare them with **this harness's** model-visible catalogue. Report:
+
+- disk-only entries as `omitted` when a runtime catalogue was captured, or `not
+  tested` when none was;
+- runtime-only entries as `present` from another root and identify that root;
+- entries with absent descriptions as `loaded-but-undiscoverable`;
+- shortened descriptions as `truncated`;
+- exact, usable entries as `working`.
+
+Both Codex and Claude can degrade catalogues under pressure. Codex may report
+`omitted_skills` and `truncated_skill_descriptions`; observed totals are dated
+measurements, not permanent byte limits. Pi runtime discovery must come from Pi;
+if unavailable, say `not tested`. A matching count is insufficient: pass only
+when names, backing roots, and full descriptions match after applying the
+harness's namespace rules.
+
+## Report contract
+
+Produce one row per check:
+
+`check | status (OK / MISSING / DEGRADED / N/A) | fact | inference | recommendation | untested | repeatable evidence`
+
+Then include:
+
+- **Profile:** one of `portable`, `platform`, `personas`, using the rule above;
+- **Top action:** exactly one highest-leverage next action, or `healthy — nothing
+  to do`.
+
+Never turn an untested state into an assertion. Keep Doctor read-only even when
+the next action is obvious.

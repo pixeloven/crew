@@ -1,6 +1,6 @@
 ---
 name: release-and-versioning
-description: How to version and publish what a repository produces — one semver line per repo rather than per component, the version living in a file with the tag only selecting it, release notes sourced from a changelog, and checksums plus verified build provenance on every asset. Load before adding a release workflow, cutting a first release, changing a tag scheme, or reviewing anything that publishes an artifact consumers pin. Covers the failure modes that report green while publishing nothing, or the wrong bytes.
+description: Use when adding a release workflow, cutting a release, changing tag rules, or reviewing artifact publication. Requires one semver line, file-owned versions, changelog notes, checksums, and verified provenance.
 tier: concept
 requires: [external:github, cli:gh]
 expects-local: [platform-conventions]
@@ -54,12 +54,12 @@ can debug later.
 Two different facts, both worth publishing:
 
 ```
-thing:cuda-v0.34.0    what is INSIDE          (moves)
+thing:cuda-v1.2.3     what is INSIDE          (moves)
 thing:cuda-1.2.3      OUR packaging of it     (cut once)
 ```
 
 Conflating them is a trap: change a Dockerfile without changing the upstream
-release and `v0.34.0` is overwritten with different bytes.
+release and `v1.2.3` is overwritten with different bytes.
 
 **Pin what is inside; never resolve it at build time.** A workflow that asks the
 upstream API for "latest" during the build makes releases non-reproducible — the
