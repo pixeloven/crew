@@ -2141,6 +2141,62 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertIn("name must be doctor", read["detail"])
             self.assertEqual("DEGRADED", codex["status"])
 
+    def test_incomplete_vendored_catalogues_preserve_candidate_failures(self) -> None:
+        cases = {
+            "malformed": {"doctor": "malformed"},
+            "unreadable": {"doctor": "unreadable"},
+            "valid-only": {"doctor": "valid"},
+            "mixed": {
+                "doctor": "valid",
+                "onboarding": "malformed",
+                "intake-process": "unreadable",
+            },
+        }
+        for case, candidates in cases.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project = base / "project"
+                vendored = project / ".agents/skills"
+                for name, state in candidates.items():
+                    skill = vendored / name / "SKILL.md"
+                    skill.parent.mkdir(parents=True, exist_ok=True)
+                    if state == "valid":
+                        shutil.copyfile(ROOT / "skills" / name / "SKILL.md", skill)
+                    elif state == "unreadable":
+                        skill.write_bytes(b"\xff")
+                    else:
+                        skill.write_text(
+                            f"---\nname: wrong-{name}\ndescription: Broken candidate.\n---\n",
+                            encoding="utf-8",
+                        )
+
+                codex = inspect_installations(project, base / "home")["harnesses"]["codex"]
+
+                self.assertEqual([], codex["vendored_catalogues"])
+                self.assertEqual("DEGRADED", codex["status"])
+                missing = next(
+                    read
+                    for read in codex["catalogue_reads"]
+                    if read["source"] == str(vendored / "activation-contracts/SKILL.md")
+                )
+                self.assertEqual("unavailable", missing["state"])
+                missing_finding = next(
+                    finding
+                    for finding in codex["findings"]
+                    if finding["evidence"][0]["source"] == missing["source"]
+                )
+                self.assertIn("is unavailable", missing_finding["claim"])
+                for name, state in candidates.items():
+                    if state == "valid":
+                        continue
+                    source = str(vendored / name / "SKILL.md")
+                    self.assertTrue(
+                        any(
+                            read["source"] == source and read["state"] == state
+                            for read in codex["catalogue_reads"]
+                        )
+                    )
+
     def test_complete_vendored_catalogue_keeps_unverified_provenance(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)

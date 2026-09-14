@@ -784,7 +784,10 @@ def _degrade_for_read_failures(result: dict[str, Any]) -> None:
         + result["catalogue_reads"]
         + result["cache_reads"]
     ):
-        if read["state"] not in {"malformed", "unreadable"}:
+        if read["state"] not in {"malformed", "unreadable"} and not (
+            read["state"] == "unavailable"
+            and read in result["catalogue_reads"]
+        ):
             continue
         result["status"] = "DEGRADED"
         claim = f"{read['label']} is {read['state']}"
@@ -1413,14 +1416,18 @@ def _inspect_crew_catalogue(
 ) -> tuple[bool, list[dict[str, str]]]:
     distributed = pathlib.Path(__file__).resolve().parents[1] / "skills"
     expected, _ = _catalogue_skill_names(distributed)
-    candidate_directories = (
-        {path.parent.name for path in catalogue.glob("*/SKILL.md")}
-        if catalogue.is_dir()
-        else set()
-    )
-    if len(expected) < 10 or not expected <= candidate_directories:
+    if len(expected) < 10 or not catalogue.is_dir():
         return False, []
     names, failures = _catalogue_skill_names(catalogue)
+    failures.extend(
+        {
+            "label": "Crew vendored catalogue skill",
+            "state": "unavailable",
+            "source": str(catalogue / name / "SKILL.md"),
+            "detail": "expected catalogue entry is missing or invalid",
+        }
+        for name in sorted(expected - names)
+    )
     return expected <= names, failures
 
 
