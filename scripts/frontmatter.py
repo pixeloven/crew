@@ -42,6 +42,20 @@ def _block_scalar_header(value: str) -> tuple[str, int | None] | None:
     return match.group(1), int(indentation) if indentation else None
 
 
+def _over_indented_leading_blank(
+    leading_blank_lines: list[tuple[int, int]],
+    content_indentation: int,
+) -> int | None:
+    return next(
+        (
+            line_number
+            for indentation, line_number in leading_blank_lines
+            if indentation > content_indentation
+        ),
+        None,
+    )
+
+
 def _double_quoted(value: str) -> str:
     escapes = {
         "0": "\0",
@@ -357,13 +371,9 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                 continue
             if content_indentation is None:
                 content_indentation = current
-                over_indented = next(
-                    (
-                        blank_line
-                        for blank_indentation, blank_line in leading_blank_lines
-                        if blank_indentation > content_indentation
-                    ),
-                    None,
+                over_indented = _over_indented_leading_blank(
+                    leading_blank_lines,
+                    content_indentation,
                 )
                 if over_indented is not None:
                     raise ScalarParseError(
@@ -376,13 +386,9 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                     f"invalid block indentation on line {line_number}"
                 )
             elif not saw_content:
-                over_indented = next(
-                    (
-                        blank_line
-                        for blank_indentation, blank_line in leading_blank_lines
-                        if blank_indentation > content_indentation
-                    ),
-                    None,
+                over_indented = _over_indented_leading_blank(
+                    leading_blank_lines,
+                    content_indentation,
                 )
                 if over_indented is not None:
                     raise ScalarParseError(
@@ -525,16 +531,33 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
         if header is not None:
             continuation: list[str] = []
             indentation = header[1]
+            leading_blank_lines: list[tuple[int, int]] = []
+            saw_content = False
             index += 1
             while index < len(lines) and (not lines[index] or lines[index][0].isspace()):
                 if lines[index].startswith("\t"):
                     raise ScalarParseError(f"tab indentation on line {index + 1}")
-                if lines[index].strip():
-                    current = len(lines[index]) - len(lines[index].lstrip(" "))
-                    if indentation is None:
-                        indentation = current
-                    elif current < indentation:
-                        raise ScalarParseError(f"invalid block indentation on line {index + 1}")
+                current = len(lines[index]) - len(lines[index].lstrip(" "))
+                if not lines[index].strip():
+                    if lines[index] and not saw_content:
+                        leading_blank_lines.append((current, index + 1))
+                    continuation.append(lines[index].strip())
+                    index += 1
+                    continue
+                if indentation is None:
+                    indentation = current
+                elif current < indentation:
+                    raise ScalarParseError(f"invalid block indentation on line {index + 1}")
+                if not saw_content:
+                    over_indented = _over_indented_leading_blank(
+                        leading_blank_lines,
+                        indentation,
+                    )
+                    if over_indented is not None:
+                        raise ScalarParseError(
+                            f"invalid block indentation on line {over_indented}"
+                        )
+                saw_content = True
                 continuation.append(lines[index].strip())
                 index += 1
             separator = " " if header[0] == ">" else "\n"
