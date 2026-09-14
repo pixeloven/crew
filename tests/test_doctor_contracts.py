@@ -3818,8 +3818,8 @@ class DerivedContractTests(unittest.TestCase):
 
     def test_claude_consumer_role_identity_must_not_be_blank(self) -> None:
         for declaration, expected_name, valid in (
-            ("' '", "custom-file", False),
-            ('""', "custom-file", False),
+            ("' '", None, False),
+            ('""', None, False),
             ("librarian", "librarian", True),
         ):
             with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as tmp:
@@ -3839,7 +3839,7 @@ class DerivedContractTests(unittest.TestCase):
                 self.assertEqual(valid, posture["role_valid"])
                 if not valid:
                     self.assertIn(
-                        "name must be custom-file",
+                        "resolved role identity is missing",
                         posture["validation_errors"],
                     )
 
@@ -3860,12 +3860,51 @@ class DerivedContractTests(unittest.TestCase):
                 if row["source"] == str(role)
             )
 
-            self.assertEqual("custom-file", posture["name"])
+            self.assertIsNone(posture["name"])
             self.assertFalse(posture["role_valid"])
             self.assertIn(
                 "name must use lowercase letters and hyphens",
                 posture["validation_errors"],
             )
+
+    def test_invalid_claude_overlay_does_not_suppress_packaged_fleet_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".claude/agents/reviewer.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: custom:reviewer\ndescription: Invalid override.\n"
+                "tools: Read, Grep\n---\n",
+                encoding="utf-8",
+            )
+
+            postures = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row
+                for row in postures
+                if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+            unresolved = next(row for row in postures if row["source"] == str(overlay))
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertEqual("crew", reviewer["scope"])
+            self.assertEqual(str(ROOT / "agents/reviewer.md"), reviewer["source"])
+            self.assertIsNone(unresolved["name"])
+            self.assertFalse(unresolved["role_valid"])
+
+            report = compose_doctor_report(
+                inspect_installations(consumer, pathlib.Path(tmp) / "home"),
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=postures,
+                persona_evidence=[],
+            )
+            checks = {row["check"]: row for row in report["checks"]}
+
+            self.assertEqual("OK", checks["role.claude.reviewer"]["status"])
+            unresolved_check = checks["role.consumer.claude.unresolved-1"]
+            self.assertEqual("DEGRADED", unresolved_check["status"])
+            self.assertEqual(str(overlay), unresolved_check["evidence"][0]["source"])
 
     def test_nested_claude_and_pi_consumer_roles_are_reported(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -2201,12 +2201,12 @@ def inspect_role_postures(
         ("claude", package_root / "agents", consumer_root / ".claude/agents"),
         ("pi", package_root / "pi-agents", consumer_root / ".pi/agents"),
     )
-    targets: list[tuple[str, str, pathlib.Path, bool, bool, bool]] = []
+    targets: list[tuple[str | None, str, pathlib.Path, bool, bool, bool]] = []
     for harness, distributed, overlay in harness_roots:
         consumer_roles: dict[str, list[pathlib.Path]] = {}
+        unresolved_roles: list[pathlib.Path] = []
         if overlay.is_dir():
             for path in sorted(overlay.rglob("*.md")):
-                identity = path.stem
                 if harness == "claude":
                     try:
                         metadata, error = read_frontmatter(path)
@@ -2218,8 +2218,12 @@ def inspect_role_postures(
                         and isinstance(metadata, dict)
                         else None
                     )
-                    if resolved_name:
-                        identity = resolved_name
+                    if not resolved_name:
+                        unresolved_roles.append(path)
+                        continue
+                    identity = resolved_name
+                else:
+                    identity = path.stem
                 consumer_roles.setdefault(identity, []).append(path)
         for name in EXPECTED_ROLE_NAMES:
             paths = consumer_roles.pop(name, [])
@@ -2237,6 +2241,10 @@ def inspect_role_postures(
                 (name, harness, path, True, harness != "claude", len(paths) > 1)
                 for path in paths
             )
+        targets.extend(
+            (None, harness, path, True, False, False)
+            for path in unresolved_roles
+        )
     if has_consumer_root:
         neutral_root = consumer_root / "agents"
         targets.extend(
@@ -2256,7 +2264,11 @@ def inspect_role_postures(
             metadata = {}
         resolved_name = metadata.get("name")
         if not isinstance(resolved_name, str) or not resolved_name.strip():
-            errors.append(f"name must be {name}")
+            errors.append(
+                f"name must be {name}"
+                if name is not None
+                else "resolved role identity is missing"
+            )
         elif harness == "claude" and is_consumer_role and not claude_role_identity(
             resolved_name
         ):
@@ -2534,8 +2546,13 @@ def compose_doctor_report(
         )
 
     posture_index: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    unresolved_postures: list[dict[str, Any]] = []
     for posture in role_postures:
-        key = (str(posture.get("harness") or ""), str(posture.get("name") or ""))
+        name = posture.get("name")
+        if posture.get("scope") == "consumer" and not isinstance(name, str):
+            unresolved_postures.append(posture)
+            continue
+        key = (str(posture.get("harness") or ""), str(name or ""))
         posture_index.setdefault(key, []).append(posture)
     for harness in ("claude", "pi"):
         for name in EXPECTED_ROLE_NAMES:
@@ -2616,6 +2633,27 @@ def compose_doctor_report(
                 "evidence": [
                     {"claim": fact, "source": source} for source in dict.fromkeys(sources)
                 ] or [{"claim": fact, "source": ""}],
+            }
+        )
+
+    for index, posture in enumerate(
+        sorted(unresolved_postures, key=lambda item: str(item.get("source", ""))),
+        start=1,
+    ):
+        harness = str(posture.get("harness") or "unknown")
+        errors = posture.get("validation_errors", [])
+        detail = "; ".join(str(error) for error in errors) or "identity is unresolved"
+        fact = f"{harness} consumer role identity is unresolved: {detail}"
+        source = str(posture.get("source") or "")
+        checks.append(
+            {
+                "check": f"role.consumer.{harness}.unresolved-{index}",
+                "status": "DEGRADED",
+                "fact": fact,
+                "inference": "the file does not resolve to a consumer role identity",
+                "recommendation": f"Resolve the {harness} consumer role identity",
+                "untested": "",
+                "evidence": [{"claim": fact, "source": source}],
             }
         )
 
