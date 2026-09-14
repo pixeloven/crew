@@ -136,55 +136,10 @@ def _without_comment(value: str) -> str:
     return value.rstrip()
 
 
-def _flow_sequence(value: str) -> list[Any]:
-    if not value.endswith("]"):
-        raise ScalarParseError("unterminated flow sequence")
-    content = value[1:-1]
-    items: list[str] = []
-    quote: str | None = None
-    start = 0
-    index = 0
-    while index < len(content):
-        character = content[index]
-        if quote == "'":
-            if character == "'":
-                if index + 1 < len(content) and content[index + 1] == "'":
-                    index += 2
-                    continue
-                quote = None
-        elif quote == '"':
-            if character == "\\":
-                index += 2
-                continue
-            if character == '"':
-                quote = None
-        elif character in {"'", '"'} and not content[start:index].strip():
-            quote = character
-        elif character == ",":
-            item = content[start:index].strip()
-            if not item:
-                raise ScalarParseError("empty flow-sequence entry")
-            items.append(item)
-            start = index + 1
-        elif character == "#" and (index == 0 or content[index - 1].isspace()):
-            raise ScalarParseError("comments in flow sequences are unsupported")
-        elif character in "[]{}":
-            raise ScalarParseError("nested flow collections are unsupported")
-        index += 1
-    if quote is not None:
-        raise ScalarParseError("unterminated quote in flow sequence")
-    final = content[start:].strip()
-    if final:
-        items.append(final)
-    return [_scalar(item) for item in items]
-
-
-def _flow_mapping(value: str) -> dict[str, Any]:
-    if not value.endswith("}"):
-        raise ScalarParseError("unterminated flow mapping")
-    content = value[1:-1]
+def _flow_entries(content: str, allow_nested_flow: bool) -> list[str]:
     entries: list[str] = []
     quote: str | None = None
+    closers: list[str] = []
     start = 0
     index = 0
     while index < len(content):
@@ -202,71 +157,101 @@ def _flow_mapping(value: str) -> dict[str, Any]:
             if character == '"':
                 quote = None
         elif character in {"'", '"'}:
-            prefix = content[start:index].rstrip()
-            if not prefix or prefix.endswith(":"):
-                quote = character
-        elif character == ",":
+            quote = character
+        elif character in "[{":
+            if not allow_nested_flow:
+                raise ScalarParseError("nested flow collections are unsupported")
+            closers.append("]" if character == "[" else "}")
+        elif character in "]}":
+            if not closers or character != closers.pop():
+                raise ScalarParseError("mismatched flow-collection delimiter")
+        elif character == "," and not closers:
             entry = content[start:index].strip()
             if not entry:
-                raise ScalarParseError("empty flow-mapping entry")
+                raise ScalarParseError("empty flow-collection entry")
             entries.append(entry)
             start = index + 1
         elif character == "#" and (index == 0 or content[index - 1].isspace()):
-            raise ScalarParseError("comments in flow mappings are unsupported")
-        elif character in "[]{}":
-            raise ScalarParseError("nested flow collections are unsupported")
+            raise ScalarParseError("comments in flow collections are unsupported")
         index += 1
     if quote is not None:
-        raise ScalarParseError("unterminated quote in flow mapping")
+        raise ScalarParseError("unterminated quote in flow collection")
+    if closers:
+        raise ScalarParseError("unterminated nested flow collection")
     final = content[start:].strip()
     if final:
         entries.append(final)
-    elif content.rstrip().endswith(","):
-        pass
-    elif content.strip():
-        raise ScalarParseError("empty flow-mapping entry")
+    return entries
+
+
+def _flow_mapping_separator(entry: str) -> int | None:
+    quote: str | None = None
+    closers: list[str] = []
+    index = 0
+    while index < len(entry):
+        character = entry[index]
+        if quote == "'":
+            if character == "'":
+                if index + 1 < len(entry) and entry[index + 1] == "'":
+                    index += 2
+                    continue
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'}:
+            quote = character
+        elif character in "[{":
+            closers.append("]" if character == "[" else "}")
+        elif character in "]}":
+            if not closers or character != closers.pop():
+                raise ScalarParseError("mismatched flow-collection delimiter")
+        elif character == ":" and not closers:
+            return index
+        index += 1
+    return None
+
+
+def _flow_sequence(value: str, allow_nested_flow: bool = False) -> list[Any]:
+    if not value.endswith("]"):
+        raise ScalarParseError("unterminated flow sequence")
+    entries = _flow_entries(value[1:-1], allow_nested_flow)
+    return [
+        _scalar(entry, allow_nested_flow=allow_nested_flow)
+        for entry in entries
+    ]
+
+
+def _flow_mapping(value: str, allow_nested_flow: bool = False) -> dict[str, Any]:
+    if not value.endswith("}"):
+        raise ScalarParseError("unterminated flow mapping")
+    entries = _flow_entries(value[1:-1], allow_nested_flow)
 
     result: dict[str, Any] = {}
     for entry in entries:
-        quote = None
-        separator_index = None
-        index = 0
-        while index < len(entry):
-            character = entry[index]
-            if quote == "'":
-                if character == "'":
-                    if index + 1 < len(entry) and entry[index + 1] == "'":
-                        index += 2
-                        continue
-                    quote = None
-            elif quote == '"':
-                if character == "\\":
-                    index += 2
-                    continue
-                if character == '"':
-                    quote = None
-            elif character in {"'", '"'} and not entry[:index].strip():
-                quote = character
-            elif character == ":":
-                separator_index = index
-                break
-            index += 1
+        separator_index = _flow_mapping_separator(entry)
         if separator_index is None:
             raise ScalarParseError("invalid flow-mapping entry")
         key_text = entry[:separator_index].strip()
         value_text = entry[separator_index + 1:].strip()
-        if not key_text or not value_text:
+        if not key_text or not value_text and not allow_nested_flow:
             raise ScalarParseError("invalid flow-mapping entry")
         key = _scalar(key_text.strip())
         if not isinstance(key, str) or not key:
             raise ScalarParseError("flow-mapping keys must be strings")
         if key in result:
             raise ScalarParseError(f"duplicate flow-mapping key {key!r}")
-        result[key] = _scalar(value_text.strip())
+        result[key] = _scalar(
+            value_text.strip(),
+            allow_nested_flow=allow_nested_flow,
+        )
     return result
 
 
-def _scalar(value: str) -> Any:
+def _scalar(value: str, *, allow_nested_flow: bool = False) -> Any:
     value = _without_comment(value.strip())
     if not value:
         return None
@@ -291,9 +276,9 @@ def _scalar(value: str) -> Any:
             raise ScalarParseError("unterminated double-quoted scalar")
         return _double_quoted(value[1:-1])
     if value.startswith("["):
-        return _flow_sequence(value)
+        return _flow_sequence(value, allow_nested_flow)
     if value.startswith("{"):
-        return _flow_mapping(value)
+        return _flow_mapping(value, allow_nested_flow)
     if value[0] in "]}":
         raise ScalarParseError("unmatched flow-collection delimiter")
     if re.search(r":(?:[ \t]|$)", value):
@@ -370,7 +355,7 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
 
     def scalar(raw: str, line_number: int) -> None:
         try:
-            _scalar(raw)
+            _scalar(raw, allow_nested_flow=True)
         except ScalarParseError as error:
             raise ScalarParseError(f"{error} on line {line_number}") from error
 
@@ -643,7 +628,10 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
                 values[key] = sequence
                 index = cursor
                 continue
-        values[key] = _scalar(raw)
+        values[key] = _scalar(
+            raw,
+            allow_nested_flow=key in OPAQUE_NESTED_FIELDS,
+        )
         index += 1
     return values
 

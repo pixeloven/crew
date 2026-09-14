@@ -359,6 +359,47 @@ class LayoutContractTests(unittest.TestCase):
                     completed.stdout + completed.stderr,
                 )
 
+    def test_claude_opaque_metadata_accepts_nested_flow_collections(self) -> None:
+        cases = (
+            (
+                'mcpServers: [{playwright: {type: stdio, command: npx, '
+                'args: ["-y", "@playwright/mcp@latest"]}}]\n',
+                True,
+            ),
+            (
+                'hooks: {PreToolUse: [{matcher: "Bash,[{}]", hooks: '
+                '[{type: command, command: "printf \'[ok], {done}\'"}]}]}\n',
+                True,
+            ),
+            ('mcpServers: [{playwright: {type: stdio}]\n', False),
+            ('hooks: {PreToolUse: [{matcher: "Bash"}]\n', False),
+            ('tools: [Read, {name: nested}]\n', False),
+        )
+        for declaration, valid in cases:
+            with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".claude/agents/reviewer.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    "---\nname: reviewer\ndescription: Reviews changes.\n"
+                    f"{declaration}"
+                    "---\n",
+                    encoding="utf-8",
+                )
+
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                output = completed.stdout + completed.stderr
+                self.assertEqual(valid, completed.returncode == 0, output)
+                if not valid:
+                    self.assertIn("invalid YAML frontmatter", output)
+
     def test_nested_hook_compact_mapping_uses_actual_key_column(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
