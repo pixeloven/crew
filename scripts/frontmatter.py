@@ -381,9 +381,10 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             keys.add(key)
             position += 1
             header = _block_scalar_header(raw)
+            content = _without_comment(raw).rstrip()
             if header is not None:
                 position = block_scalar(position, indentation, header[1])
-            elif raw:
+            elif content:
                 scalar(raw, line_number)
             else:
                 position = skip_comments(position)
@@ -425,9 +426,10 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             key, raw = match.groups()
             item_indentation = indentation + 1 + separation
             header = _block_scalar_header(raw)
+            content = _without_comment(raw).rstrip()
             if header is not None:
                 position = block_scalar(position, item_indentation, header[1])
-            elif raw:
+            elif content:
                 scalar(raw, line_number)
             else:
                 position = skip_comments(position)
@@ -480,6 +482,7 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
         if key in values:
             raise ScalarParseError(f"duplicate mapping key {key!r}")
         header = _block_scalar_header(raw)
+        content = _without_comment(raw).rstrip()
         if header is not None:
             continuation: list[str] = []
             indentation = header[1]
@@ -498,7 +501,7 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
             separator = " " if header[0] == ">" else "\n"
             values[key] = separator.join(part for part in continuation if part)
             continue
-        if not raw:
+        if not content:
             if key in OPAQUE_NESTED_FIELDS:
                 continuation: list[str] = []
                 cursor = index + 1

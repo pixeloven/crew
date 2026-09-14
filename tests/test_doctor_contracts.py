@@ -2973,7 +2973,43 @@ class InstallationTruthTests(unittest.TestCase):
                     set(row),
                 )
                 for item in row["evidence"]:
-                    self.assertIn(f"source: {item['source'] or 'not recorded'}", rendered)
+                    self.assertTrue(item["source"])
+                    self.assertIn(f"source: {item['source']}", rendered)
+
+    def test_composed_absence_checks_preserve_inspection_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            package = base / "crew"
+            report = compose_doctor_report(
+                inspect_installations(project, home),
+                runtime_comparisons=[],
+                local_slots=declared_local_slots(package),
+                role_postures=[],
+                persona_evidence=[],
+            )
+
+            slots = next(
+                row for row in report["checks"] if row["check"] == "local-slots.declarations"
+            )
+            missing_roles = [
+                row
+                for row in report["checks"]
+                if row["check"].startswith("role.") and " is missing" in row["fact"]
+            ]
+            profile = next(
+                row for row in report["checks"] if row["check"] == "operating-profile.selection"
+            )
+
+            self.assertIn(str(package / "skills"), {item["source"] for item in slots["evidence"]})
+            self.assertEqual(14, len(missing_roles))
+            self.assertTrue(
+                all(item["source"] for row in missing_roles for item in row["evidence"])
+            )
+            self.assertTrue(profile["evidence"])
+            self.assertTrue(all(item["source"] for item in profile["evidence"]))
+            self.assertNotIn("source: not recorded", render_doctor_report(report))
 
     def test_negative_dimension_preserves_direct_and_inspection_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -4119,10 +4155,10 @@ class DerivedContractTests(unittest.TestCase):
             role.write_text(
                 "---\nname: reviewer\ndescription: Reviews changes.\n"
                 "tools: Read, Grep\n"
-                "hooks:\n"
-                "  PreToolUse:\n"
+                "hooks: # lifecycle hooks\n"
+                "  PreToolUse: # before commands\n"
                 "    -   matcher: Bash\n"
-                "        hooks:\n"
+                "        hooks: # command hooks\n"
                 "          - type: command\n"
                 "            command: |2\n"
                 "              \t./scripts/check-command.sh\n"

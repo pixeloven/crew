@@ -1814,7 +1814,13 @@ def inspect_installations(
         top = f"Resolve the {degraded[0]} health findings, then rerun the free checks"
     else:
         top = "Healthy installation evidence; run only authorized runtime probes still marked untested"
-    return {"harnesses": harnesses, "checks": checks, "evidence": evidence, "top_actions": [top]}
+    return {
+        "harnesses": harnesses,
+        "checks": checks,
+        "evidence": evidence,
+        "top_actions": [top],
+        "inspection_context": {"project_root": str(project_root)},
+    }
 
 
 def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
@@ -2023,7 +2029,9 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
     declared: set[str] = set()
     sources: list[str] = []
     reads: list[dict[str, str]] = []
-    for path in pathlib.Path(package_root).glob("skills/*/SKILL.md"):
+    skills_root = pathlib.Path(package_root) / "skills"
+    inspected_paths = sorted(skills_root.glob("*/SKILL.md"))
+    for path in inspected_paths:
         try:
             frontmatter, error = read_frontmatter(path)
         except (OSError, UnicodeDecodeError) as exception:
@@ -2086,6 +2094,7 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
         "declared": sorted(declared),
         "recommended_vocabulary": list(RECOMMENDED_LOCAL_VOCABULARY),
         "sources": sources,
+        "inspection_sources": [str(skills_root), *(str(path) for path in inspected_paths)],
         "reads": reads,
     }
 
@@ -2466,6 +2475,34 @@ def compose_doctor_report(
     report = deepcopy(installation_report)
     checks = report["checks"]
 
+    project_root = str(report.get("inspection_context", {}).get("project_root") or "")
+    role_inspection_sources: dict[str, list[str]] = {"claude": [], "pi": []}
+    for harness, suffix in (("claude", ".claude/agents"), ("pi", ".pi/agents")):
+        harness_report = report["harnesses"][harness]
+        candidates: list[str] = []
+        if project_root:
+            candidates.append(str(pathlib.Path(project_root) / suffix))
+        package_suffix = "agents" if harness == "claude" else "pi-agents"
+        candidates.extend(
+            str(pathlib.Path(root) / package_suffix)
+            for root in [
+                *harness_report.get("resolved_package_roots", []),
+                *harness_report.get("package_roots", []),
+            ]
+        )
+        candidates.extend(str(source) for source in harness_report.get("inspection_paths", []))
+        role_inspection_sources[harness] = list(
+            dict.fromkeys(source for source in candidates if source)
+        )
+    report_inspection_sources = list(
+        dict.fromkeys(
+            source
+            for harness_report in report["harnesses"].values()
+            for source in harness_report.get("inspection_paths", [])
+            if source
+        )
+    )
+
     for comparison in runtime_comparisons:
         capture = comparison.get("capture", {})
         capture_source = str(capture.get("source_command", "captured runtime catalogue"))
@@ -2497,6 +2534,23 @@ def compose_doctor_report(
     )
     slot_reads = local_slots.get("reads", [])
     slot_status = "DEGRADED" if slot_reads else "OK"
+    slot_evidence = [
+        {
+            "claim": f"local-slot declaration is {read['state']}: {read['detail']}",
+            "source": read["source"],
+        }
+        for read in slot_reads
+    ]
+    if not slot_evidence:
+        slot_sources = (
+            local_slots.get("sources")
+            or local_slots.get("inspection_sources")
+            or report_inspection_sources
+        )
+        slot_evidence = [
+            {"claim": slot_fact, "source": source}
+            for source in dict.fromkeys(str(source) for source in slot_sources if source)
+        ]
     checks.append(
         {
             "check": "local-slots.declarations",
@@ -2509,13 +2563,7 @@ def compose_doctor_report(
             ),
             "recommendation": "Resolve malformed local-slot declarations" if slot_reads else "",
             "untested": "",
-            "evidence": [
-                {
-                    "claim": f"local-slot declaration is {read['state']}: {read['detail']}",
-                    "source": read["source"],
-                }
-                for read in slot_reads
-            ] or [{"claim": slot_fact, "source": ""}],
+            "evidence": slot_evidence,
         }
     )
 
@@ -2558,6 +2606,16 @@ def compose_doctor_report(
             continue
         key = (str(posture.get("harness") or ""), str(name or ""))
         posture_index.setdefault(key, []).append(posture)
+    posture_sources = {
+        harness: list(
+            dict.fromkeys(
+                str(posture["source"])
+                for posture in role_postures
+                if posture.get("harness") == harness and posture.get("source")
+            )
+        )
+        for harness in ("claude", "pi")
+    }
     for harness in ("claude", "pi"):
         for name in EXPECTED_ROLE_NAMES:
             matches = posture_index.get((harness, name), [])
@@ -2581,6 +2639,8 @@ def compose_doctor_report(
                 for posture in matches
                 if posture.get("source")
             ]
+            if not sources:
+                sources = posture_sources[harness] or role_inspection_sources[harness]
             checks.append(
                 {
                     "check": f"role.{harness}.{name}",
@@ -2591,7 +2651,7 @@ def compose_doctor_report(
                     "untested": "",
                     "evidence": [
                         {"claim": fact, "source": source} for source in dict.fromkeys(sources)
-                    ] or [{"claim": fact, "source": ""}],
+                    ],
                 }
             )
 
@@ -2626,6 +2686,8 @@ def compose_doctor_report(
             for posture in matches
             if posture.get("source")
         ]
+        if not sources:
+            sources = role_inspection_sources.get(harness, report_inspection_sources)
         checks.append(
             {
                 "check": f"role.consumer.{harness}.{name}",
@@ -2636,7 +2698,7 @@ def compose_doctor_report(
                 "untested": "",
                 "evidence": [
                     {"claim": fact, "source": source} for source in dict.fromkeys(sources)
-                ] or [{"claim": fact, "source": ""}],
+                ],
             }
         )
 
@@ -2674,9 +2736,9 @@ def compose_doctor_report(
         profile_sources = [
             evidence["source"]
             for item in capability_checks
-            if item["state"] == "working" and item.get("ownership") == "project"
             for evidence in item["evidence"]
         ]
+        profile_sources.extend(report_inspection_sources)
     checks.append(
         {
             "check": "operating-profile.selection",
@@ -2688,7 +2750,7 @@ def compose_doctor_report(
             "evidence": [
                 {"claim": profile_fact, "source": source}
                 for source in dict.fromkeys(source for source in profile_sources if source)
-            ] or [{"claim": profile_fact, "source": ""}],
+            ],
         }
     )
     actionable = [row for row in checks if row["status"] in {"MISSING", "DEGRADED"} and row["recommendation"]]
@@ -2732,6 +2794,12 @@ def render_doctor_report(report: dict[str, Any]) -> str:
         raise ValueError("Doctor reports require exactly one top action")
     if report.get("profile") not in PROFILE_TAXONOMY:
         raise ValueError("Doctor reports require exactly one valid profile")
+    if any(
+        not item.get("source")
+        for row in report["checks"]
+        for item in row.get("evidence", [])
+    ):
+        raise ValueError("Doctor report evidence must be source-bearing")
     lines = [
         "| check | status | fact | inference | recommendation | untested | repeatable evidence |",
         "|---|---|---|---|---|---|---|",
@@ -2745,7 +2813,7 @@ def render_doctor_report(report: dict[str, Any]) -> str:
             row["recommendation"],
             row["untested"],
             "; ".join(
-                f"{item['claim']} (source: {item['source'] or 'not recorded'})"
+                f"{item['claim']} (source: {item['source']})"
                 for item in row["evidence"]
             ),
         ]
