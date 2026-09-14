@@ -3011,6 +3011,41 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertTrue(all(item["source"] for item in profile["evidence"]))
             self.assertNotIn("source: not recorded", render_doctor_report(report))
 
+    def test_missing_role_evidence_does_not_cite_a_sibling_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            installation = inspect_installations(project, home)
+            lead = next(
+                row
+                for row in inspect_role_postures(ROOT, project)
+                if row["harness"] == "claude" and row["name"] == "lead"
+            )
+            report = compose_doctor_report(
+                installation,
+                runtime_comparisons=[],
+                local_slots=declared_local_slots(ROOT),
+                role_postures=[lead],
+                persona_evidence=[],
+            )
+
+            reviewer = next(
+                row for row in report["checks"] if row["check"] == "role.claude.reviewer"
+            )
+            sources = [item["source"] for item in reviewer["evidence"]]
+
+            self.assertEqual("DEGRADED", reviewer["status"])
+            self.assertNotIn(lead["source"], sources)
+            self.assertIn(str(project / ".claude/agents"), sources)
+            self.assertEqual(
+                [
+                    str(project / ".claude/agents"),
+                    *installation["harnesses"]["claude"]["inspection_paths"],
+                ],
+                sources,
+            )
+
     def test_negative_dimension_preserves_direct_and_inspection_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -4181,6 +4216,37 @@ class DerivedContractTests(unittest.TestCase):
                 any(row["name"] is None and row["source"] == str(role) for row in rows)
             )
 
+    def test_commented_hook_sequence_item_preserves_consumer_override(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/reviewer.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: reviewer\ndescription: Reviews changes.\n"
+                "tools: Read, Grep\n"
+                "hooks:\n"
+                "  PreToolUse:\n"
+                "    - # command hook\n"
+                "      type: command\n"
+                "      command: ./scripts/check-command.sh\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row
+                for row in rows
+                if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertEqual("consumer", reviewer["scope"])
+            self.assertEqual(str(role), reviewer["source"])
+            self.assertFalse(
+                any(row["name"] is None and row["source"] == str(role) for row in rows)
+            )
+
     def test_malformed_nested_hook_cannot_suppress_packaged_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             consumer = pathlib.Path(tmp) / "consumer"
@@ -4224,6 +4290,43 @@ class DerivedContractTests(unittest.TestCase):
                 "        - type: command\n"
                 "          command: |\n"
                 "              #!/bin/sh\n"
+                "            ./scripts/report-result.sh\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row
+                for row in rows
+                if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+            unresolved = next(row for row in rows if row["source"] == str(role))
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertEqual("crew", reviewer["scope"])
+            self.assertIsNone(unresolved["name"])
+            self.assertFalse(unresolved["role_valid"])
+            self.assertIn(
+                "invalid YAML frontmatter",
+                " ".join(unresolved["validation_errors"]),
+            )
+
+    def test_hook_block_scalar_over_indented_leading_blank_is_unresolved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/reviewer.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: reviewer\ndescription: Invalid hook metadata.\n"
+                "tools: Read, Grep\n"
+                "hooks:\n"
+                "  PreToolUse:\n"
+                "    - matcher: Bash\n"
+                "      hooks:\n"
+                "        - type: command\n"
+                "          command: |\n"
+                "              \n"
                 "            ./scripts/report-result.sh\n"
                 "---\n",
                 encoding="utf-8",

@@ -311,6 +311,9 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
     tokens: list[tuple[int, str, int]] = []
     for offset, line in enumerate(lines):
         if not line.strip():
+            if line:
+                prefix = line[: len(line) - len(line.lstrip(" "))]
+                tokens.append((len(prefix), line[len(prefix) :], line_offset + offset))
             continue
         prefix = line[: len(line) - len(line.lstrip(" "))]
         tokens.append((len(prefix), line[len(prefix) :], line_offset + offset))
@@ -324,7 +327,9 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             raise ScalarParseError(f"{error} on line {line_number}") from error
 
     def skip_comments(position: int) -> int:
-        while position < len(tokens) and tokens[position][1].startswith("#"):
+        while position < len(tokens) and (
+            not tokens[position][1].strip() or tokens[position][1].startswith("#")
+        ):
             position += 1
         return position
 
@@ -339,16 +344,50 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             else None
         )
         saw_content = False
-        while position < len(tokens) and tokens[position][0] > parent_indentation:
+        leading_blank_lines: list[tuple[int, int]] = []
+        while position < len(tokens) and (
+            not tokens[position][1].strip()
+            or tokens[position][0] > parent_indentation
+        ):
             current, text, line_number = tokens[position]
+            if not text.strip():
+                if not saw_content:
+                    leading_blank_lines.append((current, line_number))
+                position += 1
+                continue
             if content_indentation is None:
                 content_indentation = current
+                over_indented = next(
+                    (
+                        blank_line
+                        for blank_indentation, blank_line in leading_blank_lines
+                        if blank_indentation > content_indentation
+                    ),
+                    None,
+                )
+                if over_indented is not None:
+                    raise ScalarParseError(
+                        f"invalid block indentation on line {over_indented}"
+                    )
             elif current < content_indentation:
                 if saw_content and text.startswith("#"):
                     return position
                 raise ScalarParseError(
                     f"invalid block indentation on line {line_number}"
                 )
+            elif not saw_content:
+                over_indented = next(
+                    (
+                        blank_line
+                        for blank_indentation, blank_line in leading_blank_lines
+                        if blank_indentation > content_indentation
+                    ),
+                    None,
+                )
+                if over_indented is not None:
+                    raise ScalarParseError(
+                        f"invalid block indentation on line {over_indented}"
+                    )
             saw_content = True
             position += 1
         return position
@@ -410,7 +449,7 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             separation = len(item_text) - len(item_text.lstrip(" "))
             raw_item = item_text.strip()
             position += 1
-            if not raw_item:
+            if not _without_comment(raw_item).rstrip():
                 position = skip_comments(position)
                 if position < len(tokens) and tokens[position][0] > indentation:
                     position = node(position, tokens[position][0])

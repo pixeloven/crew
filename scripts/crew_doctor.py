@@ -2606,16 +2606,6 @@ def compose_doctor_report(
             continue
         key = (str(posture.get("harness") or ""), str(name or ""))
         posture_index.setdefault(key, []).append(posture)
-    posture_sources = {
-        harness: list(
-            dict.fromkeys(
-                str(posture["source"])
-                for posture in role_postures
-                if posture.get("harness") == harness and posture.get("source")
-            )
-        )
-        for harness in ("claude", "pi")
-    }
     for harness in ("claude", "pi"):
         for name in EXPECTED_ROLE_NAMES:
             matches = posture_index.get((harness, name), [])
@@ -2640,7 +2630,7 @@ def compose_doctor_report(
                 if posture.get("source")
             ]
             if not sources:
-                sources = posture_sources[harness] or role_inspection_sources[harness]
+                sources = role_inspection_sources[harness]
             checks.append(
                 {
                     "check": f"role.{harness}.{name}",
