@@ -4233,6 +4233,12 @@ class DerivedContractTests(unittest.TestCase):
                 True,
             ),
             (
+                "tools: Bash(*)\n",
+                "bare allows: Bash(*)",
+                "Bash is available through a bare allow",
+                True,
+            ),
+            (
                 "tools: Bash(git status:*)\n",
                 "scoped allows: Bash(git status:*)",
                 "Bash is restricted to scoped allows: Bash(git status:*)",
@@ -4241,6 +4247,12 @@ class DerivedContractTests(unittest.TestCase):
             (
                 "disallowedTools: Bash\n",
                 "bare denies: Bash",
+                "Bash is unavailable through a bare deny",
+                False,
+            ),
+            (
+                "disallowedTools: Bash(*)\n",
+                "bare denies: Bash(*)",
                 "Bash is unavailable through a bare deny",
                 False,
             ),
@@ -4307,7 +4319,9 @@ class DerivedContractTests(unittest.TestCase):
                 "mcpServers:\n"
                 "  - playwright:\n"
                 "      type: stdio\n"
-                "      command: npx\n",
+                "      command: npx\n"
+                "      env:\n"
+                "        TOKEN: ${TOKEN:-missing}\n",
                 True,
             ),
             (

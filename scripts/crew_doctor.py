@@ -2154,6 +2154,11 @@ def _claude_tool_base(value: str) -> str:
     return match.group(1) if match else value
 
 
+def _claude_tool_is_bare(value: str) -> bool:
+    base = _claude_tool_base(value)
+    return value == base or value == f"{base}(*)"
+
+
 def _consumer_role_posture(
     harness: str,
     allowed: list[str],
@@ -2163,16 +2168,16 @@ def _consumer_role_posture(
     denylist_declared: bool,
 ) -> dict[str, Any]:
     if harness == "claude":
-        bare_allowed = [item for item in allowed if _claude_tool_base(item) == item]
+        bare_allowed = [item for item in allowed if _claude_tool_is_bare(item)]
         scoped_allowed = [
-            item for item in allowed if _claude_tool_base(item) != item
+            item for item in allowed if not _claude_tool_is_bare(item)
         ]
-        bare_denied = [item for item in denied if _claude_tool_base(item) == item]
+        bare_denied = [item for item in denied if _claude_tool_is_bare(item)]
         scoped_denied = [
-            item for item in denied if _claude_tool_base(item) != item
+            item for item in denied if not _claude_tool_is_bare(item)
         ]
-        bare_allowed_tools = set(bare_allowed)
-        bare_denied_tools = set(bare_denied)
+        bare_allowed_tools = {_claude_tool_base(item) for item in bare_allowed}
+        bare_denied_tools = {_claude_tool_base(item) for item in bare_denied}
 
         def unrestricted(tool: str) -> bool:
             return (

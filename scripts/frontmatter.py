@@ -294,7 +294,7 @@ def _scalar(value: str) -> Any:
         return _flow_sequence(value)
     if value.startswith("{"):
         return _flow_mapping(value)
-    if value[0] in "]}" or any(character in value for character in "[]{}"):
+    if value[0] in "]}":
         raise ScalarParseError("unmatched flow-collection delimiter")
     if re.search(r":(?:[ \t]|$)", value):
         raise ScalarParseError("mapping separator in plain scalar")
