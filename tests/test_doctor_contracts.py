@@ -3060,6 +3060,34 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertNotIn("pi", result)
         self.assertEqual("DEGRADED", result["status"])
 
+    def test_runtime_only_entries_reflect_description_visibility(self) -> None:
+        fixture = {
+            "harness": "codex",
+            "source_command": "captured Codex catalogue",
+            "skills": [
+                {
+                    "name": "described",
+                    "description": "Visible runtime skill.",
+                    "path": "/runtime/described/SKILL.md",
+                },
+                {
+                    "name": "hidden",
+                    "path": "/runtime/hidden/SKILL.md",
+                },
+            ],
+        }
+
+        result = compare_runtime_catalog([], fixture)
+        entries = {row["runtime_name"]: row for row in result["entries"]}
+
+        self.assertEqual("present", entries["described"]["state"])
+        self.assertEqual("loaded-but-undiscoverable", entries["hidden"]["state"])
+        self.assertEqual(
+            "/runtime/hidden/SKILL.md",
+            entries["hidden"]["runtime"]["path"],
+        )
+        self.assertEqual("captured Codex catalogue", result["capture"]["source_command"])
+
     def test_runtime_fixture_rejects_malformed_collections_with_source(self) -> None:
         malformed = (
             ({"schema_version": "1"}, "schema_version must be integer 1"),
@@ -3716,6 +3744,74 @@ class DerivedContractTests(unittest.TestCase):
         self.assertIn("harness", consumer_checks["role.consumer.neutral.librarian"]["fact"])
         rendered = render_doctor_report(report)
         self.assertTrue(all(check in rendered for check in consumer_checks))
+
+    def test_custom_consumer_tool_posture_is_reported_verbatim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".pi/agents/librarian.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: librarian\ndescription: Custom consumer role.\n"
+                "tools: read, bash, web\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            librarian = next(
+                row
+                for row in rows
+                if row["name"] == "librarian" and row["harness"] == "pi"
+            )
+
+            self.assertTrue(librarian["role_valid"])
+            self.assertEqual("consumer", librarian["scope"])
+            self.assertEqual(["read", "bash", "web"], librarian["allowed_tools"])
+            self.assertIn("read, bash, web", librarian["write_effect"])
+
+    def test_malformed_consumer_tool_posture_retains_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".pi/agents/librarian.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: librarian\ndescription: Broken consumer role.\n"
+                "tools: {read: true}\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            librarian = next(
+                row
+                for row in rows
+                if row["name"] == "librarian" and row["harness"] == "pi"
+            )
+
+            self.assertFalse(librarian["role_valid"])
+            self.assertEqual(str(role), librarian["source"])
+            self.assertIn("tools must be a string sequence", librarian["validation_errors"])
+
+    def test_shipped_roles_still_require_a_fixed_write_posture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package = pathlib.Path(tmp) / "package"
+            shutil.copytree(ROOT / "agents", package / "agents")
+            shutil.copytree(ROOT / "pi-agents", package / "pi-agents")
+            role = package / "pi-agents/lead.md"
+            role.write_text(
+                "---\nname: lead\ndescription: Altered shipped role.\n"
+                "tools: read, bash, web\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(package)
+            lead = next(
+                row for row in rows if row["name"] == "lead" and row["harness"] == "pi"
+            )
+
+            self.assertFalse(lead["role_valid"])
+            self.assertIn(
+                "tool posture does not match a supported write posture",
+                lead["validation_errors"],
+            )
 
     def test_validator_assets_are_in_the_dry_run_npm_tarball(self) -> None:
         import subprocess

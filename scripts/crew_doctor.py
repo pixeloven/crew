@@ -1917,6 +1917,11 @@ def _runtime_path_matches(disk: dict[str, Any], runtime: dict[str, Any]) -> bool
     return True
 
 
+def _runtime_description_visible(runtime: dict[str, Any]) -> bool:
+    description = runtime.get("description")
+    return isinstance(description, str) and bool(description.strip())
+
+
 def compare_runtime_catalog(
     disk_entries: list[dict[str, Any]],
     runtime_fixture: dict[str, Any],
@@ -1975,7 +1980,7 @@ def compare_runtime_catalog(
             state = absent_state
         elif not matching_paths:
             state = "unavailable"
-        elif not runtime.get("description"):
+        elif not _runtime_description_visible(runtime):
             state = "loaded-but-undiscoverable"
         elif runtime.get("description") == disk.get("description"):
             state = "working"
@@ -1989,7 +1994,11 @@ def compare_runtime_catalog(
         rows.append(
             {
                 "runtime_name": visible_names[index],
-                "state": "present",
+                "state": (
+                    "present"
+                    if _runtime_description_visible(runtime)
+                    else "loaded-but-undiscoverable"
+                ),
                 "disk": None,
                 "runtime": runtime,
             }
@@ -2098,6 +2107,25 @@ def _role_string_list(value: Any) -> list[str] | None:
     return None
 
 
+def _consumer_role_posture(harness: str, tools: list[str]) -> dict[str, Any]:
+    if harness == "claude":
+        allowed: list[str] = []
+        denied = tools
+        effect = f"declared denied tools: {', '.join(denied) or 'none'}"
+    else:
+        allowed = tools
+        denied = []
+        effect = f"declared allowed tools: {', '.join(allowed) or 'none'}"
+    return {
+        "writes": "custom",
+        "harness": harness,
+        "allowed_tools": allowed,
+        "denied_tools": denied,
+        "write_effect": effect,
+        "caveat": "shell access makes the frontmatter posture advisory unless the host sandbox enforces it",
+    }
+
+
 def inspect_role_postures(
     package_root: pathlib.Path,
     consumer_root: pathlib.Path | None = None,
@@ -2163,6 +2191,8 @@ def inspect_role_postures(
             denied = _role_string_list(metadata.get("disallowedTools", ""))
             if denied is None:
                 errors.append("disallowedTools must be a string sequence")
+            elif is_consumer_role:
+                writes = "custom"
             else:
                 matches = [
                     mode
@@ -2174,6 +2204,8 @@ def inspect_role_postures(
             allowed = _role_string_list(metadata.get("tools"))
             if allowed is None:
                 errors.append("tools must be a string sequence")
+            elif is_consumer_role:
+                writes = "custom"
             else:
                 effective_allowed = set(allowed) - {"subagent"}
                 matches = [
@@ -2212,10 +2244,15 @@ def inspect_role_postures(
                     }
                 )
                 continue
+            posture = (
+                _consumer_role_posture(harness, denied if harness == "claude" else allowed)
+                if is_consumer_role
+                else effective_posture(writes, harness)
+            )
             rows.append(
                 {
                     "name": name,
-                    **effective_posture(writes, harness),
+                    **posture,
                     "source": str(path),
                     "scope": "consumer" if is_consumer_role else "crew",
                     "role_valid": True,
@@ -2235,6 +2272,26 @@ def _complete_role_posture(posture: dict[str, Any], harness: str, name: str) -> 
             posture.get("role_valid") is True
             and posture.get("name") == name
             and posture.get("harness") == harness
+            and isinstance(posture.get("source"), str)
+            and bool(posture["source"])
+        )
+    if posture.get("scope") == "consumer":
+        allowed = posture.get("allowed_tools")
+        denied = posture.get("denied_tools")
+        return (
+            posture.get("role_valid") is True
+            and posture.get("name") == name
+            and posture.get("harness") == harness
+            and posture.get("writes") == "custom"
+            and isinstance(allowed, list)
+            and all(isinstance(tool, str) and tool for tool in allowed)
+            and isinstance(denied, list)
+            and all(isinstance(tool, str) and tool for tool in denied)
+            and (not denied if harness == "pi" else not allowed)
+            and isinstance(posture.get("write_effect"), str)
+            and bool(posture["write_effect"])
+            and isinstance(posture.get("caveat"), str)
+            and bool(posture["caveat"])
             and isinstance(posture.get("source"), str)
             and bool(posture["source"])
         )
