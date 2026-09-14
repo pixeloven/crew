@@ -18,7 +18,7 @@ BLOCK_SCALAR_HEADER = re.compile(
     r"^([|>])(?:(?:([1-9])([+-])?)|(?:([+-])([1-9])?))?"
     r"(?:[ \t]+#.*)?[ \t]*$"
 )
-OPAQUE_NESTED_FIELDS = {"hooks"}
+OPAQUE_NESTED_FIELDS = {"hooks", "mcpServers"}
 INTEGER = re.compile(r"^[+-]?(?:0|[1-9][0-9_]*|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$")
 FLOAT = re.compile(
     r"^[+-]?(?:(?:[0-9][0-9_]*)?\.[0-9_]+|[0-9][0-9_]*(?:\.[0-9_]*)?[eE][+-]?[0-9]+|\.inf|\.nan)$",

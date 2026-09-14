@@ -2125,6 +2125,30 @@ def _role_string_list(value: Any) -> list[str] | None:
     return None
 
 
+def _claude_role_string_list(value: Any) -> list[str] | None:
+    if not isinstance(value, str):
+        return _role_string_list(value)
+    if not value.strip():
+        return []
+    items: list[str] = []
+    start = 0
+    depth = 0
+    for index, character in enumerate(value):
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif character == "," and depth == 0:
+            items.append(value[start:index].strip())
+            start = index + 1
+    if depth != 0:
+        return None
+    items.append(value[start:].strip())
+    return items if all(items) else None
+
+
 def _claude_tool_base(value: str) -> str:
     match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\([^()\r\n]+\)", value)
     return match.group(1) if match else value
@@ -2359,12 +2383,12 @@ def inspect_role_postures(
                 allowlist_declared = "tools" in metadata
                 denylist_declared = "disallowedTools" in metadata
                 allowed = (
-                    _role_string_list(metadata["tools"])
+                    _claude_role_string_list(metadata["tools"])
                     if allowlist_declared
                     else []
                 )
                 denied = (
-                    _role_string_list(metadata["disallowedTools"])
+                    _claude_role_string_list(metadata["disallowedTools"])
                     if denylist_declared
                     else []
                 )
@@ -2375,7 +2399,9 @@ def inspect_role_postures(
                 if allowed is not None and denied is not None:
                     writes = "custom"
             else:
-                denied = _role_string_list(metadata.get("disallowedTools", ""))
+                denied = _claude_role_string_list(
+                    metadata.get("disallowedTools", "")
+                )
                 if denied is None:
                     errors.append("disallowedTools must be a string sequence")
                 matches = [
