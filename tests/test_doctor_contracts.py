@@ -473,6 +473,7 @@ class InstallationTruthTests(unittest.TestCase):
             runtime = {
                 "codex": {
                     "state": "working",
+                    "source": "captured Codex catalogue for cache selection",
                     "skills": [
                         {
                             "name": "crew:doctor",
@@ -936,13 +937,19 @@ class InstallationTruthTests(unittest.TestCase):
                 project,
                 home,
                 {
-                    "pi": {"state": "omitted", "skill_roots": [str(pi_roots[1])]},
+                    "pi": {
+                        "state": "omitted",
+                        "source": "Pi catalogue omitted by the test harness",
+                        "skill_roots": [str(pi_roots[1])],
+                    },
                     "claude": {
                         "state": "unavailable",
+                        "source": "Claude runtime unavailable to the test harness",
                         "skill_roots": [str(claude_roots[1])],
                     },
                     "codex": {
                         "state": "not tested",
+                        "source": "Codex runtime not tested by this scenario",
                         "skill_roots": [str(codex_roots[1])],
                     },
                 },
@@ -2960,6 +2967,7 @@ class InstallationTruthTests(unittest.TestCase):
                 "claude": {
                     "harness": "claude",
                     "state": "present",
+                    "source": "captured Claude registry catalogue",
                     "version": "0.30.0",
                     "skills": [
                         {
@@ -3692,6 +3700,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
             base = pathlib.Path(tmp)
             runtime = {
                 "codex": {
+                    "source": "captured Codex catalogue with unrelated telemetry",
                     "skills": [
                         {
                             "name": "crew:doctor",
@@ -4108,6 +4117,72 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual(str(overlay), reviewer["source"])
             self.assertFalse(reviewer["role_valid"])
             self.assertIn("forbidden runtime keys", " ".join(reviewer["validation_errors"]))
+
+    def test_doctor_resolves_overlay_with_quoted_hash_in_opaque_flow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".claude/agents/reviewer.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: reviewer\ndescription: Consumer override.\n"
+                "tools: Read, Grep\n"
+                'hooks: {PreToolUse: [{matcher: "Bash # guarded", hooks: '
+                '[{type: command, command: "printf #ok"}]}]}\n'
+                "---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row for row in rows if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertEqual(str(overlay), reviewer["source"])
+
+    def test_pi_overlay_precedence_uses_validated_frontmatter_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".pi/agents/custom-file.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: reviewer\ndescription: Consumer override.\n"
+                "tools: read, bash, grep, find\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewers = [
+                row for row in rows if row["name"] == "reviewer" and row["harness"] == "pi"
+            ]
+
+            self.assertEqual(1, len(reviewers))
+            self.assertEqual(str(overlay), reviewers[0]["source"])
+            self.assertFalse(reviewers[0]["role_valid"])
+            self.assertIn("name must be custom-file", reviewers[0]["validation_errors"])
+
+    def test_malformed_pi_overlay_does_not_suppress_packaged_role(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".pi/agents/reviewer.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: [reviewer]\ndescription: Broken override.\n"
+                "tools: read, bash, grep, find\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewers = [
+                row for row in rows if row["name"] == "reviewer" and row["harness"] == "pi"
+            ]
+            unresolved = next(row for row in rows if row["source"] == str(overlay))
+
+            self.assertEqual(1, len(reviewers))
+            self.assertTrue(reviewers[0]["role_valid"])
+            self.assertEqual(str(ROOT / "pi-agents/reviewer.md"), reviewers[0]["source"])
+            self.assertIsNone(unresolved["name"])
+            self.assertFalse(unresolved["role_valid"])
 
     def test_consumer_fleet_override_uses_resolved_consumer_inference(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
