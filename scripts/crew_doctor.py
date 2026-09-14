@@ -284,7 +284,7 @@ def _validate_runtime_capture(
         raise ValueError(
             f"invalid runtime capture {source}: state must be a supported string"
         )
-    for source_field in ("source", "source_command"):
+    for source_field in ("source", "source_command", "source_path"):
         if source_field in runtime and (
             not isinstance(runtime[source_field], str)
             or not runtime[source_field].strip()
@@ -1834,8 +1834,7 @@ def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
         require_schema=True,
         require_harness=True,
     )
-    if not fixture.get("source_command") and not fixture.get("source"):
-        fixture["source"] = str(fixture_path)
+    fixture["source_path"] = str(fixture_path)
     return fixture
 
 
@@ -1945,29 +1944,50 @@ def compare_runtime_catalog(
     )
     harness = runtime_fixture.get("harness")
     expected = _expected_catalog(disk_entries, harness)
-    capture_source = runtime_fixture.get("source_command") or runtime_fixture.get(
-        "source"
+    capture_sources = list(
+        dict.fromkeys(
+            source
+            for source in (
+                runtime_fixture.get("source_command"),
+                runtime_fixture.get("source"),
+                runtime_fixture.get("source_path"),
+            )
+            if isinstance(source, str) and source.strip()
+        )
     )
-    if not isinstance(capture_source, str) or not capture_source.strip():
+    if not capture_sources:
         raise ValueError(
-            "invalid runtime catalogue capture: source_command or source is required"
+            "invalid runtime catalogue capture: source_command, source, or source_path is required"
         )
     capture = {
-        "source": capture_source,
+        "source": capture_sources[0],
+        "sources": capture_sources,
         "source_command": runtime_fixture.get("source_command"),
+        "source_path": runtime_fixture.get("source_path"),
         "captured_at": runtime_fixture.get("captured_at"),
         "cost": runtime_fixture.get("cost", "unknown"),
     }
     if runtime_fixture.get("tested") is False:
+        entries = [
+            {"runtime_name": name, "state": "not tested", "disk": entry}
+            for name, entry in expected
+        ]
+        if not entries:
+            entries.append(
+                {
+                    "runtime_name": "catalogue",
+                    "state": "not tested",
+                    "disk": None,
+                    "runtime": None,
+                    "scope": "harness",
+                }
+            )
         return {
             "harness": harness,
             "status": "N/A",
             "expected_count": len(expected),
             "visible_count": 0,
-            "entries": [
-                {"runtime_name": name, "state": "not tested", "disk": entry}
-                for name, entry in expected
-            ],
+            "entries": entries,
             "capture": capture,
         }
 
@@ -2598,12 +2618,15 @@ def compose_doctor_report(
 
     for comparison in runtime_comparisons:
         capture = comparison.get("capture", {})
-        capture_source = str(capture["source"])
+        capture_sources = [str(source) for source in capture["sources"]]
         for entry in comparison["entries"]:
             state = entry["state"]
             status = "OK" if state == "working" else "N/A" if state == "not tested" else "DEGRADED"
-            fact = f"{entry['runtime_name']} runtime entry is {state}"
-            sources = [capture_source]
+            if entry.get("scope") == "harness":
+                fact = f"{comparison['harness']} runtime catalogue is {state}"
+            else:
+                fact = f"{entry['runtime_name']} runtime entry is {state}"
+            sources = list(capture_sources)
             for side in (entry.get("disk"), entry.get("runtime")):
                 if isinstance(side, dict) and side.get("path"):
                     sources.append(str(side["path"]))

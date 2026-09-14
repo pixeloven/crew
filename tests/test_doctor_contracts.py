@@ -3212,6 +3212,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
                 {
                     "schema_version": 1,
                     "harness": "codex",
+                    "source_command": "captured session catalogue",
                     "skills": [
                         {
                             "name": "runtime-only",
@@ -3242,7 +3243,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                [str(capture_path)],
+                ["captured session catalogue", str(capture_path)],
                 [item["source"] for item in observed_check["evidence"]],
             )
             self.assertIn(
@@ -3255,7 +3256,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
                 installation,
                 runtime_comparisons=[
                     compare_runtime_catalog(
-                        self.disk,
+                        [],
                         {
                             "harness": "codex",
                             "tested": False,
@@ -3273,13 +3274,16 @@ class RuntimeDiscoveryTests(unittest.TestCase):
                 if row["check"].startswith("runtime.codex.")
             ]
 
-            self.assertEqual(len(self.disk), len(untested_checks))
-            self.assertTrue(all(row["status"] == "N/A" for row in untested_checks))
-            self.assertTrue(
-                all(
-                    [command] == [item["source"] for item in row["evidence"]]
-                    for row in untested_checks
-                )
+            self.assertEqual(1, len(untested_checks))
+            self.assertEqual("runtime.codex.catalogue", untested_checks[0]["check"])
+            self.assertEqual("N/A", untested_checks[0]["status"])
+            self.assertEqual(
+                "codex runtime catalogue is not tested",
+                untested_checks[0]["fact"],
+            )
+            self.assertEqual(
+                [command],
+                [item["source"] for item in untested_checks[0]["evidence"]],
             )
             self.assertIn(f"source: {command}", render_doctor_report(untested))
 
