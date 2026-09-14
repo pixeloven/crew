@@ -284,12 +284,14 @@ def _validate_runtime_capture(
         raise ValueError(
             f"invalid runtime capture {source}: state must be a supported string"
         )
-    if "source" in runtime and (
-        not isinstance(runtime["source"], str) or not runtime["source"].strip()
-    ):
-        raise ValueError(
-            f"invalid runtime capture {source}: source must be a non-empty string"
-        )
+    for source_field in ("source", "source_command"):
+        if source_field in runtime and (
+            not isinstance(runtime[source_field], str)
+            or not runtime[source_field].strip()
+        ):
+            raise ValueError(
+                f"invalid runtime capture {source}: {source_field} must be a non-empty string"
+            )
     if "skills" in runtime:
         skills = runtime["skills"]
         if not isinstance(skills, list):
@@ -364,7 +366,7 @@ def _record_runtime(
     """Record only evidence supplied by this harness's capture."""
     if runtime is None or runtime.get("tested") is False:
         return
-    runtime_source = runtime.get("source", "captured runtime")
+    runtime_source = runtime.get("source_command") or runtime.get("source")
     if not isinstance(runtime_source, str) or not runtime_source.strip():
         runtime_source = "captured runtime"
     captured_state = runtime.get("state")
@@ -2137,35 +2139,82 @@ def _consumer_role_posture(
     denylist_declared: bool,
 ) -> dict[str, Any]:
     if harness == "claude":
-        allowed_tools = {_claude_tool_base(item) for item in allowed}
-        denied_tools = set(denied)
-        scoped_constraints = [
+        bare_allowed = [item for item in allowed if _claude_tool_base(item) == item]
+        scoped_allowed = [
+            item for item in allowed if _claude_tool_base(item) != item
+        ]
+        bare_denied = [item for item in denied if _claude_tool_base(item) == item]
+        scoped_denied = [
             item for item in denied if _claude_tool_base(item) != item
         ]
+        bare_allowed_tools = set(bare_allowed)
+        bare_denied_tools = set(bare_denied)
 
-        def available(tool: str) -> bool:
+        def unrestricted(tool: str) -> bool:
             return (
-                not allowlist_declared or tool in allowed_tools
-            ) and tool not in denied_tools
+                not allowlist_declared or tool in bare_allowed_tools
+            ) and tool not in bare_denied_tools
+
+        def restricted(tool: str) -> list[str]:
+            if tool in bare_denied_tools or unrestricted(tool):
+                return []
+            return [
+                item for item in scoped_allowed if _claude_tool_base(item) == tool
+            ]
 
         effective_writes = [
-            tool for tool in ("Write", "Edit", "NotebookEdit") if available(tool)
+            tool for tool in ("Write", "Edit", "NotebookEdit") if unrestricted(tool)
+        ]
+        restricted_writes = [
+            item
+            for tool in ("Write", "Edit", "NotebookEdit")
+            for item in restricted(tool)
         ]
         effect = (
             f"declared allowlist: {', '.join(allowed) if allowlist_declared else 'unrestricted'}; "
             f"declared denylist: {', '.join(denied) if denylist_declared else 'none'}; "
-            f"scoped constraints: {', '.join(scoped_constraints) or 'none'}; "
-            f"effective write tools: {', '.join(effective_writes) or 'none'}"
+            f"bare allows: {', '.join(bare_allowed) or 'none'}; "
+            f"scoped allows: {', '.join(scoped_allowed) or 'none'}; "
+            f"bare denies: {', '.join(bare_denied) or 'none'}; "
+            f"scoped denies: {', '.join(scoped_denied) or 'none'}; "
+            f"effective write tools: {', '.join(effective_writes) or 'none'}; "
+            f"restricted write tools: {', '.join(restricted_writes) or 'none'}"
         )
-        shell = (
-            "Bash is available; shell access makes the write posture advisory "
-            "unless the host sandbox enforces it"
-            if available("Bash")
-            else "Bash is unavailable; shell access is unavailable under the declared tool constraints"
-        )
+        bash_scoped_denies = [
+            item for item in scoped_denied if _claude_tool_base(item) == "Bash"
+        ]
+        restricted_bash = restricted("Bash")
+        if unrestricted("Bash"):
+            route = (
+                "through a bare allow"
+                if allowlist_declared
+                else "without an allowlist"
+            )
+            constraints = (
+                f" with scoped denies: {', '.join(bash_scoped_denies)}"
+                if bash_scoped_denies
+                else ""
+            )
+            shell = (
+                f"Bash is available {route}{constraints}; shell access makes the "
+                "write posture advisory unless the host sandbox enforces it"
+            )
+        elif restricted_bash:
+            shell = (
+                f"Bash is restricted to scoped allows: {', '.join(restricted_bash)}; "
+                "unrestricted shell access is unavailable"
+            )
+        elif "Bash" in bare_denied_tools:
+            shell = "Bash is unavailable through a bare deny; shell access is unavailable"
+        else:
+            shell = (
+                "Bash is unavailable; shell access is unavailable under the declared "
+                "tool constraints"
+            )
         caveat = (
             f"{shell}; effective write tools: "
-            f"{', '.join(effective_writes) or 'none'}"
+            f"{', '.join(effective_writes) or 'none'}; restricted write tools: "
+            f"{', '.join(restricted_writes) or 'none'}"
         )
     else:
         effect = f"declared allowed tools: {', '.join(allowed) or 'none'}"

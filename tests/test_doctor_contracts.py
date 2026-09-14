@@ -3066,6 +3066,48 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertIn(str(base / "home/.codex/config.toml"), sources)
             self.assertIn(str(base / "home/.codex/plugins/cache/crew/crew"), sources)
 
+    def test_codex_prompt_command_reaches_runtime_and_version_report_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            root = home / ".codex/plugins/cache/crew/crew/0.36.0"
+            write_json(
+                root / ".claude-plugin/plugin.json",
+                {"name": "crew", "version": "0.36.0", "skills": "./skills"},
+            )
+            write_codex_marketplace_identity(home)
+            runtime = parse_codex_prompt_capture(
+                FIXTURES / "runtime/codex-prompt-raw.json"
+            )
+            runtime["version"] = "0.36.0"
+            for entry in runtime["skills"]:
+                if entry["name"].startswith("crew:"):
+                    name = entry["name"].split(":", 1)[1]
+                    entry["path"] = str(root / f"skills/{name}/SKILL.md")
+
+            installation = inspect_installations(
+                project,
+                home,
+                runtime_fixtures={"codex": runtime},
+            )
+            report = compose_doctor_report(
+                installation,
+                runtime_comparisons=[],
+                local_slots=declared_local_slots(ROOT),
+                role_postures=inspect_role_postures(ROOT, project),
+                persona_evidence=[],
+            )
+            command = runtime["source_command"]
+            runtime_check = next(
+                row for row in report["checks"] if row["check"] == "codex.runtime"
+            )
+
+            self.assertEqual(command, installation["harnesses"]["codex"]["runtime"]["source"])
+            self.assertEqual(command, installation["harnesses"]["codex"]["loaded_version_source"])
+            self.assertEqual([command], [item["source"] for item in runtime_check["evidence"]])
+            self.assertIn(f"source: {command}", render_doctor_report(report))
+
     def test_top_action_does_not_mislabel_runtime_degradation_as_installation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
@@ -4178,9 +4220,58 @@ class DerivedContractTests(unittest.TestCase):
             self.assertTrue(reviewer["role_valid"])
             self.assertIn("Bash is available", reviewer["caveat"])
             self.assertIn(
-                "scoped constraints: Bash(git push *)",
+                "scoped denies: Bash(git push *)",
                 reviewer["write_effect"],
             )
+
+    def test_claude_bash_rules_preserve_bare_and_scoped_capabilities(self) -> None:
+        cases = (
+            (
+                "tools: Bash\n",
+                "bare allows: Bash",
+                "Bash is available through a bare allow",
+                True,
+            ),
+            (
+                "tools: Bash(git status:*)\n",
+                "scoped allows: Bash(git status:*)",
+                "Bash is restricted to scoped allows: Bash(git status:*)",
+                False,
+            ),
+            (
+                "disallowedTools: Bash\n",
+                "bare denies: Bash",
+                "Bash is unavailable through a bare deny",
+                False,
+            ),
+            (
+                "disallowedTools: Bash(git push:*)\n",
+                "scoped denies: Bash(git push:*)",
+                "Bash is available without an allowlist with scoped denies: Bash(git push:*)",
+                True,
+            ),
+        )
+        for fields, evidence, caveat, advisory in cases:
+            with self.subTest(fields=fields), tempfile.TemporaryDirectory() as tmp:
+                consumer = pathlib.Path(tmp) / "consumer"
+                role = consumer / ".claude/agents/reviewer.md"
+                role.parent.mkdir(parents=True)
+                role.write_text(
+                    "---\nname: reviewer\ndescription: Reviews changes.\n"
+                    f"{fields}---\n",
+                    encoding="utf-8",
+                )
+
+                reviewer = next(
+                    row
+                    for row in inspect_role_postures(ROOT, consumer)
+                    if row["name"] == "reviewer" and row["harness"] == "claude"
+                )
+
+                self.assertTrue(reviewer["role_valid"])
+                self.assertIn(evidence, reviewer["write_effect"])
+                self.assertIn(caveat, reviewer["caveat"])
+                self.assertEqual(advisory, "write posture advisory" in reviewer["caveat"])
 
     def test_nested_claude_hook_preserves_consumer_override_resolution(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
