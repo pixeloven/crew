@@ -284,6 +284,17 @@ def _validate_runtime_capture(
         raise ValueError(
             f"invalid runtime capture {source}: state must be a supported string"
         )
+    tested = runtime.get("tested")
+    state = runtime.get("state")
+    if (
+        tested is False
+        and state not in {None, "not tested"}
+        or tested is True
+        and state == "not tested"
+    ):
+        raise ValueError(
+            f"invalid runtime capture {source}: tested and state are inconsistent"
+        )
     for source_field in ("source", "source_command", "source_path"):
         if source_field in runtime and (
             not isinstance(runtime[source_field], str)
@@ -318,6 +329,10 @@ def _validate_runtime_capture(
             raise ValueError(
                 f"invalid runtime capture {source}: skill_roots must be a string sequence"
             )
+    if not _runtime_capture_sources(runtime):
+        raise ValueError(
+            f"invalid runtime capture {source}: source_path, source_command, or source is required"
+        )
     return runtime
 
 
@@ -384,7 +399,7 @@ def _record_runtime(
     """Record only evidence supplied by this harness's capture."""
     if runtime is None:
         return
-    runtime_sources = _runtime_capture_sources(runtime) or ["captured runtime"]
+    runtime_sources = _runtime_capture_sources(runtime)
     runtime_source = runtime_sources[0]
     captured_state = runtime.get("state")
     if _runtime_capture_is_untested(runtime):
@@ -1859,13 +1874,14 @@ def inspect_installations(
 def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
     fixture_path = pathlib.Path(path)
     fixture = _read_json(fixture_path, {}).value
+    if isinstance(fixture, dict):
+        fixture["source_path"] = str(fixture_path)
     fixture = _validate_runtime_capture(
         fixture,
         str(fixture_path),
         require_schema=True,
         require_harness=True,
     )
-    fixture["source_path"] = str(fixture_path)
     return fixture
 
 
@@ -1976,10 +1992,6 @@ def compare_runtime_catalog(
     harness = runtime_fixture.get("harness")
     expected = _expected_catalog(disk_entries, harness)
     capture_sources = _runtime_capture_sources(runtime_fixture)
-    if not capture_sources:
-        raise ValueError(
-            "invalid runtime catalogue capture: source_command, source, or source_path is required"
-        )
     capture = {
         "source": capture_sources[0],
         "sources": capture_sources,

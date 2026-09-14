@@ -3528,7 +3528,11 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertEqual("OK", result["status"])
 
     def test_only_supported_untested_states_are_not_tested(self) -> None:
-        for fields in ({"tested": False}, {"state": "not tested"}):
+        for fields in (
+            {"tested": False},
+            {"state": "not tested"},
+            {"tested": False, "state": "not tested"},
+        ):
             with self.subTest(fields=fields):
                 source = f"pi catalogue probe intentionally not run: {fields}"
                 result = compare_runtime_catalog(
@@ -3562,6 +3566,24 @@ class RuntimeDiscoveryTests(unittest.TestCase):
                 self.assertEqual("DEGRADED", result["status"])
                 self.assertEqual({state}, {row["state"] for row in result["entries"]})
 
+        contradictions = (
+            {"tested": False, "state": "working"},
+            {"tested": True, "state": "not tested"},
+        )
+        for fields in contradictions:
+            with self.subTest(fields=fields), self.assertRaisesRegex(
+                ValueError,
+                "tested and state are inconsistent",
+            ):
+                compare_runtime_catalog(
+                    self.disk,
+                    {
+                        "harness": "pi",
+                        "source_command": "contradictory capture",
+                        **fields,
+                    },
+                )
+
         for fields in ({"tested": "false"}, {"state": "failed"}):
             with self.subTest(fields=fields), self.assertRaises(ValueError):
                 compare_runtime_catalog(
@@ -3570,6 +3592,27 @@ class RuntimeDiscoveryTests(unittest.TestCase):
                         "harness": "pi",
                         "source_command": "invalid capture",
                         **fields,
+                    },
+                )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            with self.assertRaisesRegex(
+                ValueError,
+                "source_path, source_command, or source is required",
+            ):
+                inspect_installations(
+                    base / "project",
+                    base / "home",
+                    runtime_fixtures={
+                        "codex": {
+                            "skills": [
+                                {
+                                    "name": "crew:doctor",
+                                    "description": "Visible Doctor skill.",
+                                }
+                            ]
+                        }
                     },
                 )
 
