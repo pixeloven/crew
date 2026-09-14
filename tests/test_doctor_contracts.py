@@ -3745,6 +3745,71 @@ class DerivedContractTests(unittest.TestCase):
         rendered = render_doctor_report(report)
         self.assertTrue(all(check in rendered for check in consumer_checks))
 
+    def test_claude_consumer_role_uses_frontmatter_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/custom-file.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: librarian\ndescription: Maintains references.\n"
+                "tools: Read, Grep\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            librarian = next(
+                row
+                for row in rows
+                if row["name"] == "librarian" and row["harness"] == "claude"
+            )
+
+            self.assertTrue(librarian["role_valid"])
+            self.assertEqual(str(role), librarian["source"])
+            report = compose_doctor_report(
+                inspect_installations(consumer, pathlib.Path(tmp) / "home"),
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=rows,
+                persona_evidence=[],
+            )
+            check = next(
+                item
+                for item in report["checks"]
+                if item["check"] == "role.consumer.claude.librarian"
+            )
+            self.assertEqual("OK", check["status"])
+            self.assertEqual(str(role), check["evidence"][0]["source"])
+
+    def test_claude_duplicate_frontmatter_identities_are_degraded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            agents = consumer / ".claude/agents"
+            agents.mkdir(parents=True)
+            paths = [agents / "first.md", agents / "second.md"]
+            for path in paths:
+                path.write_text(
+                    "---\nname: librarian\ndescription: Maintains references.\n"
+                    "tools: Read, Grep\n---\n",
+                    encoding="utf-8",
+                )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            librarians = [
+                row
+                for row in rows
+                if row["name"] == "librarian" and row["harness"] == "claude"
+            ]
+
+            self.assertEqual(2, len(librarians))
+            self.assertEqual({str(path) for path in paths}, {row["source"] for row in librarians})
+            self.assertTrue(all(not row["role_valid"] for row in librarians))
+            self.assertTrue(
+                all(
+                    "duplicate resolved role identity librarian" in row["validation_errors"]
+                    for row in librarians
+                )
+            )
+
     def test_custom_consumer_tool_posture_is_reported_verbatim(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             consumer = pathlib.Path(tmp) / "consumer"

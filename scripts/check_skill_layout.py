@@ -43,9 +43,11 @@ discovery contract:
     .claude/agents/<name>.md                Claude project roles
     .pi/agents/<name>.md                    Pi project roles
 
-Each requires a matching `name` and a non-empty `description`. Model, reasoning,
-and turn-budget knobs belong to dispatch and are rejected here. Missing Pi names
-are called out explicitly because pi-subagents drops them without a diagnostic.
+Each requires a non-empty `name` and `description`. Pi and neutral role names
+must match their filenames; Claude resolves the frontmatter name independently.
+Model, reasoning, and turn-budget knobs belong to dispatch and are rejected
+here. Missing Pi names are called out explicitly because pi-subagents drops them
+without a diagnostic.
 """
 
 import argparse
@@ -129,8 +131,19 @@ def check(root: pathlib.Path) -> list[str]:
         base = root / rel
         if not base.is_dir():
             continue
-        for path in sorted(base.glob("*.md")):
-            metadata, error = frontmatter(path)
+        records = [
+            (path, *frontmatter(path))
+            for path in sorted(base.glob("*.md"))
+        ]
+        identity_paths: dict[str, list[pathlib.Path]] = {}
+        if rel == ".claude/agents":
+            for path, metadata, error in records:
+                if error or not isinstance(metadata, dict):
+                    continue
+                name = metadata.get("name")
+                if isinstance(name, str) and name:
+                    identity_paths.setdefault(name, []).append(path)
+        for path, metadata, error in records:
             display = f"{rel}/{path.name}"
             if error:
                 errors.append(f"{display}: {error}")
@@ -147,10 +160,12 @@ def check(root: pathlib.Path) -> list[str]:
                     errors.append(
                         f"{display}: filename/name mismatch: {path.stem!r} cannot match an absent required name"
                     )
-            elif name != path.stem:
+            elif rel != ".claude/agents" and name != path.stem:
                 errors.append(
                     f"{display}: filename/name mismatch: frontmatter name {name!r} != filename {path.stem!r}"
                 )
+            elif rel == ".claude/agents" and len(identity_paths.get(name, [])) > 1:
+                errors.append(f"{display}: duplicate resolved role identity {name!r}")
             description = metadata.get("description")
             if not isinstance(description, str) or not description.strip():
                 errors.append(f"{display}: no `description:` in frontmatter — the role is undiscoverable")

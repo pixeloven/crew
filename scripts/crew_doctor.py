@@ -2177,29 +2177,49 @@ def inspect_role_postures(
         ("claude", package_root / "agents", consumer_root / ".claude/agents"),
         ("pi", package_root / "pi-agents", consumer_root / ".pi/agents"),
     )
-    targets = [
-        (name, harness, distributed, overlay)
-        for name in EXPECTED_ROLE_NAMES
-        for harness, distributed, overlay in harness_roots
-    ]
-    targets.extend(
-        (path.stem, harness, distributed, overlay)
-        for harness, distributed, overlay in harness_roots
-        if overlay.is_dir()
-        for path in sorted(overlay.glob("*.md"))
-        if path.stem not in EXPECTED_ROLE_NAMES
-    )
+    targets: list[tuple[str, str, pathlib.Path, bool, bool, bool]] = []
+    for harness, distributed, overlay in harness_roots:
+        consumer_roles: dict[str, list[pathlib.Path]] = {}
+        if overlay.is_dir():
+            for path in sorted(overlay.glob("*.md")):
+                identity = path.stem
+                if harness == "claude":
+                    try:
+                        metadata, error = read_frontmatter(path)
+                    except (OSError, UnicodeDecodeError):
+                        metadata, error = None, "unreadable"
+                    if (
+                        not error
+                        and isinstance(metadata, dict)
+                        and isinstance(metadata.get("name"), str)
+                        and metadata["name"]
+                    ):
+                        identity = metadata["name"]
+                consumer_roles.setdefault(identity, []).append(path)
+        for name in EXPECTED_ROLE_NAMES:
+            paths = consumer_roles.pop(name, [])
+            if paths:
+                targets.extend(
+                    (name, harness, path, True, harness != "claude", len(paths) > 1)
+                    for path in paths
+                )
+            else:
+                targets.append(
+                    (name, harness, distributed / f"{name}.md", False, True, False)
+                )
+        for name, paths in sorted(consumer_roles.items()):
+            targets.extend(
+                (name, harness, path, True, harness != "claude", len(paths) > 1)
+                for path in paths
+            )
     if has_consumer_root:
         neutral_root = consumer_root / "agents"
         targets.extend(
-            (path.stem, "neutral", neutral_root, neutral_root)
+            (path.stem, "neutral", path, True, True, False)
             for path in sorted(neutral_root.glob("*.md"))
         )
 
-    for name, harness, distributed, overlay in targets:
-        overlay_path = overlay / f"{name}.md"
-        is_consumer_role = overlay_path.is_file()
-        path = overlay_path if is_consumer_role else distributed / f"{name}.md"
+    for name, harness, path, is_consumer_role, enforce_filename, duplicate in targets:
         errors: list[str] = []
         try:
             metadata, error = read_frontmatter(path)
@@ -2209,8 +2229,13 @@ def inspect_role_postures(
             errors.append(error)
         if not isinstance(metadata, dict):
             metadata = {}
-        if metadata.get("name") != name:
+        resolved_name = metadata.get("name")
+        if not isinstance(resolved_name, str) or not resolved_name:
             errors.append(f"name must be {name}")
+        elif enforce_filename and resolved_name != path.stem:
+            errors.append(f"name must be {path.stem}")
+        if duplicate:
+            errors.append(f"duplicate resolved role identity {name}")
         if not isinstance(metadata.get("description"), str) or not metadata["description"].strip():
             errors.append("description must be a non-empty string")
         forbidden = sorted(key for key in metadata if key in FORBIDDEN_RUNTIME_KEYS)

@@ -220,6 +220,73 @@ class LayoutContractTests(unittest.TestCase):
             self.assertNotEqual(0, completed.returncode)
             self.assertIn("silent Pi drop", completed.stdout + completed.stderr)
 
+    def test_claude_consumer_role_identity_is_frontmatter_owned(self) -> None:
+        for filename in ("librarian.md", "custom-file.md"):
+            with self.subTest(filename=filename), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / f".claude/agents/{filename}"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    "---\nname: librarian\ndescription: Maintains references.\n---\n",
+                    encoding="utf-8",
+                )
+
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
+    def test_claude_duplicate_resolved_role_identities_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            agents = root / ".claude/agents"
+            agents.mkdir(parents=True)
+            for filename in ("first.md", "second.md"):
+                (agents / filename).write_text(
+                    "---\nname: librarian\ndescription: Maintains references.\n---\n",
+                    encoding="utf-8",
+                )
+
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            output = completed.stdout + completed.stderr
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("duplicate resolved role identity 'librarian'", output)
+            self.assertIn("first.md", output)
+            self.assertIn("second.md", output)
+
+    def test_pi_consumer_role_identity_remains_filename_owned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            agent = root / ".pi/agents/custom-file.md"
+            agent.parent.mkdir(parents=True)
+            agent.write_text(
+                "---\nname: librarian\ndescription: Maintains references.\n---\n",
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("filename/name mismatch", completed.stdout + completed.stderr)
+
     def test_unreadable_frontmatter_is_a_source_bearing_validation_error(self) -> None:
         for relative_path in (
             ".agents/skills/broken/SKILL.md",
