@@ -4121,12 +4121,12 @@ class DerivedContractTests(unittest.TestCase):
                 "tools: Read, Grep\n"
                 "hooks:\n"
                 "  PreToolUse:\n"
-                "    - matcher: Bash\n"
-                "      hooks:\n"
-                "        - type: command\n"
-                "          command: |2\n"
-                "            \t./scripts/check-command.sh\n"
-                "            ./scripts/report-result.sh\n"
+                "    -   matcher: Bash\n"
+                "        hooks:\n"
+                "          - type: command\n"
+                "            command: |2\n"
+                "              \t./scripts/check-command.sh\n"
+                "              ./scripts/report-result.sh\n"
                 "---\n",
                 encoding="utf-8",
             )

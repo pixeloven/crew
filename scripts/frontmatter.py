@@ -405,7 +405,9 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                 raise ScalarParseError(f"unexpected indentation on line {line_number}")
             if text != "-" and not text.startswith("- "):
                 raise ScalarParseError(f"mixed sequence and mapping on line {line_number}")
-            raw_item = text[1:].strip()
+            item_text = text[1:]
+            separation = len(item_text) - len(item_text.lstrip(" "))
+            raw_item = item_text.strip()
             position += 1
             if not raw_item:
                 position = skip_comments(position)
@@ -421,7 +423,7 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                     )
                 continue
             key, raw = match.groups()
-            item_indentation = indentation + 2
+            item_indentation = indentation + 1 + separation
             header = _block_scalar_header(raw)
             if header is not None:
                 position = block_scalar(position, item_indentation, header[1])

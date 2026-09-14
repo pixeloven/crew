@@ -359,6 +359,33 @@ class LayoutContractTests(unittest.TestCase):
                     completed.stdout + completed.stderr,
                 )
 
+    def test_nested_hook_compact_mapping_uses_actual_key_column(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            agent = root / ".claude/agents/reviewer.md"
+            agent.parent.mkdir(parents=True)
+            agent.write_text(
+                "---\nname: reviewer\ndescription: Reviews changes.\n"
+                "hooks:\n"
+                "  PreToolUse:\n"
+                "    -   matcher: Bash\n"
+                "        hooks:\n"
+                "          - type: command\n"
+                "            command: ./scripts/check-command.sh\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
     def test_claude_consumer_role_rejects_malformed_nested_hooks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
