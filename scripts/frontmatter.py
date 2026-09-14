@@ -15,6 +15,7 @@ from typing import Any
 
 FIELD = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(?:[ \t]*(.*))$")
 FOLDED_MARKERS = {">", ">-", ">+", "|", "|-", "|+"}
+OPAQUE_NESTED_FIELDS = {"hooks"}
 INTEGER = re.compile(r"^[+-]?(?:0|[1-9][0-9_]*|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$")
 FLOAT = re.compile(
     r"^[+-]?(?:(?:[0-9][0-9_]*)?\.[0-9_]+|[0-9][0-9_]*(?:\.[0-9_]*)?[eE][+-]?[0-9]+|\.inf|\.nan)$",
@@ -337,6 +338,20 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
             values[key] = separator.join(part for part in continuation if part)
             continue
         if not raw:
+            if key in OPAQUE_NESTED_FIELDS:
+                continuation: list[str] = []
+                cursor = index + 1
+                while cursor < len(lines) and (
+                    not lines[cursor] or lines[cursor][0].isspace()
+                ):
+                    if lines[cursor].startswith("\t"):
+                        raise ScalarParseError(f"tab indentation on line {cursor + 1}")
+                    continuation.append(lines[cursor])
+                    cursor += 1
+                if any(line.strip() and not line.lstrip().startswith("#") for line in continuation):
+                    values[key] = "\n".join(continuation)
+                    index = cursor
+                    continue
             sequence: list[Any] = []
             indentation: int | None = None
             cursor = index + 1

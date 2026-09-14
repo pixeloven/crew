@@ -4051,6 +4051,13 @@ class DerivedContractTests(unittest.TestCase):
                 "disallowedTools: Bash(git push *)\n",
                 [],
                 ["Bash(git push *)"],
+                "Bash is available",
+                "effective write tools: Write, Edit, NotebookEdit",
+            ),
+            (
+                "disallowedTools: Bash, Bash(git push *)\n",
+                [],
+                ["Bash", "Bash(git push *)"],
                 "Bash is unavailable",
                 "effective write tools: Write, Edit, NotebookEdit",
             ),
@@ -4079,6 +4086,62 @@ class DerivedContractTests(unittest.TestCase):
                 self.assertIn(bash_state, librarian["caveat"])
                 self.assertIn(write_state, librarian["write_effect"])
                 self.assertIn(write_state, librarian["caveat"])
+
+    def test_scoped_claude_deny_rule_is_reported_as_a_constraint(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/reviewer.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: reviewer\ndescription: Reviews changes.\n"
+                "disallowedTools: Bash(git push *)\n---\n",
+                encoding="utf-8",
+            )
+
+            reviewer = next(
+                row
+                for row in inspect_role_postures(ROOT, consumer)
+                if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertIn("Bash is available", reviewer["caveat"])
+            self.assertIn(
+                "scoped constraints: Bash(git push *)",
+                reviewer["write_effect"],
+            )
+
+    def test_nested_claude_hook_preserves_consumer_override_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/reviewer.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: reviewer\ndescription: Reviews changes.\n"
+                "tools: Read, Grep\n"
+                "hooks:\n"
+                "  PreToolUse:\n"
+                "    - matcher: Bash\n"
+                "      hooks:\n"
+                "        - type: command\n"
+                "          command: ./scripts/check-command.sh\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            reviewer = next(
+                row
+                for row in rows
+                if row["name"] == "reviewer" and row["harness"] == "claude"
+            )
+
+            self.assertTrue(reviewer["role_valid"])
+            self.assertEqual("consumer", reviewer["scope"])
+            self.assertEqual(str(role), reviewer["source"])
+            self.assertFalse(
+                any(row["name"] is None and row["source"] == str(role) for row in rows)
+            )
 
     def test_malformed_claude_consumer_tool_fields_retain_source_evidence(self) -> None:
         fields = (

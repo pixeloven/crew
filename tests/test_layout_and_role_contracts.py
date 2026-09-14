@@ -325,6 +325,33 @@ class LayoutContractTests(unittest.TestCase):
 
             self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
 
+    def test_claude_consumer_role_accepts_nested_hook_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            agent = root / ".claude/agents/reviewer.md"
+            agent.parent.mkdir(parents=True)
+            agent.write_text(
+                "---\nname: reviewer\ndescription: Reviews changes.\n"
+                "hooks:\n"
+                "  PreToolUse:\n"
+                "    - matcher: Bash\n"
+                "      hooks:\n"
+                "        - type: command\n"
+                "          command: ./scripts/check-command.sh\n"
+                "---\n",
+                encoding="utf-8",
+            )
+
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
     def test_claude_duplicate_resolved_role_identities_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

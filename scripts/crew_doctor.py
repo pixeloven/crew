@@ -2129,7 +2129,10 @@ def _consumer_role_posture(
 ) -> dict[str, Any]:
     if harness == "claude":
         allowed_tools = {_claude_tool_base(item) for item in allowed}
-        denied_tools = {_claude_tool_base(item) for item in denied}
+        denied_tools = set(denied)
+        scoped_constraints = [
+            item for item in denied if _claude_tool_base(item) != item
+        ]
 
         def available(tool: str) -> bool:
             return (
@@ -2142,6 +2145,7 @@ def _consumer_role_posture(
         effect = (
             f"declared allowlist: {', '.join(allowed) if allowlist_declared else 'unrestricted'}; "
             f"declared denylist: {', '.join(denied) if denylist_declared else 'none'}; "
+            f"scoped constraints: {', '.join(scoped_constraints) or 'none'}; "
             f"effective write tools: {', '.join(effective_writes) or 'none'}"
         )
         shell = (
