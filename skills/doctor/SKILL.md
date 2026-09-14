@@ -135,9 +135,11 @@ Onboarding consumes this exact value and rule.
 
 Validate package roles plus consumer `agents/*.md`, `.claude/agents/*.md`, and
 `.pi/agents/*.md` with the absolute package-root layout validator. Require YAML
-frontmatter `name` and `description`; `name` must match the filename. A missing
-Pi name is a silent-drop finding. Reject `model`, `thinking`, `effort`,
-`model_reasoning_effort`, `turnBudget`, and `maxTurns`: dispatch owns them.
+frontmatter `name` and `description`. Neutral and Pi role names must match their
+filenames; a Claude consumer role's frontmatter `name` owns its resolved identity
+and may differ from its filename. Reject missing, malformed, or duplicate resolved
+identities. A missing Pi name is a silent-drop finding. Reject `model`, `thinking`,
+`effort`, `model_reasoning_effort`, `turnBudget`, and `maxTurns`: dispatch owns them.
 
 Report every resolved role's effective tools, not only its declared posture.
 `drafts` on Claude denies surgical `Edit`/`NotebookEdit` but retains `Write`, so

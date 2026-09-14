@@ -2509,7 +2509,11 @@ def compose_doctor_report(
             if ready:
                 posture = matches[0]
                 fact = f"{harness} role {name}: {posture['write_effect']}; {posture['caveat']}"
-                inference = "effective tool posture matches the rendered role contract"
+                inference = (
+                    "effective tool posture is the validated resolved-consumer posture"
+                    if posture.get("scope") == "consumer"
+                    else "effective tool posture matches the rendered role contract"
+                )
             elif not matches:
                 fact = f"{harness} role {name} is missing"
                 inference = "the expected seven-role fleet is incomplete"
@@ -2556,7 +2560,7 @@ def compose_doctor_report(
             inference = (
                 "neutral role metadata is valid; effective tools remain harness-dependent"
                 if harness == "neutral"
-                else "effective tool posture matches the resolved consumer role contract"
+                else "effective tool posture is the validated resolved-consumer posture"
             )
         else:
             fact = f"{harness} consumer role {name} posture evidence is incomplete or duplicated"

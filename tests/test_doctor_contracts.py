@@ -3685,6 +3685,42 @@ class DerivedContractTests(unittest.TestCase):
             self.assertFalse(reviewer["role_valid"])
             self.assertIn("forbidden runtime keys", " ".join(reviewer["validation_errors"]))
 
+    def test_consumer_fleet_override_uses_resolved_consumer_inference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            override = consumer / ".claude/agents/reviewer.md"
+            override.parent.mkdir(parents=True)
+            override.write_text(
+                "---\nname: reviewer\ndescription: Consumer reviewer.\n"
+                "tools: Read, Grep\n---\n",
+                encoding="utf-8",
+            )
+
+            report = compose_doctor_report(
+                inspect_installations(consumer, pathlib.Path(tmp) / "home"),
+                runtime_comparisons=[],
+                local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+                role_postures=inspect_role_postures(ROOT, consumer),
+                persona_evidence=[],
+            )
+            consumer_check = next(
+                row for row in report["checks"] if row["check"] == "role.claude.reviewer"
+            )
+            shipped_check = next(
+                row for row in report["checks"] if row["check"] == "role.claude.lead"
+            )
+
+            self.assertEqual("OK", consumer_check["status"])
+            self.assertEqual(
+                "effective tool posture is the validated resolved-consumer posture",
+                consumer_check["inference"],
+            )
+            self.assertNotIn("rendered role contract", consumer_check["inference"])
+            self.assertEqual(
+                "effective tool posture matches the rendered role contract",
+                shipped_check["inference"],
+            )
+
     def test_consumer_only_roles_are_enumerated_separately_from_the_crew_fleet(self) -> None:
         consumer = FIXTURES / "consumer-valid"
 
