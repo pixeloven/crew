@@ -3422,6 +3422,8 @@ class RuntimeDiscoveryTests(unittest.TestCase):
             ({"source": None}, "source must be a non-empty string"),
             ({"source": ["capture"]}, "source must be a non-empty string"),
             ({"source": "   "}, "source must be a non-empty string"),
+            ({"source_path": None}, "source_path must be a non-empty string"),
+            ({"source_path": []}, "source_path must be a non-empty string"),
             ({"skill_roots": None}, "skill_roots must be a string sequence"),
             ({"skill_roots": [7]}, "skill_roots must be a string sequence"),
             ({"skills": {}}, "skills must be a sequence"),
@@ -3445,6 +3447,24 @@ class RuntimeDiscoveryTests(unittest.TestCase):
 
                 self.assertIn(str(path), str(raised.exception))
                 self.assertIn(detail, str(raised.exception))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "runtime.json"
+            write_json(
+                path,
+                {
+                    "schema_version": 1,
+                    "harness": "codex",
+                    "tested": False,
+                },
+            )
+
+            fixture = load_runtime_fixture(path)
+            comparison = compare_runtime_catalog([], fixture)
+
+            self.assertEqual(str(path), fixture["source_path"])
+            self.assertEqual([str(path)], comparison["capture"]["sources"])
+            self.assertEqual("N/A", comparison["status"])
 
     def test_public_runtime_capture_boundaries_reject_malformed_mappings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

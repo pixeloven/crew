@@ -242,6 +242,19 @@ def _add_finding(result: dict[str, Any], claim: str, *sources: str) -> None:
     )
 
 
+def _validate_runtime_provenance(runtime: Any, source: str) -> None:
+    if not isinstance(runtime, dict):
+        return
+    for source_field in ("source", "source_command", "source_path"):
+        if source_field in runtime and (
+            not isinstance(runtime[source_field], str)
+            or not runtime[source_field].strip()
+        ):
+            raise ValueError(
+                f"invalid runtime capture {source}: {source_field} must be a non-empty string"
+            )
+
+
 def _validate_runtime_capture(
     runtime: Any,
     source: str,
@@ -295,14 +308,7 @@ def _validate_runtime_capture(
         raise ValueError(
             f"invalid runtime capture {source}: tested and state are inconsistent"
         )
-    for source_field in ("source", "source_command", "source_path"):
-        if source_field in runtime and (
-            not isinstance(runtime[source_field], str)
-            or not runtime[source_field].strip()
-        ):
-            raise ValueError(
-                f"invalid runtime capture {source}: {source_field} must be a non-empty string"
-            )
+    _validate_runtime_provenance(runtime, source)
     if "skills" in runtime:
         skills = runtime["skills"]
         if not isinstance(skills, list):
@@ -1874,6 +1880,7 @@ def inspect_installations(
 def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
     fixture_path = pathlib.Path(path)
     fixture = _read_json(fixture_path, {}).value
+    _validate_runtime_provenance(fixture, str(fixture_path))
     if isinstance(fixture, dict):
         fixture["source_path"] = str(fixture_path)
     fixture = _validate_runtime_capture(
