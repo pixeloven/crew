@@ -14,7 +14,10 @@ from typing import Any
 
 
 FIELD = re.compile(r"^([A-Za-z][A-Za-z0-9_-]*):(?:[ \t]*(.*))$")
-FOLDED_MARKERS = {">", ">-", ">+", "|", "|-", "|+"}
+BLOCK_SCALAR_HEADER = re.compile(
+    r"^([|>])(?:(?:([1-9])([+-])?)|(?:([+-])([1-9])?))?"
+    r"(?:[ \t]+#.*)?[ \t]*$"
+)
 OPAQUE_NESTED_FIELDS = {"hooks"}
 INTEGER = re.compile(r"^[+-]?(?:0|[1-9][0-9_]*|0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+)$")
 FLOAT = re.compile(
@@ -29,6 +32,14 @@ SEXAGESIMAL = re.compile(r"^[+-]?[0-9][0-9_]*(?::[0-5]?[0-9])+$")
 
 class ScalarParseError(ValueError):
     """Raised when a supported scalar contains invalid YAML syntax."""
+
+
+def _block_scalar_header(value: str) -> tuple[str, int | None] | None:
+    match = BLOCK_SCALAR_HEADER.fullmatch(value)
+    if match is None:
+        return None
+    indentation = match.group(2) or match.group(5)
+    return match.group(1), int(indentation) if indentation else None
 
 
 def _double_quoted(value: str) -> str:
@@ -299,7 +310,7 @@ def _scalar(value: str) -> Any:
 def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
     tokens: list[tuple[int, str, int]] = []
     for offset, line in enumerate(lines):
-        if not line.strip() or line.lstrip().startswith("#"):
+        if not line.strip():
             continue
         prefix = line[: len(line) - len(line.lstrip(" \t"))]
         if "\t" in prefix:
@@ -314,16 +325,33 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
         except ScalarParseError as error:
             raise ScalarParseError(f"{error} on line {line_number}") from error
 
-    def block_scalar(position: int, parent_indentation: int) -> int:
-        content_indentation: int | None = None
+    def skip_comments(position: int) -> int:
+        while position < len(tokens) and tokens[position][1].startswith("#"):
+            position += 1
+        return position
+
+    def block_scalar(
+        position: int,
+        parent_indentation: int,
+        declared_indentation: int | None,
+    ) -> int:
+        content_indentation = (
+            parent_indentation + declared_indentation
+            if declared_indentation is not None
+            else None
+        )
+        saw_content = False
         while position < len(tokens) and tokens[position][0] > parent_indentation:
-            current, _, line_number = tokens[position]
+            current, text, line_number = tokens[position]
             if content_indentation is None:
                 content_indentation = current
             elif current < content_indentation:
+                if saw_content and text.startswith("#"):
+                    return position
                 raise ScalarParseError(
                     f"invalid block indentation on line {line_number}"
                 )
+            saw_content = True
             position += 1
         return position
 
@@ -334,6 +362,9 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
     ) -> int:
         keys = set(initial_keys or ())
         while position < len(tokens):
+            position = skip_comments(position)
+            if position >= len(tokens):
+                return position
             current, text, line_number = tokens[position]
             if current < indentation:
                 return position
@@ -349,16 +380,22 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                 raise ScalarParseError(f"duplicate mapping key {key!r}")
             keys.add(key)
             position += 1
-            if raw in FOLDED_MARKERS:
-                position = block_scalar(position, indentation)
+            header = _block_scalar_header(raw)
+            if header is not None:
+                position = block_scalar(position, indentation, header[1])
             elif raw:
                 scalar(raw, line_number)
-            elif position < len(tokens) and tokens[position][0] > indentation:
-                position = node(position, tokens[position][0])
+            else:
+                position = skip_comments(position)
+                if position < len(tokens) and tokens[position][0] > indentation:
+                    position = node(position, tokens[position][0])
         return position
 
     def sequence(position: int, indentation: int) -> int:
         while position < len(tokens):
+            position = skip_comments(position)
+            if position >= len(tokens):
+                return position
             current, text, line_number = tokens[position]
             if current < indentation:
                 return position
@@ -369,6 +406,7 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             raw_item = text[1:].strip()
             position += 1
             if not raw_item:
+                position = skip_comments(position)
                 if position < len(tokens) and tokens[position][0] > indentation:
                     position = node(position, tokens[position][0])
                 continue
@@ -382,12 +420,16 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                 continue
             key, raw = match.groups()
             item_indentation = indentation + 2
-            if raw in FOLDED_MARKERS:
-                position = block_scalar(position, item_indentation)
+            header = _block_scalar_header(raw)
+            if header is not None:
+                position = block_scalar(position, item_indentation, header[1])
             elif raw:
                 scalar(raw, line_number)
-            elif position < len(tokens) and tokens[position][0] > item_indentation:
-                position = node(position, tokens[position][0])
+            else:
+                position = skip_comments(position)
+                if position < len(tokens) and tokens[position][0] > item_indentation:
+                    position = node(position, tokens[position][0])
+            position = skip_comments(position)
             if position < len(tokens) and tokens[position][0] == item_indentation:
                 position = mapping(position, item_indentation, {key})
             elif position < len(tokens) and tokens[position][0] > indentation:
@@ -402,7 +444,10 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
             return sequence(position, indentation)
         return mapping(position, indentation)
 
-    position = node(0, tokens[0][0])
+    position = skip_comments(0)
+    if position == len(tokens):
+        return
+    position = node(position, tokens[position][0])
     if position != len(tokens):
         raise ScalarParseError(f"invalid nested mapping on line {tokens[position][2]}")
 
@@ -430,9 +475,10 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
         key, raw = match.groups()
         if key in values:
             raise ScalarParseError(f"duplicate mapping key {key!r}")
-        if raw in FOLDED_MARKERS:
+        header = _block_scalar_header(raw)
+        if header is not None:
             continuation: list[str] = []
-            indentation: int | None = None
+            indentation = header[1]
             index += 1
             while index < len(lines) and (not lines[index] or lines[index][0].isspace()):
                 if lines[index].startswith("\t"):
@@ -445,7 +491,7 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
                         raise ScalarParseError(f"invalid block indentation on line {index + 1}")
                 continuation.append(lines[index].strip())
                 index += 1
-            separator = " " if raw.startswith(">") else "\n"
+            separator = " " if header[0] == ">" else "\n"
             values[key] = separator.join(part for part in continuation if part)
             continue
         if not raw:

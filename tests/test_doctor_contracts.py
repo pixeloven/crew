@@ -4187,7 +4187,7 @@ class DerivedContractTests(unittest.TestCase):
                 "      hooks:\n"
                 "        - type: command\n"
                 "          command: |\n"
-                "              ./scripts/check-command.sh\n"
+                "              #!/bin/sh\n"
                 "            ./scripts/report-result.sh\n"
                 "---\n",
                 encoding="utf-8",
