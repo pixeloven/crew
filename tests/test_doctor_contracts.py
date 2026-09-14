@@ -3527,17 +3527,51 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertEqual(2, result["visible_count"])
         self.assertEqual("OK", result["status"])
 
-    def test_no_runtime_capture_is_not_tested(self) -> None:
-        result = compare_runtime_catalog(
-            self.disk,
-            {
-                "harness": "pi",
-                "tested": False,
-                "source_command": "pi catalogue probe intentionally not run",
-            },
-        )
-        self.assertTrue(result["entries"])
-        self.assertEqual({"not tested"}, {row["state"] for row in result["entries"]})
+    def test_only_supported_untested_states_are_not_tested(self) -> None:
+        for fields in ({"tested": False}, {"state": "not tested"}):
+            with self.subTest(fields=fields):
+                source = f"pi catalogue probe intentionally not run: {fields}"
+                result = compare_runtime_catalog(
+                    self.disk,
+                    {
+                        "harness": "pi",
+                        "source_command": source,
+                        **fields,
+                    },
+                )
+
+                self.assertEqual("N/A", result["status"])
+                self.assertTrue(result["entries"])
+                self.assertEqual(
+                    {"not tested"},
+                    {row["state"] for row in result["entries"]},
+                )
+                self.assertEqual([source], result["capture"]["sources"])
+
+        for state in ("omitted", "unavailable"):
+            with self.subTest(state=state):
+                result = compare_runtime_catalog(
+                    self.disk,
+                    {
+                        "harness": "pi",
+                        "state": state,
+                        "source_command": f"pi catalogue probe reported {state}",
+                    },
+                )
+
+                self.assertEqual("DEGRADED", result["status"])
+                self.assertEqual({state}, {row["state"] for row in result["entries"]})
+
+        for fields in ({"tested": "false"}, {"state": "failed"}):
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                compare_runtime_catalog(
+                    self.disk,
+                    {
+                        "harness": "pi",
+                        "source_command": "invalid capture",
+                        **fields,
+                    },
+                )
 
     def test_duplicate_or_wrong_root_runtime_entries_degrade(self) -> None:
         disk = [{**self.disk[0], "path": "/authorized/skills/doctor/SKILL.md"}]

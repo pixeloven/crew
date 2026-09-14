@@ -370,6 +370,10 @@ def _runtime_capture_sources(runtime: dict[str, Any]) -> list[str]:
     )
 
 
+def _runtime_capture_is_untested(runtime: dict[str, Any]) -> bool:
+    return runtime.get("tested") is False or runtime.get("state") == "not tested"
+
+
 def _record_runtime(
     result: dict[str, Any],
     runtime: dict[str, Any] | None,
@@ -382,15 +386,8 @@ def _record_runtime(
         return
     runtime_sources = _runtime_capture_sources(runtime) or ["captured runtime"]
     runtime_source = runtime_sources[0]
-    if runtime.get("tested") is False:
-        result["runtime"] = {
-            "state": "not tested",
-            "source": runtime_source,
-            "sources": runtime_sources,
-        }
-        return
     captured_state = runtime.get("state")
-    if captured_state == "not tested":
+    if _runtime_capture_is_untested(runtime):
         result["runtime"] = {
             "state": "not tested",
             "source": runtime_source,
@@ -1991,7 +1988,7 @@ def compare_runtime_catalog(
         "captured_at": runtime_fixture.get("captured_at"),
         "cost": runtime_fixture.get("cost", "unknown"),
     }
-    if runtime_fixture.get("tested") is False:
+    if _runtime_capture_is_untested(runtime_fixture):
         entries = [
             {"runtime_name": name, "state": "not tested", "disk": entry}
             for name, entry in expected
