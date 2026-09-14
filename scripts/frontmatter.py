@@ -109,8 +109,9 @@ def _double_quoted(value: str) -> str:
     return "".join(result)
 
 
-def _without_comment(value: str) -> str:
+def _without_comment(value: str, *, allow_nested_flow: bool = False) -> str:
     quote: str | None = None
+    flow_depth = 0
     index = 0
     while index < len(value):
         character = value[index]
@@ -126,7 +127,11 @@ def _without_comment(value: str) -> str:
                 continue
             if character == '"':
                 quote = None
-        elif character in {"'", '"'} and index == 0:
+        elif character in "[{":
+            flow_depth += 1
+        elif character in "]}" and flow_depth:
+            flow_depth -= 1
+        elif character in {"'", '"'} and (index == 0 or allow_nested_flow and flow_depth):
             quote = character
         elif character == "#" and (index == 0 or value[index - 1].isspace()):
             return value[:index].rstrip()
@@ -252,7 +257,7 @@ def _flow_mapping(value: str, allow_nested_flow: bool = False) -> dict[str, Any]
 
 
 def _scalar(value: str, *, allow_nested_flow: bool = False) -> Any:
-    value = _without_comment(value.strip())
+    value = _without_comment(value.strip(), allow_nested_flow=allow_nested_flow)
     if not value:
         return None
     if value.startswith("'"):

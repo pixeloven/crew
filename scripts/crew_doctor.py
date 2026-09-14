@@ -2371,23 +2371,21 @@ def inspect_role_postures(
         unresolved_roles: list[pathlib.Path] = []
         if overlay.is_dir():
             for path in sorted(overlay.rglob("*.md")):
-                if harness == "claude":
-                    try:
-                        metadata, error = read_frontmatter(path)
-                    except (OSError, UnicodeDecodeError):
-                        metadata, error = None, "unreadable"
-                    resolved_name = (
-                        claude_role_identity(metadata.get("name"))
-                        if not error
-                        and isinstance(metadata, dict)
-                        else None
-                    )
-                    if not resolved_name:
-                        unresolved_roles.append(path)
-                        continue
-                    identity = resolved_name
-                else:
-                    identity = path.stem
+                try:
+                    metadata, error = read_frontmatter(path)
+                except (OSError, UnicodeDecodeError):
+                    metadata, error = None, "unreadable"
+                resolved_name = None
+                if not error and isinstance(metadata, dict):
+                    candidate = metadata.get("name")
+                    if harness == "claude":
+                        resolved_name = claude_role_identity(candidate)
+                    elif isinstance(candidate, str) and candidate.strip():
+                        resolved_name = candidate.strip()
+                if not resolved_name:
+                    unresolved_roles.append(path)
+                    continue
+                identity = resolved_name
                 consumer_roles.setdefault(identity, []).append(path)
         for name in EXPECTED_ROLE_NAMES:
             paths = consumer_roles.pop(name, [])
