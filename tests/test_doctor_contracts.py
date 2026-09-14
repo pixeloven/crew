@@ -3201,6 +3201,88 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         )
         self.assertEqual("captured Codex catalogue", result["capture"]["source_command"])
 
+    def test_runtime_comparisons_preserve_fixture_and_untested_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            capture_path = base / "runtime-catalogue.json"
+            write_json(
+                capture_path,
+                {
+                    "schema_version": 1,
+                    "harness": "codex",
+                    "skills": [
+                        {
+                            "name": "runtime-only",
+                            "description": "Visible runtime-only skill.",
+                        }
+                    ],
+                },
+            )
+            installation = inspect_installations(project, home)
+            postures = inspect_role_postures(ROOT, project)
+
+            observed = compose_doctor_report(
+                installation,
+                runtime_comparisons=[
+                    compare_runtime_catalog(
+                        [],
+                        load_runtime_fixture(capture_path),
+                    )
+                ],
+                local_slots=declared_local_slots(ROOT),
+                role_postures=postures,
+                persona_evidence=[],
+            )
+            observed_check = next(
+                row
+                for row in observed["checks"]
+                if row["check"] == "runtime.codex.runtime-only"
+            )
+
+            self.assertEqual(
+                [str(capture_path)],
+                [item["source"] for item in observed_check["evidence"]],
+            )
+            self.assertIn(
+                f"source: {capture_path}",
+                render_doctor_report(observed),
+            )
+
+            command = 'codex debug prompt-input "hi"'
+            untested = compose_doctor_report(
+                installation,
+                runtime_comparisons=[
+                    compare_runtime_catalog(
+                        self.disk,
+                        {
+                            "harness": "codex",
+                            "tested": False,
+                            "source_command": command,
+                        },
+                    )
+                ],
+                local_slots=declared_local_slots(ROOT),
+                role_postures=postures,
+                persona_evidence=[],
+            )
+            untested_checks = [
+                row
+                for row in untested["checks"]
+                if row["check"].startswith("runtime.codex.")
+            ]
+
+            self.assertEqual(len(self.disk), len(untested_checks))
+            self.assertTrue(all(row["status"] == "N/A" for row in untested_checks))
+            self.assertTrue(
+                all(
+                    [command] == [item["source"] for item in row["evidence"]]
+                    for row in untested_checks
+                )
+            )
+            self.assertIn(f"source: {command}", render_doctor_report(untested))
+
     def test_runtime_fixture_rejects_malformed_collections_with_source(self) -> None:
         malformed = (
             ({"schema_version": "1"}, "schema_version must be integer 1"),
@@ -3323,7 +3405,14 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         self.assertEqual("OK", result["status"])
 
     def test_no_runtime_capture_is_not_tested(self) -> None:
-        result = compare_runtime_catalog(self.disk, {"harness": "pi", "tested": False})
+        result = compare_runtime_catalog(
+            self.disk,
+            {
+                "harness": "pi",
+                "tested": False,
+                "source_command": "pi catalogue probe intentionally not run",
+            },
+        )
         self.assertTrue(result["entries"])
         self.assertEqual({"not tested"}, {row["state"] for row in result["entries"]})
 
@@ -3331,6 +3420,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
         disk = [{**self.disk[0], "path": "/authorized/skills/doctor/SKILL.md"}]
         fixture = {
             "harness": "codex",
+            "source_command": "captured duplicate-root catalogue",
             "skills": [
                 {
                     "name": "crew:doctor",
@@ -3360,6 +3450,7 @@ class RuntimeDiscoveryTests(unittest.TestCase):
             disk,
             {
                 "harness": "codex",
+                "source_command": "captured structured-namespace catalogue",
                 "skills": [
                     {
                         "name": "doctor",

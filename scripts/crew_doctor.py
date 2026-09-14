@@ -1828,12 +1828,15 @@ def inspect_installations(
 def load_runtime_fixture(path: pathlib.Path) -> dict[str, Any]:
     fixture_path = pathlib.Path(path)
     fixture = _read_json(fixture_path, {}).value
-    return _validate_runtime_capture(
+    fixture = _validate_runtime_capture(
         fixture,
         str(fixture_path),
         require_schema=True,
         require_harness=True,
     )
+    if not fixture.get("source_command") and not fixture.get("source"):
+        fixture["source"] = str(fixture_path)
+    return fixture
 
 
 def parse_codex_prompt_capture(path: pathlib.Path) -> dict[str, Any]:
@@ -1942,6 +1945,19 @@ def compare_runtime_catalog(
     )
     harness = runtime_fixture.get("harness")
     expected = _expected_catalog(disk_entries, harness)
+    capture_source = runtime_fixture.get("source_command") or runtime_fixture.get(
+        "source"
+    )
+    if not isinstance(capture_source, str) or not capture_source.strip():
+        raise ValueError(
+            "invalid runtime catalogue capture: source_command or source is required"
+        )
+    capture = {
+        "source": capture_source,
+        "source_command": runtime_fixture.get("source_command"),
+        "captured_at": runtime_fixture.get("captured_at"),
+        "cost": runtime_fixture.get("cost", "unknown"),
+    }
     if runtime_fixture.get("tested") is False:
         return {
             "harness": harness,
@@ -1952,6 +1968,7 @@ def compare_runtime_catalog(
                 {"runtime_name": name, "state": "not tested", "disk": entry}
                 for name, entry in expected
             ],
+            "capture": capture,
         }
 
     visible = [
@@ -2019,11 +2036,7 @@ def compare_runtime_catalog(
         "expected_count": len(expected),
         "visible_count": len(visible),
         "entries": rows,
-        "capture": {
-            "source_command": runtime_fixture.get("source_command", "captured runtime catalogue"),
-            "captured_at": runtime_fixture.get("captured_at"),
-            "cost": runtime_fixture.get("cost", "unknown"),
-        },
+        "capture": capture,
     }
 
 
@@ -2585,7 +2598,7 @@ def compose_doctor_report(
 
     for comparison in runtime_comparisons:
         capture = comparison.get("capture", {})
-        capture_source = str(capture.get("source_command", "captured runtime catalogue"))
+        capture_source = str(capture["source"])
         for entry in comparison["entries"]:
             state = entry["state"]
             status = "OK" if state == "working" else "N/A" if state == "not tested" else "DEGRADED"
