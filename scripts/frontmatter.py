@@ -321,6 +321,40 @@ def _scalar(value: str) -> Any:
     return value
 
 
+def _nested_mapping_field(value: str) -> tuple[str, str] | None:
+    value = _without_comment(value).rstrip()
+    quote: str | None = None
+    index = 0
+    while index < len(value):
+        character = value[index]
+        if quote == "'":
+            if character == "'":
+                if index + 1 < len(value) and value[index + 1] == "'":
+                    index += 2
+                    continue
+                quote = None
+        elif quote == '"':
+            if character == "\\":
+                index += 2
+                continue
+            if character == '"':
+                quote = None
+        elif character in {"'", '"'} and not value[:index].strip():
+            quote = character
+        elif character == ":" and (
+            index + 1 == len(value) or value[index + 1].isspace()
+        ):
+            key_text = value[:index].strip()
+            if not key_text:
+                raise ScalarParseError("empty mapping key")
+            key = _scalar(key_text)
+            if not isinstance(key, str) or not key:
+                raise ScalarParseError("mapping keys must be strings")
+            return key, value[index + 1 :].lstrip(" \t")
+        index += 1
+    return None
+
+
 def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
     tokens: list[tuple[int, str, int]] = []
     for offset, line in enumerate(lines):
@@ -417,10 +451,13 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                 raise ScalarParseError(f"unexpected indentation on line {line_number}")
             if text == "-" or text.startswith("- "):
                 raise ScalarParseError(f"mixed mapping and sequence on line {line_number}")
-            match = FIELD.fullmatch(text)
-            if not match:
+            try:
+                field = _nested_mapping_field(text)
+            except ScalarParseError as error:
+                raise ScalarParseError(f"{error} on line {line_number}") from error
+            if field is None:
                 raise ScalarParseError(f"invalid mapping entry on line {line_number}")
-            key, raw = match.groups()
+            key, raw = field
             if key in keys:
                 raise ScalarParseError(f"duplicate mapping key {key!r}")
             keys.add(key)
@@ -460,15 +497,18 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
                 if position < len(tokens) and tokens[position][0] > indentation:
                     position = node(position, tokens[position][0])
                 continue
-            match = FIELD.fullmatch(raw_item)
-            if not match:
+            try:
+                field = _nested_mapping_field(raw_item)
+            except ScalarParseError as error:
+                raise ScalarParseError(f"{error} on line {line_number}") from error
+            if field is None:
                 scalar(raw_item, line_number)
                 if position < len(tokens) and tokens[position][0] > indentation:
                     raise ScalarParseError(
                         f"unexpected indentation on line {tokens[position][2]}"
                     )
                 continue
-            key, raw = match.groups()
+            key, raw = field
             item_indentation = indentation + 1 + separation
             header = _block_scalar_header(raw)
             content = _without_comment(raw).rstrip()

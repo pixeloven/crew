@@ -4479,7 +4479,8 @@ class DerivedContractTests(unittest.TestCase):
                 "      type: stdio\n"
                 "      command: npx\n"
                 "      env:\n"
-                "        TOKEN: ${TOKEN:-missing}\n",
+                "        TOKEN: ${TOKEN:-missing}\n"
+                "        _JAVA_OPTIONS: -Xmx512m\n",
                 True,
             ),
             (
