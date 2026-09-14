@@ -5,6 +5,11 @@ The renderer and consumer validator import this module so the generated
 frontmatter, Doctor output, and comments cannot acquire different meanings.
 """
 
+import re
+
+
+CLAUDE_ROLE_NAME = re.compile(r"^[a-z]+(?:-[a-z]+)*$")
+
 FORBIDDEN_RUNTIME_KEYS = {
     "model": "the dispatcher's choice — both harnesses inherit the session model",
     "thinking": "reasoning depth is the dispatcher's choice",
@@ -31,6 +36,14 @@ WRITE_POSTURES = {
         "pi": {"allowed": ["read", "write", "edit", "bash", "grep", "find"]},
     },
 }
+
+
+def claude_role_identity(value: object) -> str | None:
+    """Return a normalized Claude role identity when its syntax is supported."""
+    if not isinstance(value, str):
+        return None
+    identity = value.strip()
+    return identity if CLAUDE_ROLE_NAME.fullmatch(identity) else None
 
 
 def effective_posture(writes: str, harness: str) -> dict[str, object]:

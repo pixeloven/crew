@@ -36,12 +36,11 @@ Every skill, everywhere, is a directory containing SKILL.md:
     .claude/skills/<name>/SKILL.md          Claude Code (usually a symlink)
     skills/<name>/SKILL.md                  what a distributed plugin ships
 
-Consumer roles are flat Markdown files, but their frontmatter is still a
-discovery contract:
+Consumer roles are Markdown files whose frontmatter is a discovery contract:
 
     agents/<name>.md                        neutral/project role definitions
-    .claude/agents/<name>.md                Claude project roles
-    .pi/agents/<name>.md                    Pi project roles
+    .claude/agents/**/<name>.md             Claude project roles
+    .pi/agents/**/<name>.md                 Pi project roles
 
 Each requires a non-empty `name` and `description`. Pi and neutral role names
 must match their filenames; Claude resolves the frontmatter name independently.
@@ -57,10 +56,10 @@ import tempfile
 
 try:
     from .frontmatter import read_frontmatter
-    from .role_contract import FORBIDDEN_RUNTIME_KEYS
+    from .role_contract import FORBIDDEN_RUNTIME_KEYS, claude_role_identity
 except ImportError:  # Direct script execution.
     from frontmatter import read_frontmatter
-    from role_contract import FORBIDDEN_RUNTIME_KEYS
+    from role_contract import FORBIDDEN_RUNTIME_KEYS, claude_role_identity
 
 # Where each harness looks. A flat `<name>.md` in any of these is invisible to
 # the harness that reads it -- silently, which is the whole problem.
@@ -131,20 +130,22 @@ def check(root: pathlib.Path) -> list[str]:
         base = root / rel
         if not base.is_dir():
             continue
-        records = [
-            (path, *frontmatter(path))
-            for path in sorted(base.glob("*.md"))
-        ]
+        paths = (
+            base.rglob("*.md")
+            if rel in {".claude/agents", ".pi/agents"}
+            else base.glob("*.md")
+        )
+        records = [(path, *frontmatter(path)) for path in sorted(paths)]
         identity_paths: dict[str, list[pathlib.Path]] = {}
         if rel == ".claude/agents":
             for path, metadata, error in records:
                 if error or not isinstance(metadata, dict):
                     continue
-                name = metadata.get("name")
-                if isinstance(name, str) and name.strip():
-                    identity_paths.setdefault(name.strip(), []).append(path)
+                identity = claude_role_identity(metadata.get("name"))
+                if identity:
+                    identity_paths.setdefault(identity, []).append(path)
         for path, metadata, error in records:
-            display = f"{rel}/{path.name}"
+            display = path.relative_to(root).as_posix()
             if error:
                 errors.append(f"{display}: {error}")
                 continue
@@ -160,13 +161,20 @@ def check(root: pathlib.Path) -> list[str]:
                     errors.append(
                         f"{display}: filename/name mismatch: {path.stem!r} cannot match an absent required name"
                     )
+            elif rel == ".claude/agents" and not claude_role_identity(name):
+                errors.append(
+                    f"{display}: invalid Claude role name {name!r}; "
+                    "use lowercase letters and hyphens"
+                )
             elif rel != ".claude/agents" and name != path.stem:
                 errors.append(
                     f"{display}: filename/name mismatch: frontmatter name {name!r} != filename {path.stem!r}"
                 )
-            elif rel == ".claude/agents" and len(identity_paths.get(name.strip(), [])) > 1:
+            elif rel == ".claude/agents" and len(
+                identity_paths.get(claude_role_identity(name) or "", [])
+            ) > 1:
                 errors.append(
-                    f"{display}: duplicate resolved role identity {name.strip()!r}"
+                    f"{display}: duplicate resolved role identity {claude_role_identity(name)!r}"
                 )
             description = metadata.get("description")
             if not isinstance(description, str) or not description.strip():

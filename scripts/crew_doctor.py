@@ -2114,6 +2114,11 @@ def _role_string_list(value: Any) -> list[str] | None:
     return None
 
 
+def _claude_tool_base(value: str) -> str:
+    match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_-]*)\([^()\r\n]+\)", value)
+    return match.group(1) if match else value
+
+
 def _consumer_role_posture(
     harness: str,
     allowed: list[str],
@@ -2123,8 +2128,13 @@ def _consumer_role_posture(
     denylist_declared: bool,
 ) -> dict[str, Any]:
     if harness == "claude":
+        allowed_tools = {_claude_tool_base(item) for item in allowed}
+        denied_tools = {_claude_tool_base(item) for item in denied}
+
         def available(tool: str) -> bool:
-            return (not allowlist_declared or tool in allowed) and tool not in denied
+            return (
+                not allowlist_declared or tool in allowed_tools
+            ) and tool not in denied_tools
 
         effective_writes = [
             tool for tool in ("Write", "Edit", "NotebookEdit") if available(tool)
@@ -2169,9 +2179,19 @@ def inspect_role_postures(
 ) -> list[dict[str, Any]]:
     """Return effective posture evidence from resolved harness role files."""
     try:
-        from .role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES, effective_posture
+        from .role_contract import (
+            FORBIDDEN_RUNTIME_KEYS,
+            WRITE_POSTURES,
+            claude_role_identity,
+            effective_posture,
+        )
     except ImportError:
-        from role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES, effective_posture
+        from role_contract import (
+            FORBIDDEN_RUNTIME_KEYS,
+            WRITE_POSTURES,
+            claude_role_identity,
+            effective_posture,
+        )
 
     package_root = pathlib.Path(package_root)
     has_consumer_root = consumer_root is not None
@@ -2185,7 +2205,7 @@ def inspect_role_postures(
     for harness, distributed, overlay in harness_roots:
         consumer_roles: dict[str, list[pathlib.Path]] = {}
         if overlay.is_dir():
-            for path in sorted(overlay.glob("*.md")):
+            for path in sorted(overlay.rglob("*.md")):
                 identity = path.stem
                 if harness == "claude":
                     try:
@@ -2193,11 +2213,10 @@ def inspect_role_postures(
                     except (OSError, UnicodeDecodeError):
                         metadata, error = None, "unreadable"
                     resolved_name = (
-                        metadata.get("name").strip()
+                        claude_role_identity(metadata.get("name"))
                         if not error
                         and isinstance(metadata, dict)
-                        and isinstance(metadata.get("name"), str)
-                        else ""
+                        else None
                     )
                     if resolved_name:
                         identity = resolved_name
@@ -2238,8 +2257,16 @@ def inspect_role_postures(
         resolved_name = metadata.get("name")
         if not isinstance(resolved_name, str) or not resolved_name.strip():
             errors.append(f"name must be {name}")
+        elif harness == "claude" and is_consumer_role and not claude_role_identity(
+            resolved_name
+        ):
+            errors.append("name must use lowercase letters and hyphens")
         else:
-            resolved_name = resolved_name.strip()
+            resolved_name = (
+                claude_role_identity(resolved_name)
+                if harness == "claude" and is_consumer_role
+                else resolved_name.strip()
+            )
             if enforce_filename and resolved_name != path.stem:
                 errors.append(f"name must be {path.stem}")
         if duplicate:

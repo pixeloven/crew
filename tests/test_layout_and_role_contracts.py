@@ -266,6 +266,65 @@ class LayoutContractTests(unittest.TestCase):
                     self.assertIn(".claude/agents/custom-file.md", output)
                     self.assertIn("no `name:` in frontmatter", output)
 
+    def test_claude_consumer_role_identity_uses_supported_syntax(self) -> None:
+        for identity, valid in (
+            ("reviewer", True),
+            ("security-reviewer", True),
+            ("custom:reviewer", False),
+            ("security_reviewer", False),
+            ("Security-reviewer", False),
+            ("reviewer2", False),
+        ):
+            with self.subTest(identity=identity), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".claude/agents/custom-file.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    f"---\nname: {identity}\ndescription: Maintains references.\n---\n",
+                    encoding="utf-8",
+                )
+
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                output = completed.stdout + completed.stderr
+                self.assertEqual(valid, completed.returncode == 0, output)
+                if not valid:
+                    self.assertIn(str(agent.relative_to(root)), output)
+                    self.assertIn("invalid Claude role name", output)
+
+    def test_nested_consumer_roles_follow_harness_discovery_boundaries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            roles = (
+                (root / ".claude/agents/review/security.md", "security-reviewer"),
+                (root / ".pi/agents/review/security.md", "security"),
+            )
+            for path, identity in roles:
+                path.parent.mkdir(parents=True)
+                path.write_text(
+                    f"---\nname: {identity}\ndescription: Reviews security.\n---\n",
+                    encoding="utf-8",
+                )
+            neutral = root / "agents/review/ignored.md"
+            neutral.parent.mkdir(parents=True)
+            neutral.write_text("not frontmatter\n", encoding="utf-8")
+
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
     def test_claude_duplicate_resolved_role_identities_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

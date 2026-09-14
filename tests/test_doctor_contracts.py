@@ -3843,6 +3843,64 @@ class DerivedContractTests(unittest.TestCase):
                         posture["validation_errors"],
                     )
 
+    def test_invalid_claude_consumer_identity_retains_source_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".claude/agents/review/custom-file.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: custom:reviewer\ndescription: Reviews changes.\n"
+                "tools: Read, Grep\n---\n",
+                encoding="utf-8",
+            )
+
+            posture = next(
+                row
+                for row in inspect_role_postures(ROOT, consumer)
+                if row["source"] == str(role)
+            )
+
+            self.assertEqual("custom-file", posture["name"])
+            self.assertFalse(posture["role_valid"])
+            self.assertIn(
+                "name must use lowercase letters and hyphens",
+                posture["validation_errors"],
+            )
+
+    def test_nested_claude_and_pi_consumer_roles_are_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            roles = (
+                (
+                    consumer / ".claude/agents/review/security.md",
+                    "security-reviewer",
+                    "claude",
+                    "tools: Read, Grep\n",
+                ),
+                (
+                    consumer / ".pi/agents/review/security.md",
+                    "security",
+                    "pi",
+                    "tools: read, web\n",
+                ),
+            )
+            for path, identity, _, tools in roles:
+                path.parent.mkdir(parents=True)
+                path.write_text(
+                    f"---\nname: {identity}\ndescription: Reviews security.\n"
+                    f"{tools}---\n",
+                    encoding="utf-8",
+                )
+
+            rows = inspect_role_postures(ROOT, consumer)
+
+            for path, identity, harness, _ in roles:
+                with self.subTest(harness=harness):
+                    posture = next(row for row in rows if row["source"] == str(path))
+                    self.assertEqual(identity, posture["name"])
+                    self.assertEqual(harness, posture["harness"])
+                    self.assertTrue(posture["role_valid"])
+
     def test_claude_duplicate_frontmatter_identities_are_degraded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             consumer = pathlib.Path(tmp) / "consumer"
@@ -3947,6 +4005,13 @@ class DerivedContractTests(unittest.TestCase):
                 "disallowedTools: Bash\n",
                 [],
                 ["Bash"],
+                "Bash is unavailable",
+                "effective write tools: Write, Edit, NotebookEdit",
+            ),
+            (
+                "disallowedTools: Bash(git push *)\n",
+                [],
+                ["Bash(git push *)"],
                 "Bash is unavailable",
                 "effective write tools: Write, Edit, NotebookEdit",
             ),
