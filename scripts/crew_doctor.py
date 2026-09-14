@@ -2146,7 +2146,11 @@ def _consumer_role_posture(
         )
     else:
         effect = f"declared allowed tools: {', '.join(allowed) or 'none'}"
-        caveat = "shell access makes the frontmatter posture advisory unless the host sandbox enforces it"
+        caveat = (
+            "shell access makes the frontmatter posture advisory unless the host sandbox enforces it"
+            if "bash" in allowed
+            else "shell access is unavailable because bash is not in the declared allowlist"
+        )
     return {
         "writes": "custom",
         "harness": harness,
@@ -2188,13 +2192,15 @@ def inspect_role_postures(
                         metadata, error = read_frontmatter(path)
                     except (OSError, UnicodeDecodeError):
                         metadata, error = None, "unreadable"
-                    if (
-                        not error
+                    resolved_name = (
+                        metadata.get("name").strip()
+                        if not error
                         and isinstance(metadata, dict)
                         and isinstance(metadata.get("name"), str)
-                        and metadata["name"]
-                    ):
-                        identity = metadata["name"]
+                        else ""
+                    )
+                    if resolved_name:
+                        identity = resolved_name
                 consumer_roles.setdefault(identity, []).append(path)
         for name in EXPECTED_ROLE_NAMES:
             paths = consumer_roles.pop(name, [])
@@ -2230,10 +2236,12 @@ def inspect_role_postures(
         if not isinstance(metadata, dict):
             metadata = {}
         resolved_name = metadata.get("name")
-        if not isinstance(resolved_name, str) or not resolved_name:
+        if not isinstance(resolved_name, str) or not resolved_name.strip():
             errors.append(f"name must be {name}")
-        elif enforce_filename and resolved_name != path.stem:
-            errors.append(f"name must be {path.stem}")
+        else:
+            resolved_name = resolved_name.strip()
+            if enforce_filename and resolved_name != path.stem:
+                errors.append(f"name must be {path.stem}")
         if duplicate:
             errors.append(f"duplicate resolved role identity {name}")
         if not isinstance(metadata.get("description"), str) or not metadata["description"].strip():

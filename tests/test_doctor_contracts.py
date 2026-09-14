@@ -3816,6 +3816,33 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual("OK", check["status"])
             self.assertEqual(str(role), check["evidence"][0]["source"])
 
+    def test_claude_consumer_role_identity_must_not_be_blank(self) -> None:
+        for declaration, expected_name, valid in (
+            ("' '", "custom-file", False),
+            ('""', "custom-file", False),
+            ("librarian", "librarian", True),
+        ):
+            with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as tmp:
+                consumer = pathlib.Path(tmp) / "consumer"
+                role = consumer / ".claude/agents/custom-file.md"
+                role.parent.mkdir(parents=True)
+                role.write_text(
+                    f"---\nname: {declaration}\ndescription: Maintains references.\n"
+                    "tools: Read, Grep\n---\n",
+                    encoding="utf-8",
+                )
+
+                rows = inspect_role_postures(ROOT, consumer)
+                posture = next(row for row in rows if row["source"] == str(role))
+
+                self.assertEqual(expected_name, posture["name"])
+                self.assertEqual(valid, posture["role_valid"])
+                if not valid:
+                    self.assertIn(
+                        "name must be custom-file",
+                        posture["validation_errors"],
+                    )
+
     def test_claude_duplicate_frontmatter_identities_are_degraded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             consumer = pathlib.Path(tmp) / "consumer"
@@ -3868,6 +3895,30 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual("consumer", librarian["scope"])
             self.assertEqual(["read", "bash", "web"], librarian["allowed_tools"])
             self.assertIn("read, bash, web", librarian["write_effect"])
+            self.assertIn("posture advisory", librarian["caveat"])
+
+    def test_pi_consumer_without_bash_reports_shell_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            role = consumer / ".pi/agents/librarian.md"
+            role.parent.mkdir(parents=True)
+            role.write_text(
+                "---\nname: librarian\ndescription: Custom consumer role.\n"
+                "tools: read, web\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            librarian = next(
+                row
+                for row in rows
+                if row["name"] == "librarian" and row["harness"] == "pi"
+            )
+
+            self.assertTrue(librarian["role_valid"])
+            self.assertEqual(["read", "web"], librarian["allowed_tools"])
+            self.assertIn("shell access is unavailable", librarian["caveat"])
+            self.assertNotIn("posture advisory", librarian["caveat"])
 
     def test_claude_consumer_posture_composes_both_tool_fields(self) -> None:
         cases = (

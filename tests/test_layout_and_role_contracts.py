@@ -241,6 +241,31 @@ class LayoutContractTests(unittest.TestCase):
 
                 self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
 
+    def test_claude_consumer_role_identity_must_not_be_blank(self) -> None:
+        for declaration, valid in (("' '", False), ('""', False), ("librarian", True)):
+            with self.subTest(declaration=declaration), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                agent = root / ".claude/agents/custom-file.md"
+                agent.parent.mkdir(parents=True)
+                agent.write_text(
+                    f"---\nname: {declaration}\ndescription: Maintains references.\n---\n",
+                    encoding="utf-8",
+                )
+
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+
+                output = completed.stdout + completed.stderr
+                self.assertEqual(valid, completed.returncode == 0, output)
+                if not valid:
+                    self.assertIn(".claude/agents/custom-file.md", output)
+                    self.assertIn("no `name:` in frontmatter", output)
+
     def test_claude_duplicate_resolved_role_identities_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
