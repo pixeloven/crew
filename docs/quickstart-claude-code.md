@@ -7,7 +7,7 @@ Add this at project or user scope:
 ```json
 {
   "extraKnownMarketplaces": {
-    "pixeloven": { "source": { "source": "github", "repo": "pixeloven/crew" }, "autoUpdate": true }
+    "pixeloven": { "source": { "source": "github", "repo": "pixeloven/marketplace" }, "autoUpdate": true }
   },
   "enabledPlugins": { "crew@pixeloven": true }
 }

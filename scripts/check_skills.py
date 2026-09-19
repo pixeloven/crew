@@ -57,7 +57,7 @@ def validate_root(root: pathlib.Path) -> list[str]:
     errors: list[str] = []
     root = pathlib.Path(root)
 
-    for m in [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", "package.json"]:
+    for m in [".claude-plugin/plugin.json", "package.json"]:
         try:
             json.loads((root / m).read_text())
         except Exception as e:

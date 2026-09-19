@@ -29,6 +29,9 @@ except ImportError:  # Direct script execution.
 CREW_REPO = "pixeloven/crew"
 # Plugin identity is <plugin>@<marketplace>. The marketplace is the org so a
 # single PixelOven marketplace can serve crew alongside its siblings.
+# The catalogue lives in its own repo so one marketplace can serve every
+# PixelOven plugin; this repo is only the plugin it points at.
+MARKETPLACE_REPO = "pixeloven/marketplace"
 MARKETPLACE_NAME = "pixeloven"
 PLUGIN_NAME = "crew"
 PLUGIN_ID = f"{PLUGIN_NAME}@{MARKETPLACE_NAME}"
@@ -51,8 +54,9 @@ SEMVER = re.compile(
     r"(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
+# Pi has no marketplace: it installs this repo as a package and keys off its name.
 PI_CREW_PACKAGE = re.compile(
-    r"^(?:(?:git:)?github\.com/|github:)?pixeloven/crew(?:@[^@\s]+)?$"
+    r"^(?:(?:git:)?github\.com/|github:)?" + re.escape(CREW_REPO) + r"(?:@[^@\s]+)?$"
 )
 
 
@@ -179,17 +183,17 @@ def _version_tuple(
     return (major, minor, patch, 0 if separator else 1, identifiers)
 
 
-def _is_crew_marketplace_source(value: Any) -> bool:
-    if value == CREW_REPO:
+def _is_marketplace_source(value: Any) -> bool:
+    if value == MARKETPLACE_REPO:
         return True
     return (
         isinstance(value, dict)
         and value.get("source") == "github"
-        and value.get("repo") == CREW_REPO
+        and value.get("repo") == MARKETPLACE_REPO
     )
 
 
-def _is_codex_crew_git_source(source_type: Any, source: Any) -> bool:
+def _is_codex_marketplace_git_source(source_type: Any, source: Any) -> bool:
     if source_type != "git" or not isinstance(source, str):
         return False
     normalized = source.strip().rstrip("/")
@@ -204,7 +208,7 @@ def _is_codex_crew_git_source(source_type: Any, source: Any) -> bool:
         if normalized.startswith(prefix):
             normalized = normalized[len(prefix) :]
             break
-    return normalized == CREW_REPO
+    return normalized == MARKETPLACE_REPO
 
 
 def _evidence(kind: str, claim: str, source: str = "") -> dict[str, str]:
@@ -1020,7 +1024,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 if isinstance(crew_marketplace, dict)
                 else None
             )
-            source_valid = isinstance(crew_marketplace, dict) and _is_crew_marketplace_source(
+            source_valid = isinstance(crew_marketplace, dict) and _is_marketplace_source(
                 source
             )
             marketplace_records.append(
@@ -1030,7 +1034,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 _mark_config_malformed(
                     result,
                     settings_path,
-                    f"extraKnownMarketplaces.{MARKETPLACE_NAME} source must identify {CREW_REPO}",
+                    f"extraKnownMarketplaces.{MARKETPLACE_NAME} source must identify {MARKETPLACE_REPO}",
                 )
         if MARKETPLACE_NAME in marketplaces or PLUGIN_ID in enabled:
             settings_records.append({"scope": scope, "path": str(settings_path)})
@@ -1063,12 +1067,12 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         record = {}
     registry_source_valid = False
     if record:
-        registry_source_valid = _is_crew_marketplace_source(record.get("source"))
+        registry_source_valid = _is_marketplace_source(record.get("source"))
         if not registry_source_valid:
             _mark_config_malformed(
                 result,
                 registry_path,
-                f"{MARKETPLACE_NAME} marketplace source must identify {CREW_REPO}",
+                f"{MARKETPLACE_NAME} marketplace source must identify {MARKETPLACE_REPO}",
             )
     effective_marketplace = marketplace_records[0] if marketplace_records else None
     if effective_marketplace:
@@ -1144,7 +1148,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         _mark_config_malformed(
             result,
             installed_path,
-            f"{PLUGIN_ID} registrations require a validated {CREW_REPO} marketplace source",
+            f"{PLUGIN_ID} registrations require a validated {MARKETPLACE_REPO} marketplace source",
         )
     for index, registration in enumerate(result["registrations"]):
         if not isinstance(registration, dict):
@@ -1506,12 +1510,12 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         crew_plugin = {}
     raw_source = crew_market.get("source")
     raw_source_type = crew_market.get("source_type")
-    crew_source_valid = _is_codex_crew_git_source(raw_source_type, raw_source)
+    crew_source_valid = _is_codex_marketplace_git_source(raw_source_type, raw_source)
     if crew_market and not crew_source_valid:
         _mark_config_malformed(
             result,
             config_path,
-            f"marketplaces.{MARKETPLACE_NAME} must use a git source identifying {CREW_REPO}",
+            f"marketplaces.{MARKETPLACE_NAME} must use a git source identifying {MARKETPLACE_REPO}",
         )
     raw_ref = crew_market.get("ref")
     if raw_ref is not None and (

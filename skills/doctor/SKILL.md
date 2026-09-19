@@ -75,7 +75,8 @@ runtime actually resolved, if this Pi session exposes it.
 
 **Claude Code.** Reconcile four distinct facts:
 
-1. settings declare marketplace `pixeloven` and enable `crew@pixeloven`;
+1. settings declare marketplace `pixeloven` (sourced from `pixeloven/marketplace`)
+   and enable `crew@pixeloven`;
 2. `known_marketplaces.json` records source, install location, and timestamp —
    it does **not** carry a served version;
 3. the marketplace clone's `.claude-plugin/plugin.json` carries the served
