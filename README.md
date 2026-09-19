@@ -38,9 +38,9 @@ requires and disappear silently.
 - [pi.dev quickstart](docs/quickstart-pi.md)
 - [OpenAI Codex quickstart](docs/quickstart-codex.md)
 
-The npm compatibility identity remains `@ductiletoaster/harmony-crew`. It is not
-renamed or dual-published by this repository change; the active git/plugin
-identity is `pixeloven/crew` and `crew@crew`.
+The package identity is `@pixeloven/crew`, matching the git and plugin identity
+`pixeloven/crew` and `crew@crew`. Nothing is published to a package registry:
+releases are git tags, and every harness installs from a `vX.Y.Z` tag.
 
 ## Local overlays and collisions
 
