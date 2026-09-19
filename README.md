@@ -38,9 +38,14 @@ requires and disappear silently.
 - [pi.dev quickstart](docs/quickstart-pi.md)
 - [OpenAI Codex quickstart](docs/quickstart-codex.md)
 
-The npm compatibility identity remains `@ductiletoaster/harmony-crew`. It is not
-renamed or dual-published by this repository change; the active git/plugin
-identity is `pixeloven/crew` and `crew@crew`.
+One identity, three spellings: the repo is `pixeloven/crew`, the package is
+`@pixeloven/crew`, and the plugin is `crew@pixeloven`. Nothing is published to a
+package registry — releases are git tags.
+
+Claude Code and Codex install the plugin from the shared catalogue at
+[`pixeloven/marketplace`](https://github.com/pixeloven/marketplace), which pins
+this repo by commit SHA; this repo carries no marketplace of its own. Pi has no
+marketplace concept and installs the package from a `vX.Y.Z` tag directly.
 
 ## Local overlays and collisions
 

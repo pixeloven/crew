@@ -13,11 +13,12 @@ dated compatibility evidence and re-check it on a major Codex release.
 Pin a published tag by replacing `vX.Y.Z`:
 
 ```sh
-codex plugin marketplace add pixeloven/crew --ref vX.Y.Z
-codex plugin add crew@crew
+codex plugin marketplace add pixeloven/marketplace
+codex plugin add crew@pixeloven
 ```
 
-The marketplace pin lives in `config.toml`. A resolved plugin normally appears at
+The marketplace is the catalogue repo; it pins each plugin by commit SHA,
+so the served version is whatever `pixeloven/marketplace` currently points at. A resolved plugin normally appears at
 `~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/skills`; the exact
 skill-root table in `codex debug prompt-input "hi"` is stronger evidence.
 
