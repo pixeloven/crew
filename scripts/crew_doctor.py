@@ -27,6 +27,11 @@ except ImportError:  # Direct script execution.
 
 
 CREW_REPO = "pixeloven/crew"
+# Plugin identity is <plugin>@<marketplace>. The marketplace is the org so a
+# single PixelOven marketplace can serve crew alongside its siblings.
+MARKETPLACE_NAME = "pixeloven"
+PLUGIN_NAME = "crew"
+PLUGIN_ID = f"{PLUGIN_NAME}@{MARKETPLACE_NAME}"
 FIRST_PI_ROLE_DISCOVERY_VERSION = (0, 35, 0, 1, ())
 RECOMMENDED_LOCAL_VOCABULARY = ("litellm-access-map", "vault-ops")
 PROFILE_TAXONOMY = ("portable", "platform", "personas")
@@ -91,7 +96,7 @@ def _manifest_version(root: pathlib.Path) -> ReadResult:
     if read.state == "present":
         if not isinstance(read.value, dict):
             return ReadResult(None, "malformed", read.source, "manifest must be a mapping")
-        if read.value.get("name") != "crew":
+        if read.value.get("name") != PLUGIN_NAME:
             return ReadResult(
                 None,
                 "malformed",
@@ -1008,8 +1013,8 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 "extraKnownMarketplaces must be a mapping",
             )
             marketplaces = {}
-        crew_marketplace = marketplaces.get("crew")
-        if "crew" in marketplaces:
+        crew_marketplace = marketplaces.get(MARKETPLACE_NAME)
+        if MARKETPLACE_NAME in marketplaces:
             source = (
                 crew_marketplace.get("source")
                 if isinstance(crew_marketplace, dict)
@@ -1025,17 +1030,17 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
                 _mark_config_malformed(
                     result,
                     settings_path,
-                    f"extraKnownMarketplaces.crew source must identify {CREW_REPO}",
+                    f"extraKnownMarketplaces.{MARKETPLACE_NAME} source must identify {CREW_REPO}",
                 )
-        if "crew" in marketplaces or "crew@crew" in enabled:
+        if MARKETPLACE_NAME in marketplaces or PLUGIN_ID in enabled:
             settings_records.append({"scope": scope, "path": str(settings_path)})
-        if "crew@crew" in enabled:
-            enabled_value = enabled["crew@crew"]
+        if PLUGIN_ID in enabled:
+            enabled_value = enabled[PLUGIN_ID]
             if not isinstance(enabled_value, bool):
                 _mark_config_malformed(
                     result,
                     settings_path,
-                    "enabledPlugins.crew@crew must be boolean",
+                    f"enabledPlugins.{PLUGIN_ID} must be boolean",
                 )
             else:
                 enabled_records.append(
@@ -1052,9 +1057,9 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if not isinstance(registry, dict):
         _mark_config_malformed(result, registry_path, "marketplace registry must be a mapping")
         registry = {}
-    record = registry.get("crew", {})
+    record = registry.get(MARKETPLACE_NAME, {})
     if not isinstance(record, dict):
-        _mark_config_malformed(result, registry_path, "crew marketplace record must be a mapping")
+        _mark_config_malformed(result, registry_path, f"{MARKETPLACE_NAME} marketplace record must be a mapping")
         record = {}
     registry_source_valid = False
     if record:
@@ -1063,7 +1068,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             _mark_config_malformed(
                 result,
                 registry_path,
-                f"crew marketplace source must identify {CREW_REPO}",
+                f"{MARKETPLACE_NAME} marketplace source must identify {CREW_REPO}",
             )
     effective_marketplace = marketplace_records[0] if marketplace_records else None
     if effective_marketplace:
@@ -1095,7 +1100,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         _mark_config_malformed(
             result,
             registry_path,
-            "crew marketplace installLocation must be a non-empty string",
+            f"{MARKETPLACE_NAME} marketplace installLocation must be a non-empty string",
         )
         raw_location = None
     location = pathlib.Path(raw_location) if raw_location else pathlib.Path()
@@ -1122,12 +1127,12 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     if not isinstance(plugins, dict):
         _mark_config_malformed(result, installed_path, "plugins must be a mapping")
         plugins = {}
-    registrations = plugins.get("crew@crew", [])
+    registrations = plugins.get(PLUGIN_ID, [])
     if not isinstance(registrations, list):
         _mark_config_malformed(
             result,
             installed_path,
-            "crew@crew registrations must be a sequence",
+            f"{PLUGIN_ID} registrations must be a sequence",
         )
         registrations = []
     result["registrations"] = registrations
@@ -1139,14 +1144,14 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
         _mark_config_malformed(
             result,
             installed_path,
-            f"crew@crew registrations require a validated {CREW_REPO} marketplace source",
+            f"{PLUGIN_ID} registrations require a validated {CREW_REPO} marketplace source",
         )
     for index, registration in enumerate(result["registrations"]):
         if not isinstance(registration, dict):
             _mark_config_malformed(
                 result,
                 installed_path,
-                f"crew@crew registration {index} must be a mapping",
+                f"{PLUGIN_ID} registration {index} must be a mapping",
             )
             continue
         install_path = registration.get("installPath")
@@ -1154,7 +1159,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             _mark_config_malformed(
                 result,
                 installed_path,
-                f"crew@crew registration {index} installPath must be a non-empty string",
+                f"{PLUGIN_ID} registration {index} installPath must be a non-empty string",
             )
             continue
         valid = True
@@ -1163,7 +1168,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             _mark_config_malformed(
                 result,
                 installed_path,
-                f"crew@crew registration {index} scope must be local, project, or user",
+                f"{PLUGIN_ID} registration {index} scope must be local, project, or user",
             )
             valid = False
         project_path = registration.get("projectPath")
@@ -1173,14 +1178,14 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             _mark_config_malformed(
                 result,
                 installed_path,
-                f"crew@crew registration {index} projectPath must be a non-empty string",
+                f"{PLUGIN_ID} registration {index} projectPath must be a non-empty string",
             )
             valid = False
         if scope in {"local", "project"} and project_path is None:
             _mark_config_malformed(
                 result,
                 installed_path,
-                f"crew@crew registration {index} projectPath is required for {scope} scope",
+                f"{PLUGIN_ID} registration {index} projectPath is required for {scope} scope",
             )
             valid = False
         raw_registration_version = registration.get("version")
@@ -1191,7 +1196,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             _mark_config_malformed(
                 result,
                 installed_path,
-                f"crew@crew registration {index} version must be a SemVer string",
+                f"{PLUGIN_ID} registration {index} version must be a SemVer string",
             )
             valid = False
         if not valid or not crew_identity_valid:
@@ -1472,7 +1477,7 @@ def _path_within(path: pathlib.Path, root: pathlib.Path) -> bool:
 def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, Any] | None) -> dict[str, Any]:
     result = _base_harness()
     config_path = home / ".codex/config.toml"
-    cache_base = home / ".codex/plugins/cache/crew/crew"
+    cache_base = home / f".codex/plugins/cache/{MARKETPLACE_NAME}/{PLUGIN_NAME}"
     vendored_paths = (project / ".agents/skills", home / ".agents/skills")
     result["inspection_paths"] = [
         str(config_path),
@@ -1491,13 +1496,13 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
     if not isinstance(plugins, dict):
         _mark_config_malformed(result, config_path, "plugins must be a mapping")
         plugins = {}
-    crew_market = marketplaces.get("crew", {})
-    crew_plugin = plugins.get("crew@crew", {})
+    crew_market = marketplaces.get(MARKETPLACE_NAME, {})
+    crew_plugin = plugins.get(PLUGIN_ID, {})
     if not isinstance(crew_market, dict):
-        _mark_config_malformed(result, config_path, "marketplaces.crew must be a mapping")
+        _mark_config_malformed(result, config_path, f"marketplaces.{MARKETPLACE_NAME} must be a mapping")
         crew_market = {}
     if not isinstance(crew_plugin, dict):
-        _mark_config_malformed(result, config_path, 'plugins."crew@crew" must be a mapping')
+        _mark_config_malformed(result, config_path, f'plugins."{PLUGIN_ID}" must be a mapping')
         crew_plugin = {}
     raw_source = crew_market.get("source")
     raw_source_type = crew_market.get("source_type")
@@ -1506,7 +1511,7 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         _mark_config_malformed(
             result,
             config_path,
-            f"marketplaces.crew must use a git source identifying {CREW_REPO}",
+            f"marketplaces.{MARKETPLACE_NAME} must use a git source identifying {CREW_REPO}",
         )
     raw_ref = crew_market.get("ref")
     if raw_ref is not None and (
@@ -1515,12 +1520,12 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
         _mark_config_malformed(
             result,
             config_path,
-            "marketplaces.crew.ref must be a SemVer string",
+            f"marketplaces.{MARKETPLACE_NAME}.ref must be a SemVer string",
         )
         raw_ref = None
     raw_enabled = crew_plugin.get("enabled")
     if raw_enabled is not None and not isinstance(raw_enabled, bool):
-        _mark_config_malformed(result, config_path, 'plugins."crew@crew".enabled must be boolean')
+        _mark_config_malformed(result, config_path, f'plugins."{PLUGIN_ID}".enabled must be boolean')
         raw_enabled = None
     discovered_cache_roots = sorted(
         (path for path in cache_base.glob("*") if path.is_dir()),

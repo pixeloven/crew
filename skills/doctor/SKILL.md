@@ -75,18 +75,18 @@ runtime actually resolved, if this Pi session exposes it.
 
 **Claude Code.** Reconcile four distinct facts:
 
-1. settings declare marketplace `crew` and enable `crew@crew`;
+1. settings declare marketplace `pixeloven` and enable `crew@pixeloven`;
 2. `known_marketplaces.json` records source, install location, and timestamp —
    it does **not** carry a served version;
 3. the marketplace clone's `.claude-plugin/plugin.json` carries the served
    version;
 4. `installed_plugins.json` records installed paths/versions/scopes. Enumerate
-   every `plugins["crew@crew"][]` record and flag stale or duplicate scopes.
+   every `plugins["crew@pixeloven"][]` record and flag stale or duplicate scopes.
 
 Only this Claude session's catalogue can prove its loaded version. Registry
 agreement is installation evidence, not runtime proof.
 
-**Codex.** Check the marketplace pin and `plugins."crew@crew".enabled` in
+**Codex.** Check the marketplace pin and `plugins."crew@pixeloven".enabled` in
 `config.toml`, then inspect
 `~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/skills` and the exact
 skill-root paths from free `codex debug prompt-input`. A repo/user

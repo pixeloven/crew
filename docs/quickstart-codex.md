@@ -14,7 +14,7 @@ Pin a published tag by replacing `vX.Y.Z`:
 
 ```sh
 codex plugin marketplace add pixeloven/crew --ref vX.Y.Z
-codex plugin add crew@crew
+codex plugin add crew@pixeloven
 ```
 
 The marketplace pin lives in `config.toml`. A resolved plugin normally appears at

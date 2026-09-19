@@ -7,9 +7,9 @@ Add this at project or user scope:
 ```json
 {
   "extraKnownMarketplaces": {
-    "crew": { "source": { "source": "github", "repo": "pixeloven/crew" }, "autoUpdate": true }
+    "pixeloven": { "source": { "source": "github", "repo": "pixeloven/crew" }, "autoUpdate": true }
   },
-  "enabledPlugins": { "crew@crew": true }
+  "enabledPlugins": { "crew@pixeloven": true }
 }
 ```
 
@@ -27,7 +27,7 @@ claude --plugin-dir /absolute/resolved/crew/root plugin details crew
 Settings prove enablement. `known_marketplaces.json` proves only the source,
 location, and refresh timestamp. Read the marketplace clone's
 `.claude-plugin/plugin.json` for the served version, and enumerate every
-`installed_plugins.json` `crew@crew` record for installed version and scope.
+`installed_plugins.json` `crew@pixeloven` record for installed version and scope.
 Only the current session catalogue proves what loaded.
 
 A fresh `claude -p` check is billed. Crew Doctor must explain what it would add

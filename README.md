@@ -39,7 +39,7 @@ requires and disappear silently.
 - [OpenAI Codex quickstart](docs/quickstart-codex.md)
 
 The package identity is `@pixeloven/crew`, matching the git and plugin identity
-`pixeloven/crew` and `crew@crew`. Nothing is published to a package registry:
+`pixeloven/crew` and `crew@pixeloven`. Nothing is published to a package registry:
 releases are git tags, and every harness installs from a `vX.Y.Z` tag.
 
 ## Local overlays and collisions
