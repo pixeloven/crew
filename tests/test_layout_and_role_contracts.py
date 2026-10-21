@@ -677,7 +677,9 @@ class RolePostureTests(unittest.TestCase):
 
         self.assertEqual("crew", PI_PACKAGE_NAME)
         expected = {"none": "write, edit", "drafts": "edit", "full": None}
-        for role_dir in sorted(p for p in (ROOT / "roles").iterdir() if p.is_dir()):
+        for role_dir in sorted(
+            p for p in (ROOT / "roles").iterdir() if p.is_dir() and not p.name.startswith("_")
+        ):
             with self.subTest(role=role_dir.name):
                 role = yaml.safe_load((role_dir / "role.yml").read_text(encoding="utf-8"))
                 text = (ROOT / "pi-agents" / f"{role_dir.name}.md").read_text(encoding="utf-8")
@@ -720,25 +722,85 @@ class RolePostureTests(unittest.TestCase):
 
 
 class RoleReportingContractTests(unittest.TestCase):
-    @staticmethod
-    def section(body: str) -> str:
-        start = body.index("## Reporting contract")
-        end = body.find("\n## ", start + 1)
-        return body[start:] if end == -1 else body[start:end]
+    """The reporting contract has ONE source, included into every role body."""
 
-    def test_every_role_body_carries_one_identical_reporting_contract(self) -> None:
-        bodies = sorted((ROOT / "roles").glob("*/body.md"))
+    SHARED = ROOT / "roles" / "_shared" / "reporting-contract.md"
+    MARKER = "<!-- include: reporting-contract -->"
+    KEY_RULES = (
+        "Lead with decisions, or say there are none.",
+        "Already handled is not news.",
+        "Detail below the fold.",
+        "Separate, don't shrink.",
+        "Chunk and pause.",
+        "Batch review.",
+        "Confirm before an external write.",
+    )
+
+    def test_shared_source_carries_the_whole_contract(self) -> None:
+        text = self.SHARED.read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("## Reporting contract\n"))
+        headings = [line for line in text.splitlines() if line.startswith("#")]
+        self.assertEqual(["## Reporting contract"], headings)
+        for phrase in ("Decisions needed", "If no reply", "auditability", *self.KEY_RULES):
+            self.assertIn(phrase, text)
+
+    def test_every_role_body_includes_the_contract_instead_of_copying_it(self) -> None:
+        bodies = sorted((ROOT / "roles").glob("[!_]*/body.md"))
         self.assertEqual(7, len(bodies))
-        sections = {}
         for body in bodies:
             text = body.read_text(encoding="utf-8")
             with self.subTest(role=body.parent.name):
-                self.assertEqual(1, text.count("## Reporting contract"))
-                sections[body.parent.name] = self.section(text)
-                for phrase in ("Decisions needed", "If no reply", "Chunk and pause",
-                               "Batch review", "Confirm before an external write", "auditability"):
-                    self.assertIn(phrase, sections[body.parent.name])
-        self.assertEqual(1, len(set(sections.values())), "role reporting contracts have drifted apart")
+                self.assertEqual(1, text.count(self.MARKER))
+                self.assertNotIn("## Reporting contract", text)
+
+    def test_rendered_roles_carry_the_expanded_shared_text_once(self) -> None:
+        shared = self.SHARED.read_text(encoding="utf-8").strip("\n")
+        for tree in ("agents", "pi-agents"):
+            for path in sorted((ROOT / tree).glob("*.md")):
+                text = path.read_text(encoding="utf-8")
+                with self.subTest(file=f"{tree}/{path.name}"):
+                    self.assertEqual(1, text.count(shared))
+                    self.assertNotIn("<!-- include:", text)
+
+    def test_include_expands_in_place_and_rejects_unknown_targets(self) -> None:
+        from scripts.render_roles import expand_includes
+
+        with tempfile.TemporaryDirectory() as tmp:
+            shared = pathlib.Path(tmp)
+            (shared / "part.md").write_text("## Part\n\nShared text.\n", encoding="utf-8")
+            body = "Intro.\n<!-- include: part -->\n\n## After\n"
+            self.assertEqual(
+                "Intro.\n## Part\n\nShared text.\n\n## After\n",
+                expand_includes(body, "roles/x/body.md", shared),
+            )
+            with self.assertRaises(SystemExit) as raised:
+                expand_includes("<!-- include: missing -->\n", "roles/x/body.md", shared)
+            self.assertIn("missing", str(raised.exception))
+            with self.assertRaises(SystemExit):
+                expand_includes("<!-- include: ../part -->\n", "roles/x/body.md", shared)
+
+    def test_shared_dir_is_not_mistaken_for_a_role(self) -> None:
+        completed = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/render_roles.py"), "--check"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+        self.assertIn("7 roles rendered clean", completed.stdout)
+
+    def test_template_variant_keeps_every_key_rule(self) -> None:
+        # templates/AGENTS.md speaks to the operator, so its wording differs on
+        # purpose; it must still carry every rule the roles carry.
+        from scripts.onboarding_contract import reporting_contract_section
+
+        section = reporting_contract_section(
+            (ROOT / "templates" / "AGENTS.md").read_text(encoding="utf-8")
+        )
+        for rule in self.KEY_RULES:
+            with self.subTest(rule=rule):
+                self.assertIn(f"**{rule}**", section)
 
 
 if __name__ == "__main__":

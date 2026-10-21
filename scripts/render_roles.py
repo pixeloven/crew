@@ -5,6 +5,12 @@ Each roles/<role>/ contains exactly two files:
   role.yml            ONE harness-neutral definition (name, description, writes, dispatch)
   body.md             ONE shared body — the same prose reaches every harness
 
+Text that every role carries verbatim (the reporting contract) lives once in
+roles/_shared/<part>.md and a body pulls it in with a line of its own:
+`<!-- include: <part> -->`. The renderer expands it, so the rendered agent is the
+same as if the text were pasted there. `_shared` is not a role: directories whose
+name starts with `_` are skipped by the role loop.
+
 Both harnesses get the same name, description, body and capability posture. The
 only thing that differs is dialect: Claude Code subtracts tools with
 `disallowedTools`, pi with `excludeTools`, and every pi agent carries
@@ -28,6 +34,7 @@ Usage:
 """
 
 import pathlib
+import re
 import sys
 
 try:
@@ -37,6 +44,9 @@ except ImportError:  # Direct script execution.
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NOTICE = "<!-- GENERATED from roles/{role}/ — edit there and run scripts/render_roles.py -->"
+SHARED = ROOT / "roles" / "_shared"
+INCLUDE = re.compile(r"^<!-- include: (\S+) -->$", re.MULTILINE)
+PART_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 # What a role may declare. Anything else is a typo or a smuggled runtime knob.
 ALLOWED = {"name", "description", "writes", "dispatch"}
@@ -141,15 +151,31 @@ def frontmatter(role, harness):
     return "\n".join(lines)
 
 
+def expand_includes(body, origin, shared=SHARED):
+    """Replace each `<!-- include: <part> -->` line with roles/_shared/<part>.md."""
+
+    def part(match):
+        name = match.group(1)
+        path = shared / f"{name}.md"
+        if not PART_NAME.fullmatch(name) or not path.is_file():
+            sys.exit(f"{origin}: include '{name}' does not name a file in roles/_shared/")
+        return path.read_text().strip("\n")
+
+    return INCLUDE.sub(part, body)
+
+
 def render(role_dir, role, harness):
-    body = (role_dir / "body.md").read_text().strip("\n")
+    origin = f"roles/{role_dir.name}/body.md"
+    body = expand_includes((role_dir / "body.md").read_text(), origin).strip("\n")
     notice = NOTICE.format(role=role_dir.name)
     return f"---\n{frontmatter(role, harness)}\n---\n\n{notice}\n\n{body}\n"
 
 
 def main():
     check = "--check" in sys.argv
-    roles = sorted(p for p in (ROOT / "roles").iterdir() if p.is_dir())
+    roles = sorted(
+        p for p in (ROOT / "roles").iterdir() if p.is_dir() and not p.name.startswith("_")
+    )
     if not roles:
         sys.exit("no role directories under roles/")
     drift = []
