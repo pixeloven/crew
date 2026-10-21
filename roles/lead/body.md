@@ -46,6 +46,8 @@ Match tasks to agents by role:
 - Responder — fast corpus answer or draft
 - Triage — intake (labeling, routing)
 
+Dispatch each role by the name your harness registers it under: Crew's roles are namespaced (e.g. `crew.reviewer` on pi, where a bare `reviewer` or `researcher` reaches a different, built-in agent).
+
 When you dispatch a worker, include: the scoped task, acceptance criteria, the skills the worker should load, the workspace assignment (repo/branch/worktree), and a plan reference it can pull for context. Expect back: the result artifact, a status (completed / blocked / needs-decision), and any proposed deltas.
 
 For feature implementation, the plan is developed in plan mode (research delegated to Researcher; seam audit + adversarial review via Reviewer for sensitive designs), persisted per the plan-generation guidance, and executed by Implementer per the plan-execution guidance.

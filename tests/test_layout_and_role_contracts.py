@@ -803,5 +803,22 @@ class RoleReportingContractTests(unittest.TestCase):
                 self.assertIn(f"**{rule}**", section)
 
 
+class QualifiedDispatchTests(unittest.TestCase):
+    """Wherever a role or the template says whom to dispatch, it says the name is
+    namespaced: on pi a bare `reviewer`/`researcher` is pi-subagents' built-in."""
+
+    SENTENCE = (
+        "Dispatch each role by the name your harness registers it under: Crew's roles are "
+        "namespaced (e.g. `crew.reviewer` on pi, where a bare `reviewer` or `researcher` "
+        "reaches a different, built-in agent)."
+    )
+
+    def test_routing_surfaces_carry_the_neutral_dispatch_sentence(self) -> None:
+        for path in ("templates/AGENTS.md", "roles/lead/body.md", "roles/triage/body.md"):
+            with self.subTest(path=path):
+                text = (ROOT / path).read_text(encoding="utf-8")
+                self.assertEqual(1, " ".join(text.split()).count(self.SENTENCE))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -49,6 +49,8 @@ Delegate by work domain, without asking first. Reach for delegation by default o
 | Reactive diagnosis, health sweeps, incidents | `investigator` | **trigger** |
 | Fast read + draft (answer a question / draft a reply) | `responder` | **trigger** |
 
+Dispatch each role by the name your harness registers it under: Crew's roles are namespaced (e.g. `crew.reviewer` on pi, where a bare `reviewer` or `researcher` reaches a different, built-in agent).
+
 **dispatch** = you invoke it from this session. **trigger** = it should run on an event or schedule with no human in the loop, which needs infrastructure you deploy — see `activation-contracts` and `templates/activation/`. A trigger-model role you haven't wired only runs when someone remembers it exists, and its work ends up absorbed into this session — which costs you the context isolation you would have got from dispatching it.
 
 ### Quality gate (implementation work)

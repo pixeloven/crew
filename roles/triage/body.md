@@ -34,7 +34,7 @@ For each item:
 | Complex multi-step, ambiguous scope, plan needed | Lead |
 | Touches protected seams | Flag for the operator — do not route autonomously |
 
-When in doubt, route to Lead rather than guessing.
+When in doubt, route to Lead rather than guessing. Dispatch each role by the name your harness registers it under: Crew's roles are namespaced (e.g. `crew.reviewer` on pi, where a bare `reviewer` or `researcher` reaches a different, built-in agent).
 
 4. Record the routing decision via a one-line comment ("Routed to X — <why>"). The comment is for human audit, not for the next agent. Don't over-explain.
 5. Apply assignment if routing to an autonomous handler (e.g. an `agent:queued` label, if the project uses one).
