@@ -2642,6 +2642,7 @@ def inspect_role_postures(
     try:
         from .role_contract import (
             FORBIDDEN_RUNTIME_KEYS,
+            PI_PACKAGE_NAME,
             WRITE_POSTURES,
             claude_role_identity,
             effective_posture,
@@ -2649,6 +2650,7 @@ def inspect_role_postures(
     except ImportError:
         from role_contract import (
             FORBIDDEN_RUNTIME_KEYS,
+            PI_PACKAGE_NAME,
             WRITE_POSTURES,
             claude_role_identity,
             effective_posture,
@@ -2784,18 +2786,26 @@ def inspect_role_postures(
                     and set(denied) == set(contract["claude"]["denied"])
                 ]
                 writes = matches[0] if len(matches) == 1 else None
-        else:
+        elif is_consumer_role:
             allowed = _role_string_list(metadata.get("tools"))
             if allowed is None:
                 errors.append("tools must be a string sequence")
-            elif is_consumer_role:
-                writes = "custom"
             else:
-                effective_allowed = set(allowed) - {"subagent"}
+                writes = "custom"
+        else:
+            # Shipped pi roles subtract with `excludeTools` and carry
+            # `package: crew` (runtime identity `crew.<role>`); a `tools:`
+            # allowlist is the pre-0.38.0 shape and matches no posture.
+            if metadata.get("package") != PI_PACKAGE_NAME:
+                errors.append(f"package must be {PI_PACKAGE_NAME}")
+            excluded = _role_string_list(metadata.get("excludeTools", ""))
+            if excluded is None:
+                errors.append("excludeTools must be a string sequence")
+            elif "tools" not in metadata:
                 matches = [
                     mode
                     for mode, contract in WRITE_POSTURES.items()
-                    if effective_allowed == set(contract["pi"]["allowed"])
+                    if set(excluded) == set(contract["pi"]["denied"])
                 ]
                 writes = matches[0] if len(matches) == 1 else None
         if writes is None and not any("string sequence" in item for item in errors):

@@ -19,21 +19,32 @@ FORBIDDEN_RUNTIME_KEYS = {
     "maxTurns": "blast radius is the dispatcher's choice",
 }
 
-# Claude expresses the contract as a denylist; pi expresses it as an allowlist.
-# `drafts` deliberately retains Write: on Claude it can create AND overwrite a
-# file, while Edit/NotebookEdit (surgical modification) remain denied.
+# pi-subagents namespaces a package agent as `<package>.<name>`. Crew's rendered
+# pi roles declare `package: crew`, so they register as `crew.<role>` and never
+# replace pi-subagents' built-in `reviewer`/`researcher`. Same identity as the
+# plugin name (`PLUGIN_NAME` in crew_doctor.py) — one PixelOven identity.
+PI_PACKAGE_NAME = "crew"
+
+# Both harnesses express the contract as a SUBTRACTION from the default tool set,
+# so `writes:` means one thing everywhere: which dedicated file-write tools are
+# removed. pi uses `excludeTools` (pi-subagents >=0.62.0), not a `tools:`
+# allowlist: pi's `tools:` is strict and also shuts out ambient extensions (the
+# MCP adapter) in background runs. MCP side effects are governed by behaviour,
+# not by this posture, on every harness.
+# `drafts` deliberately retains Write/write: it can create AND overwrite a file,
+# while surgical Edit (and Claude's NotebookEdit) remain denied.
 WRITE_POSTURES = {
     "none": {
         "claude": {"denied": ["Write", "Edit", "NotebookEdit"]},
-        "pi": {"allowed": ["read", "bash", "grep", "find"]},
+        "pi": {"denied": ["write", "edit"]},
     },
     "drafts": {
         "claude": {"denied": ["Edit", "NotebookEdit"]},
-        "pi": {"allowed": ["read", "write", "bash", "grep", "find"]},
+        "pi": {"denied": ["edit"]},
     },
     "full": {
         "claude": {"denied": []},
-        "pi": {"allowed": ["read", "write", "edit", "bash", "grep", "find"]},
+        "pi": {"denied": []},
     },
 }
 
@@ -54,9 +65,9 @@ def effective_posture(writes: str, harness: str) -> dict[str, object]:
         raise ValueError(f"unknown harness: {harness}")
 
     raw = WRITE_POSTURES[writes][harness]
+    denied = list(raw["denied"])
+    allowed: list[str] = []
     if harness == "claude":
-        denied = list(raw["denied"])
-        allowed = []
         if writes == "none":
             effect = "dedicated file-write tools are denied"
         elif writes == "drafts":
@@ -64,12 +75,10 @@ def effective_posture(writes: str, harness: str) -> dict[str, object]:
         else:
             effect = "dedicated file-write tools are unrestricted"
     else:
-        denied = []
-        allowed = list(raw["allowed"])
         if writes == "none":
-            effect = "dedicated write and edit tools are absent"
+            effect = "write and edit are excluded from the default tool set"
         elif writes == "drafts":
-            effect = "write may create and overwrite files; surgical edit is absent"
+            effect = "write may create and overwrite files; surgical edit is excluded"
         else:
             effect = "write and edit tools are available"
 

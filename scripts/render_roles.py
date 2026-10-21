@@ -6,8 +6,9 @@ Each roles/<role>/ contains exactly two files:
   body.md             ONE shared body — the same prose reaches every harness
 
 Both harnesses get the same name, description, body and capability posture. The
-only thing that differs is dialect: Claude Code expresses capability as a denylist
-(`disallowedTools`), pi as an allowlist (`tools`). That translation lives HERE and
+only thing that differs is dialect: Claude Code subtracts tools with
+`disallowedTools`, pi with `excludeTools`, and every pi agent carries
+`package: crew` so pi-subagents registers it as `crew.<role>`. That translation lives HERE and
 nowhere else, so the two trees cannot drift apart by editing. A consumer whose
 runtime needs a role to behave differently shadows the rendered agent in its own
 overlay — per-harness prose does not belong in this repo, because the differences
@@ -30,9 +31,9 @@ import pathlib
 import sys
 
 try:
-    from .role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES
+    from .role_contract import FORBIDDEN_RUNTIME_KEYS, PI_PACKAGE_NAME, WRITE_POSTURES
 except ImportError:  # Direct script execution.
-    from role_contract import FORBIDDEN_RUNTIME_KEYS, WRITE_POSTURES
+    from role_contract import FORBIDDEN_RUNTIME_KEYS, PI_PACKAGE_NAME, WRITE_POSTURES
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NOTICE = "<!-- GENERATED from roles/{role}/ — edit there and run scripts/render_roles.py -->"
@@ -50,7 +51,7 @@ FORBIDDEN = FORBIDDEN_RUNTIME_KEYS
 WRITES = {
     posture: {
         "claude": values["claude"]["denied"],
-        "pi": values["pi"]["allowed"],
+        "pi": values["pi"]["denied"],
     }
     for posture, values in WRITE_POSTURES.items()
 }
@@ -122,11 +123,21 @@ def frontmatter(role, harness):
         if denied:
             lines.append(f"disallowedTools: {', '.join(denied)}")
     else:
+        # `package:` makes the runtime identity `crew.<name>` while `name:` stays
+        # the bare local name. Without it a package agent named `reviewer` or
+        # `researcher` silently replaces pi-subagents' built-in of that name in
+        # its own acceptance review and profiles (package beats builtin).
+        lines.append(f"package: {PI_PACKAGE_NAME}")
         lines.append(f"description: {desc}")
-        tools = list(WRITES[role["writes"]]["pi"])
+        # Subtract from pi's default tool set. Never emit `tools:` — it is a
+        # strict allowlist that also shuts out ambient extensions (MCP).
+        excluded = WRITES[role["writes"]]["pi"]
+        if excluded:
+            lines.append(f"excludeTools: {', '.join(excluded)}")
         if role.get("dispatch"):
-            tools.append("subagent")
-        lines.append(f"tools: {', '.join(tools)}")
+            # The child-safe nested `subagent` tool, granted without turning an
+            # omitted `tools:` into an allowlist.
+            lines.append("allowNestedSubagents: true")
     return "\n".join(lines)
 
 

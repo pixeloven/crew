@@ -8,7 +8,7 @@ chosen tag:
 ```json
 {
   "packages": [
-    "npm:pi-subagents@0.33.1",
+    "npm:pi-subagents@0.80.0",
     "git:github.com/pixeloven/crew@vX.Y.Z"
   ]
 }
@@ -18,13 +18,18 @@ Crew must be `v0.35.0` or newer. Earlier rendered Pi roles omitted frontmatter
 `name:`; pi-subagents silently drops such files. Read the configured pin from
 settings and the resolved version from the checkout's
 `.claude-plugin/plugin.json`. Do not use `git describe` for package version.
-Package role discovery also requires `pi-subagents` `>=0.29.0`.
+
+Crew `v0.38.0` and newer require `pi-subagents` `>=0.62.0`. The roles express
+their write posture with `excludeTools`, which older pi-subagents ignores, so
+every role would silently receive pi's full default tool set, `write` and `edit`
+included.
 
 ## 2. Verify runtime discovery
 
 In the intended Pi runtime, run its native `/subagents-doctor`. It should list
-the seven Crew roles (`lead`, `triage`, `investigator`, `researcher`, `responder`,
-`reviewer`, `implementer`) and the package skill tree. Package skill and role
+the seven Crew roles under their package-qualified names (`crew.lead`,
+`crew.triage`, `crew.investigator`, `crew.researcher`, `crew.responder`,
+`crew.reviewer`, `crew.implementer`) and the package skill tree. Package skill and role
 discovery are separate; report which half failed.
 
 If skills appear but roles do not, inspect both the package's
@@ -34,7 +39,22 @@ are separate, historically observed silent-failure seams.
 Do not substitute another harness's result for Pi runtime evidence. `pi -p` or
 any prompt-mediated fresh-session probe is billed and requires explicit approval.
 
-## 3. Project behavior and overlay
+## 3. Dispatch the qualified name
+
+Every Crew role declares `package: crew`, so pi-subagents registers it as
+`crew.<role>`; `name:` stays the bare local name. Dispatch `crew.reviewer`, not
+`reviewer`. A bare `reviewer` or `researcher` resolves to pi-subagents' own
+built-in agents. That is intended: pi-subagents' acceptance review and profiles
+dispatch those bare names, and Crew no longer silently replaces them. The other
+five bare names currently fall back to the unique local name (bare `lead`
+reaches `crew.lead`), but that breaks as soon as any other source adds a
+same-named agent, so dispatch the qualified name for every role.
+
+To shadow a Crew role from a project overlay, the `.pi/agents/<role>.md` file
+must also declare `package: crew`. Without it, the file registers as a separate
+bare-named agent and the packaged `crew.<role>` stays in effect.
+
+## 4. Project behavior and overlay
 
 Pi reads the repo-root `AGENTS.md`. Canonical project skills live in
 `.agents/skills/<name>/SKILL.md`; project roles live in `.pi/agents/<name>.md`.
@@ -50,11 +70,22 @@ python3 /absolute/resolved/crew/root/scripts/check_skill_layout.py /absolute/con
 It catches missing role identity/description and forbidden runtime knobs as well
 as invisible skill layouts.
 
-## 4. Role posture and onboarding
+## 5. Role posture and onboarding
 
-Pi role `tools:` is an allowlist, but every shipped role retains `bash`; file
-posture is advisory unless the host permission system or sandbox enforces it.
-Dispatch configuration owns model, reasoning depth, and turn budget.
+Pi roles subtract from pi's default tool set rather than allowlisting:
+`writes: none` renders `excludeTools: write, edit`, `writes: drafts` renders
+`excludeTools: edit`, and `writes: full` excludes nothing. No role declares
+`tools:`, because pi's `tools:` is a strict allowlist that would also shut out
+ambient extensions. `lead` gets nested dispatch through
+`allowNestedSubagents: true`. Every role retains `bash`, so file posture is
+advisory unless the host permission system or sandbox enforces it. Dispatch
+configuration owns model, reasoning depth, and turn budget.
+
+MCP reaches a Pi subagent only through `mcp:` entries in its frontmatter, or
+through ambient extensions such as the MCP adapter's proxy tool in a background
+(`async`) run; a foreground child never loads ambient extensions. On every
+harness the write posture limits dedicated file-write tools only: MCP side
+effects are governed by the role's behaviour, not by `writes:`.
 
 Ask **“onboard this project”** for a read-only audit. Applying findings requires a
 separate explicit current-run authorization.
