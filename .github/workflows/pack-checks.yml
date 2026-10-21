@@ -1,0 +1,124 @@
+---
+# Crew's published checks, run against a pack (docs/PACKS.md). A pack's CI is
+# one job:
+#
+#   jobs:
+#     crew:
+#       uses: pixeloven/crew/.github/workflows/pack-checks.yml@vX.Y.Z
+#
+# The pack is checked out at the workspace root and Crew under .crew/ -- a
+# dot-directory none of the checks scan, so Crew's own skills, links, and
+# manifests never count as the pack's. The slot list and requires vocabulary
+# therefore always come from Crew, never from the pack.
+#
+# tests/test_pack_workflow.py keeps the scripts run here in step with the
+# scripts that exist; add a pack-facing check there and here together.
+name: Pack checks
+
+on:
+  workflow_call:
+    inputs:
+      crew-ref:
+        description: >-
+          Crew ref whose scripts run the checks. Empty (the default) resolves
+          v<highest plugin:crew@>= the pack's skills declare>, falling back to
+          main with a warning while that release is untagged.
+        type: string
+        default: ""
+      pack-root:
+        description: Pack root, relative to the repository root.
+        type: string
+        default: "."
+
+permissions:
+  contents: read
+
+jobs:
+  pack-checks:
+    name: Pack meets Crew's contract
+    runs-on: ubuntu-latest
+    env:
+      PACK_ROOT: ${{ github.workspace }}/${{ inputs.pack-root }}
+      CREW: ${{ github.workspace }}/.crew
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Resolve the Crew ref
+        id: crew
+        env:
+          CREW_REF: ${{ inputs.crew-ref }}
+        run: |
+          ref="$CREW_REF"
+          if [ -z "$ref" ]; then
+            min=$(grep -hoE 'plugin:crew@>=[0-9]+\.[0-9]+\.[0-9]+' "$PACK_ROOT"/skills/*/SKILL.md 2>/dev/null \
+              | sed 's/.*>=//' | sort -V | tail -n 1 || true)
+            if [ -z "$min" ]; then
+              ref=main
+              echo "::warning::no skill declares plugin:crew@>=X.Y.Z; checking against Crew main (check_skills.py --pack will fail this)"
+            elif git ls-remote --exit-code --tags https://github.com/pixeloven/crew "refs/tags/v$min" >/dev/null; then
+              ref="v$min"
+            else
+              ref=main
+              echo "::warning::Crew v$min is not tagged yet; checking against main until it is (docs/PACKS.md, Bootstrap)"
+            fi
+          fi
+          echo "Checking against Crew $ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check out Crew
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: pixeloven/crew
+          ref: ${{ steps.crew.outputs.ref }}
+          path: .crew
+          persist-credentials: false
+
+      - name: Crew ships every check this workflow runs
+        env:
+          RESOLVED: ${{ steps.crew.outputs.ref }}
+        run: |
+          missing=0
+          for script in check_skills.py check_skill_layout.py check_links.py check_versions.py; do
+            if [ ! -f "$CREW/scripts/$script" ]; then
+              echo "::error::Crew $RESOLVED has no scripts/$script; raise the pack's plugin:crew@>= or pass crew-ref"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Schema v2, description budget, pack contract
+        run: python3 "$CREW/scripts/check_skills.py" --pack --root "$PACK_ROOT"
+
+      - name: Skill layout is what the harnesses read
+        run: python3 "$CREW/scripts/check_skill_layout.py" "$PACK_ROOT"
+
+      - name: Relative Markdown links resolve inside the pack
+        run: python3 "$CREW/scripts/check_links.py" "$PACK_ROOT"
+
+      - name: Manifest versions agree
+        run: python3 "$CREW/scripts/check_versions.py" "$PACK_ROOT"
+
+      # Informational: description cost is reported, never capped. The block
+      # below is the README's "Description cost" section, ready to paste.
+      - name: Description cost (job summary)
+        if: always()
+        env:
+          RESOLVED: ${{ steps.crew.outputs.ref }}
+        run: |
+          report=$(python3 "$CREW/scripts/check_skills.py" --pack --root "$PACK_ROOT" --report-cost \
+            | sed '/^total always-on description chars:/q' || true)
+          total=$(printf '%s\n' "$report" | grep '^total always-on description chars:' || true)
+          {
+            echo "## Description cost"
+            echo
+            echo "Measured with Crew's \`check_skills.py --pack --report-cost\` at Crew $RESOLVED:"
+            echo
+            echo '```text'
+            printf '%s\n' "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$total" ] && ! grep -qxF "$total" "$PACK_ROOT/README.md" 2>/dev/null; then
+            echo "::warning::README.md does not carry the current total line ($total); update its Description cost section (docs/PACKS.md)"
+          fi
