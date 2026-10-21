@@ -8,6 +8,8 @@ expects-local: [platform-conventions, protected-seams]
 
 Every review opens with a one-sentence summary judgment (Pass / Pass with required changes / Block), then lists findings by category: Required, Recommended, Note.
 
+When the review is posted to the PR, it starts with the agent marker `🤖 **Agent**:` — on the review body and on every inline comment — so the author can tell agent findings from human ones. Never post an agent review unmarked, and never add the marker to text a human wrote.
+
 ## Universal checks (all PRs)
 
 - [ ] PR scope matches stated purpose — no unrelated changes bundled

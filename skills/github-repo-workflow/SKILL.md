@@ -92,13 +92,25 @@ EOF
 
 The PR URL is printed on stdout — capture it from the command output if you need to reference it in subsequent steps.
 
+## Mark what the agent writes
+
+Every comment or review the agent posts on a PR or issue starts with a fixed marker, so readers can tell agent output from human output at a glance:
+
+```bash
+gh pr comment <N> --body "🤖 **Agent**: <comment>"
+```
+
+- **Never post agent output unmarked** — including a draft the operator approved without editing.
+- **Never mark human text.** When posting words the operator wrote, post them as theirs; mark only the agent's own additions.
+- Commits, titles and PR or issue bodies keep the project's own format and attribution convention; the marker is for comments and reviews.
+
 ## Iterate on review
 
 ```bash
 gh pr view <N>                            # description + state + conversation
 gh pr checks <N>                          # CI status rollup
 gh pr view <N> --json reviews,comments    # programmatic check
-gh pr comment <N> --body "..."            # post a top-level comment
+gh pr comment <N> --body "🤖 **Agent**: ..."  # post a top-level comment (marked)
 gh api repos/<owner>/<repo>/pulls/<N>/comments  # inline review comments
 ```
 
@@ -119,7 +131,7 @@ EOF
 )" --label <label1>,<label2>
 
 gh issue view <N>                         # full body + labels + state
-gh issue comment <N> --body "..."         # update with progress
+gh issue comment <N> --body "🤖 **Agent**: ..."  # update with progress (marked)
 gh issue edit <N> --add-label <label>     # routing labels (e.g. `agent:queued`)
 gh issue close <N> --reason completed     # close with a reason
 ```
