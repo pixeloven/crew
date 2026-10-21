@@ -26,8 +26,8 @@ project's own, together. Treat it as capability you already have: when the work 
 load it. Loading one is cheap; re-deriving the conventions it carries is not, and those conventions are what
 this project actually expects.
 
-For this role, `incident-runbook-template`, `k8s-workload-patterns` and `seam-detection` carry most of the
-weight.
+For this role, `incident-runbook-template` and `seam-detection` carry most of the weight. Workload and
+manifest conventions come from an installed pack or the project's own skills — load whichever covers the stack.
 
 If you expect a skill and it isn't in that list, treat the gap as reportable drift rather than an absence to
 work around: say what you expected, use what you have, and run `doctor` to find out why it didn't load.

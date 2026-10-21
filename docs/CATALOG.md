@@ -2,7 +2,7 @@
 
 # Skill catalog
 
-27 skills — agent methodology, portable by construction. `requires` legend:
+22 skills — agent methodology, portable by construction. `requires` legend:
 empty = needs nothing but a repo; `external:github` = uses GitHub. Skills that depend on a
 platform's capabilities live in that consumer's own overlay, not here. `expects-local` names
 the consumer-local slot a skill defers concrete values to (see templates/local-skills/).
@@ -11,17 +11,13 @@ the consumer-local slot a skill defers concrete values to (see templates/local-s
 |---|---|---|---|---|
 | `activation-contracts` | concept | external:github | — | Use when a role must run without an interactive request, when wiring CI or a scheduler to an agent, or when choosing triggered versus interactive dispatch. Defines the event → dispatch → output contract. |
 | `agent-platform-design` | concept | — | — | Use when designing an agent capability, choosing MCP vs AXI vs CLI, deciding skill vs agent, or placing a surface at operator or autonomous-runtime scope. Covers naming and federation boundaries. |
-| `ansible-conventions` | subject | — | platform-conventions, topology | Use when writing or changing Ansible roles, playbooks, or inventory. Covers repository structure, secret injection through op.env, Jinja2/bash delimiter traps, and boot-only hardware services. |
 | `autonomous-agent-design` | concept | — | agent-runtime | Use when designing or evaluating an autonomous agent workflow. Covers task decomposition, tool scoping, result contracts, failure modes, and the shadow → draft → autonomous maturity sequence. |
 | `character-and-worldbuilding` | subject | — | — | Use when defining a fictional character, setting, creative-project canon, or dossier. Provides a Q&A-driven worldbuilding method for companion agents; it supplies methodology, not lore. |
 | `delta-handling` | concept | — | protected-seams | Use when a worker proposes deviating from an active plan, when deciding whether a change needs sign-off, or when recording a mid-execution change. Defines auto-approvable vs human-escalated deltas. |
 | `doctor` | concept | — | — | Use when asked to run Crew Doctor, verify installation or onboarding, debug missing roles/skills, or report what this session can reach. Separates installed, enabled, runtime-loaded, granted, degraded, and untested evidence. |
-| `github-actions-conventions` | subject | external:github | — | Use when writing or reviewing GitHub Actions workflows or CI. Covers workflow structure, secret access, gh CLI usage, uv-based Python jobs, gitleaks scanning, and automated-commit patterns. |
-| `github-repo-workflow` | subject | external:github | — | Use when editing a GitHub repository, opening or reviewing a PR, or operating on issues. Covers clone → branch → edit → commit → push → PR using pre-wired GH_TOKEN and git credentials. |
+| `github-repo-workflow` | subject | external:github | secret-paths | Use when editing a GitHub repository, opening or reviewing a PR, or operating on issues. Covers clone → branch → edit → commit → push → PR using pre-wired GH_TOKEN and git credentials. |
 | `incident-runbook-template` | concept | — | topology | Use when writing an incident report, diagnosis brief, degradation issue, health sweep, or repeatable runbook. Structures what broke, where, why, blast radius, recommended action, and confidence. |
 | `intake-process` | concept | external:github | — | Use when triaging issues or PRs, labeling an unsorted backlog, choosing a handler, or defining intake conventions. Classifies domain, work type, complexity, and routing decision. |
-| `k8s-kustomize-conventions` | subject | — | platform-conventions | Use when writing or changing Kubernetes manifests or Kustomize files. Defines base-and-overlay structure, patch patterns, manifest validation, and ArgoCD sync conventions. |
-| `k8s-workload-patterns` | subject | — | platform-conventions, topology | Use when writing or reviewing a Kubernetes workload, choosing Deployment vs StatefulSet vs DaemonSet vs Job, or sizing a pod. Covers resources, probes, storage, security context, and exposure. |
 | `learn` | concept | — | agent-runtime | Use when asked to learn a CLI, MCP server or vendor tool this project uses, or to turn a Crew inventory gap into a lesson. Drafts one proposal per lesson into the project's declared queue and never applies it; the operator promotes. Not for explaining or teaching a topic. |
 | `mcp-server-design` | subject | — | — | Use when building MCP tools or servers with FastMCP. Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision. |
 | `onboarding` | concept | — | — | Use when onboarding or re-auditing a project against Crew. Defaults to a read-only report; edits require explicit apply authorization. Preserves mature entry files, safety tripwires, delivery contracts, and runbook pointers. |
@@ -34,5 +30,4 @@ the consumer-local slot a skill defers concrete values to (see templates/local-s
 | `python-conventions` | subject | — | — | Use when doing any Python work. Defines Python version, uv workspace and packaging conventions, Ruff and pytest gates, plus Typer CLI, FastMCP server, and Pydantic AI patterns. |
 | `release-and-versioning` | concept | external:github, cli:gh | platform-conventions | Use when adding a release workflow, cutting a release, changing tag rules, or reviewing artifact publication. Requires one semver line, file-owned versions, changelog notes, checksums, and verified provenance. |
 | `seam-alert-routing` | concept | external:github | protected-seams | Use when a protected change needs sign-off or a risky finding must be surfaced. Defines who decides, the host escalation channel, waiting behavior, and formats for PR comments, pauses, or filed issues. |
-| `seam-detection` | concept | — | protected-seams | Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects ExternalSecret, scheduling, MCP access, exit-code, and RBAC seam patterns. |
-| `terraform-conventions` | subject | — | secret-paths, topology | Use when writing or reviewing Terraform. Defines provider setup, variable structure, staged-apply separation, and secret handling, with bpg/proxmox and 1Password as worked examples. |
+| `seam-detection` | concept | — | protected-seams, secret-paths | Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects ExternalSecret, scheduling, MCP access, exit-code, and RBAC seam patterns. |

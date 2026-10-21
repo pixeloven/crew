@@ -16,7 +16,8 @@ descriptions, body text, and intended posture stay aligned.
 
 ## Scope
 
-Crew contains portable methodology and stack conventions. Project topology,
+Crew contains portable agent methodology. Stack conventions live in packs (see
+[Packs](#packs)). Project topology,
 credentials, access maps, protected seams, and runtime contracts belong in the
 consumer's local `.agents/skills/` overlay. The installed catalogue's
 `expects-local:` declarations identify the five currently required concern slots;
@@ -87,6 +88,22 @@ jobs:
 
 A local overlay still outranks a pack. See [Packs](docs/PACKS.md) for the
 contract, the required README sections, and moving a skill out of Crew.
+
+### Migrating to 0.44.0: stack skills moved to `infra-skills`
+
+`terraform-conventions`, `ansible-conventions`, `k8s-kustomize-conventions`,
+`k8s-workload-patterns`, and `github-actions-conventions` no longer ship with
+Crew. They live in the [`infra-skills`](https://github.com/pixeloven/infra-skills)
+pack (`infra-skills@pixeloven`). To keep them:
+
+1. install `infra-skills` beside Crew on each harness;
+2. on Claude Code and Codex, change every `crew:<skill>` reference in `AGENTS.md`,
+   local skills, and role overlays to `infra-skills:<skill>`. Pi's flat namespace
+   keeps the bare name.
+
+Crew Doctor reports any remaining reference to a moved skill as `DEGRADED`, and
+an Onboarding audit proposes each rename. `mcp-server-design` and
+`python-conventions` stay in Crew.
 
 ## Doctor and Onboarding
 

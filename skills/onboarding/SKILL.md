@@ -91,6 +91,13 @@ lead with decisions from adoption rather than by per-session correction. Audit
 it with `scripts/onboarding_contract.py --check-reporting <AGENTS.md>`; a
 `MISSING` or `DEGRADED` result is a proposed addition.
 
+Skills that moved from Crew to a pack change their namespaced name. Audit each
+entry file, local skill, and overlay with
+`scripts/onboarding_contract.py --check-moved-skills <file>`: every
+`crew:<skill>` it lists is a proposed update to `<pack>:<skill>`, and every hit is
+a proposal to install that pack. Apply uses `rewrite_moved_skill_references`,
+which changes only `crew:`-prefixed names; a bare name keeps pi's spelling.
+
 The `agent-runtime` slot carries a `## Capabilities` table that maps each
 capability skills name (`cli:`, `mcp:`, `external:`) to the tool that provides it
 here, with a fallback command for the operator. Build it from the read-only

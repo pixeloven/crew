@@ -141,6 +141,14 @@ local fills. **A local overlay outranks a pack.** On Claude and Codex both copie
 load, so name both. Verify every pack's `plugin:crew@>=X` against the resolved
 Crew manifest; an unmet minimum is `DEGRADED`.
 
+Then check for skills that moved out of Crew. `moved_skill_references` scans the
+consumer's `AGENTS.md`, `CLAUDE.md`, local skills, and role overlays for any name
+in the `MOVED_SKILLS` table, bare or `crew:`-prefixed; pass its result with the
+detected packs to `compose_doctor_report`. A referenced skill whose pack is not
+detected is `DEGRADED` — name the pack to install. With the pack installed, a
+lingering `crew:<skill>` is still `DEGRADED` until it becomes `<pack>:<skill>`.
+Report only; the rename is Onboarding's to propose.
+
 Report the always-on description total for Crew plus every detected pack against
 the dated harness budgets in `crew_doctor.py`, which are measurements and not
 limits. This row never fails. When the total exceeds a budget, name the packs an
