@@ -1,7 +1,8 @@
 ---
 name: reviewer
+package: crew
 description: Adversarial pre-merge review. Hard-coded skeptical posture — assumes problems exist until the diff proves otherwise. Use for code review, manifest review, design review, and seam detection on any PR or proposed change.
-tools: read, bash, grep, find
+excludeTools: write, edit
 ---
 
 <!-- GENERATED from roles/reviewer/ — edit there and run scripts/render_roles.py -->

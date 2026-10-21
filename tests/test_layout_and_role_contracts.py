@@ -659,6 +659,45 @@ class RolePostureTests(unittest.TestCase):
         self.assertNotIn("Write", posture["denied_tools"])
         self.assertIn("shell access", posture["caveat"])
 
+    def test_pi_posture_subtracts_file_write_tools_instead_of_allowlisting(self) -> None:
+        # pi-subagents `tools:` is a strict allowlist that also shuts out ambient
+        # extensions (MCP). The contract is "no file writes", so pi subtracts.
+        expected = {"none": ["write", "edit"], "drafts": ["edit"], "full": []}
+        for writes, excluded in expected.items():
+            with self.subTest(writes=writes):
+                posture = effective_posture(writes, "pi")
+                self.assertEqual(excluded, posture["denied_tools"])
+                self.assertEqual([], posture["allowed_tools"])
+                self.assertIn("shell access", posture["caveat"])
+
+    def test_rendered_pi_roles_are_package_namespaced_with_excluded_tools(self) -> None:
+        import yaml
+
+        from scripts.role_contract import PI_PACKAGE_NAME
+
+        self.assertEqual("crew", PI_PACKAGE_NAME)
+        expected = {"none": "write, edit", "drafts": "edit", "full": None}
+        for role_dir in sorted(p for p in (ROOT / "roles").iterdir() if p.is_dir()):
+            with self.subTest(role=role_dir.name):
+                role = yaml.safe_load((role_dir / "role.yml").read_text(encoding="utf-8"))
+                text = (ROOT / "pi-agents" / f"{role_dir.name}.md").read_text(encoding="utf-8")
+                header = text.split("---\n", 2)[1]
+                metadata = yaml.safe_load(header)
+                # Bare local name + package => runtime identity `crew.<role>`.
+                self.assertEqual(role_dir.name, metadata["name"])
+                self.assertEqual("crew", metadata["package"])
+                self.assertNotIn("tools", metadata)
+                self.assertEqual(expected[role["writes"]], metadata.get("excludeTools"))
+                self.assertEqual(
+                    bool(role.get("dispatch")), metadata.get("allowNestedSubagents", False)
+                )
+
+    def test_pi_peer_floor_carries_exclude_tools(self) -> None:
+        import json
+
+        package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+        self.assertEqual(">=0.62.0", package["peerDependencies"]["pi-subagents"])
+
     def test_every_runtime_knob_is_observably_rejected(self) -> None:
         for key in ("model", "thinking", "effort", "model_reasoning_effort", "turnBudget", "maxTurns"):
             with self.subTest(key=key), tempfile.TemporaryDirectory() as tmp:

@@ -38,6 +38,6 @@
     }
   },
   "peerDependencies": {
-    "pi-subagents": ">=0.29.0"
+    "pi-subagents": ">=0.62.0"
   }
 }

@@ -7,7 +7,7 @@ Code, pi.dev, and OpenAI Codex.
 | Harness | Foundation skills | Crew roles | Project behavior |
 |---|---|---|---|
 | Claude Code | plugin | seven rendered `agents/*.md` roles | root `AGENTS.md` through `CLAUDE.md` |
-| pi.dev | git package | seven rendered `pi-agents/*.md` roles | root `AGENTS.md` |
+| pi.dev | git package | seven rendered `pi-agents/*.md` roles, dispatched as `crew.<role>` | root `AGENTS.md` |
 | OpenAI Codex | plugin or vendored `.agents/skills` | uses Codex dispatch; plugin roles are unsupported | root `AGENTS.md` |
 
 The same `skills/<name>/SKILL.md` tree feeds every harness. Claude and Pi roles
@@ -32,7 +32,11 @@ catalogue pressure, not a permanent product byte limit.
 
 Use the harness quickstart and a published `vX.Y.Z` tag. Pi pins must be
 `v0.35.0` or newer: older Crew roles lack the identity frontmatter pi-subagents
-requires and disappear silently.
+requires and disappear silently. From `v0.38.0`, Crew on Pi requires
+`pi-subagents` `>=0.62.0` for its `excludeTools` posture. On Pi, roles register
+as `crew.<role>`. Dispatch the qualified name: a bare `reviewer` or `researcher`
+resolves to pi-subagents' own built-ins. On every harness, MCP side effects are
+governed by role behaviour, not by the `writes:` posture.
 
 - [Claude Code quickstart](docs/quickstart-claude-code.md)
 - [pi.dev quickstart](docs/quickstart-pi.md)

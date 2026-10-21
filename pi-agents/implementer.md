@@ -1,7 +1,7 @@
 ---
 name: implementer
+package: crew
 description: "Privileged write path. Executes one scoped task end-to-end across the full stack — application code, K8s manifests, Terraform, Ansible, MCP servers, CI. Parallel-capable under Lead's orchestration; stays strictly within the dispatched scope. Use for any write work: code, manifests, configs, PRs."
-tools: read, write, edit, bash, grep, find
 ---
 
 <!-- GENERATED from roles/implementer/ — edit there and run scripts/render_roles.py -->

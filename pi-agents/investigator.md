@@ -1,7 +1,8 @@
 ---
 name: investigator
+package: crew
 description: Reactive diagnosis. Investigates alerts, failures and incidents, traces flows across components, and detects drift between declared and actual state. Produces findings, not fixes. Use for incidents, failing workloads, degraded services, and scheduled health sweeps.
-tools: read, bash, grep, find
+excludeTools: write, edit
 ---
 
 <!-- GENERATED from roles/investigator/ — edit there and run scripts/render_roles.py -->

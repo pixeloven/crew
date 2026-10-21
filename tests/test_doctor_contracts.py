@@ -5047,6 +5047,57 @@ class DerivedContractTests(unittest.TestCase):
                 lead["validation_errors"],
             )
 
+    def test_shipped_pi_roles_require_the_crew_package_namespace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package = pathlib.Path(tmp) / "package"
+            shutil.copytree(ROOT / "agents", package / "agents")
+            shutil.copytree(ROOT / "pi-agents", package / "pi-agents")
+            role = package / "pi-agents/reviewer.md"
+            role.write_text(
+                "---\nname: reviewer\ndescription: Unnamespaced shipped role.\n"
+                "excludeTools: write, edit\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(package)
+            reviewer = next(
+                row for row in rows if row["name"] == "reviewer" and row["harness"] == "pi"
+            )
+
+            self.assertFalse(reviewer["role_valid"])
+            self.assertIn("package must be crew", reviewer["validation_errors"])
+
+    def test_shipped_pi_roles_reject_a_closed_tool_allowlist(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package = pathlib.Path(tmp) / "package"
+            shutil.copytree(ROOT / "agents", package / "agents")
+            shutil.copytree(ROOT / "pi-agents", package / "pi-agents")
+            role = package / "pi-agents/reviewer.md"
+            role.write_text(
+                "---\nname: reviewer\ndescription: Legacy shipped role.\npackage: crew\n"
+                "tools: read, bash, grep, find\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(package)
+            reviewer = next(
+                row for row in rows if row["name"] == "reviewer" and row["harness"] == "pi"
+            )
+
+            self.assertFalse(reviewer["role_valid"])
+            self.assertIn(
+                "tool posture does not match a supported write posture",
+                reviewer["validation_errors"],
+            )
+
+    def test_shipped_pi_role_postures_resolve_from_excluded_tools(self) -> None:
+        rows = inspect_role_postures(ROOT)
+        pi = {row["name"]: row for row in rows if row["harness"] == "pi"}
+        self.assertEqual(["write", "edit"], pi["reviewer"]["denied_tools"])
+        self.assertEqual(["edit"], pi["lead"]["denied_tools"])
+        self.assertEqual([], pi["implementer"]["denied_tools"])
+        self.assertTrue(all(row["role_valid"] for row in pi.values()))
+
     def test_validator_assets_are_in_the_dry_run_npm_tarball(self) -> None:
         import subprocess
 
