@@ -28,12 +28,14 @@ privileged: the same rules apply to every one.
    pack skill. Anything bound to one deployment's vault, gateway, cluster, secret
    paths, or domains becomes a slot the skill defers to with `expects-local:`,
    and the consumer fills it.
-5. **Declare the Crew it needs.** Every pack declares
-   `requires: [plugin:crew@>=X.Y.Z]` on the skills that depend on Crew's roles or
-   slots. `plugin:<name>@>=X.Y.Z` is part of the `requires` vocabulary; only `>=`
-   on a full `X.Y.Z` is accepted. Pack mode fails a pack that declares it nowhere.
-   Doctor compares it with the resolved Crew manifest and reports an unmet
-   minimum as `DEGRADED`.
+5. **Declare the Crew it needs — on every skill.** Each pack skill carries
+   `plugin:crew@>=X.Y.Z` in its `requires:` (beside anything else it needs, e.g.
+   `requires: [cli:gh, plugin:crew@>=X.Y.Z]`). Every skill, not some: a skill is
+   listed, loaded, and moved on its own, so each one names the Crew it was checked
+   against. `plugin:<name>@>=X.Y.Z` is part of the `requires` vocabulary; only `>=`
+   on a full `X.Y.Z` is accepted. Pack mode fails each skill that omits it. Doctor
+   compares it with the resolved Crew manifest and reports an unmet minimum as
+   `DEGRADED`.
 6. **User-invoked utilities stay user-invoked.** Setup, scaffolding, and other
    one-shot skills should be invoked by the user where the harness allows it,
    so they do not trigger on ordinary work. Where a harness has no such switch,
@@ -58,6 +60,12 @@ provides: [protected-seams]
 `roles/expected-local-skills.txt`. Crew itself fills no slots. Doctor reports
 *"slot `protected-seams` filled by pack `example-skills`"* next to local fills.
 
+**Citing a slot in a skill body.** A skill that defers to a slot (`expects-local:`)
+says so once, in one hedged sentence near the top — for example *"Where the
+project has a `topology` local skill, its facts outrank anything below."* Do not
+repeat the citation in every section: the one sentence covers the whole skill,
+and each repetition costs body tokens on every load.
+
 **A local overlay outranks a pack.** When both the consumer's overlay and a pack
 fill a slot, the local skill is the fill of record. What "outranks" can mean
 depends on the harness, and this is still an open question:
@@ -81,27 +89,118 @@ lazy. The budget is the operator's to spend, but it should never be spent blind:
 
 - `check_skills.py --report-cost` prints each skill's description size and the
   total. It never changes the exit code.
-- Publish your pack's total in its catalogue or README.
+- Publish your pack's total in its README, in the required section below.
 - Doctor sums what is installed (Crew plus every detected pack), compares it with
   known harness budgets, and names packs to disable when an operator wants
   headroom. Those budgets are dated measurements, not limits: Codex was measured
   on 2026-09-05 dividing one ~22 KB skills-listing budget across every entry
   (pixeloven/crew#72). Re-measure on a harness upgrade.
 
-## Running Crew's checks from a pack
+## Required README sections
+
+### Description cost
+
+Every pack README carries this section, in exactly this shape, so an operator can
+add up packs' totals without reading prose:
+
+````markdown
+## Description cost
+
+Measured with Crew's `check_skills.py --pack --report-cost` at Crew vX.Y.Z:
+
+```text
+<the report's per-skill lines, verbatim>
+total always-on description chars: <N> (<M> skills)
+```
+````
+
+The fenced block is the `--report-cost` output, verbatim and nothing else; its
+last line is the figure of record. The reusable workflow writes this exact
+section to the job summary on every run, and warns, without failing, when the
+README's total line no longer matches. Update the section in any change that
+edits a description.
+
+### Install
+
+Before a pack has a marketplace entry, its install section says so plainly and
+gives what works today:
+
+- **pi.dev:** the package from a `vX.Y.Z` tag, added beside Crew in `packages`;
+  pi.dev has no marketplace, so nothing is pending there.
+- **Claude Code:** load a local checkout with `claude --plugin-dir
+  /absolute/path/to/<pack>`, or vendor `skills/` into the project.
+- **Codex:** vendor `skills/` into `.agents/skills/`.
+- Say the marketplace entry is pending, and print no `<pack>@<marketplace>`
+  install command until the entry has merged — an install line that fails is
+  worse than none.
+
+Once the entry lands, replace the pending note with the plugin install line.
+Either way, tell readers to install Crew first: a pack adds skills, not setup.
+
+## Checks
+
+### In CI: the reusable workflow
+
+A pack's CI is one job calling Crew's reusable workflow:
+
+```yaml
+jobs:
+  crew:
+    uses: pixeloven/crew/.github/workflows/pack-checks.yml@vX.Y.Z
+```
+
+It checks the pack out at the workspace root and Crew under `.crew/`, runs
+`check_skills.py --pack`, `check_skill_layout.py`, `check_links.py`, and
+`check_versions.py` against the pack, and writes the `--report-cost` section to
+the job summary. Both inputs are optional:
+
+| Input | Default | Meaning |
+|---|---|---|
+| `crew-ref` | empty | the Crew ref whose scripts run. Empty resolves `v` + the highest `plugin:crew@>=` the pack's skills declare, falling back to `main` with a warning while that tag does not exist |
+| `pack-root` | `.` | the pack's root, relative to the repository |
+
+So by default the checks run with the vocabulary and slot list of the Crew the
+pack says it needs; raise `requires:` to pick up newer checks. A pack **must not
+vendor Crew's scripts, and must not check Crew out at its workspace root** — its
+checks would then read Crew's own skills, links, and manifests as the pack's. The
+workflow keeps Crew in a dot-directory no check scans. Add `.crew/` to the pack's
+`.gitignore` so a local run never commits it.
+
+### Bootstrap: before the Crew release is tagged
+
+A new pack often needs a Crew that has merged but is not yet tagged. Until it is:
+
+1. call the workflow at `@main`
+   (`uses: pixeloven/crew/.github/workflows/pack-checks.yml@main`); the empty
+   `crew-ref` already falls back to `main` and says so in a warning;
+2. once Crew tags the release, pin the `uses:` line to `@vX.Y.Z` in the pack's
+   next change. Nothing should track `main` after the tag exists.
+
+### Locally
 
 Run the checks from the **installed Crew root**, by absolute path, so the slot
 list and vocabulary come from that Crew install and never from the pack:
 
 ```sh
 CREW=/absolute/resolved/crew/root
-python3 "$CREW/scripts/check_skills.py" --root /absolute/pack/repo --pack --report-cost
-python3 "$CREW/scripts/check_skill_layout.py" /absolute/pack/repo
+PACK=/absolute/pack/repo
+python3 "$CREW/scripts/check_skills.py" --root "$PACK" --pack --report-cost
+python3 "$CREW/scripts/check_skill_layout.py" "$PACK"
+python3 "$CREW/scripts/check_links.py" "$PACK"
+python3 "$CREW/scripts/check_versions.py" "$PACK"
 ```
 
-In CI, check out the Crew tag your pack's `requires:` names and run the same two
-commands. Pack mode differs from Crew's own run in three ways: a pack needs at
-least one manifest (`.claude-plugin/plugin.json` and/or `package.json`) rather
-than both, it must not ship `roles/`, `agents/`, or `pi-agents/`, and it must
-declare `plugin:crew@>=X.Y.Z`. With no arguments the script still validates Crew
-itself, exactly as before.
+Pack mode differs from Crew's own run in three ways: a pack needs at least one
+manifest (`.claude-plugin/plugin.json` and/or `package.json`) rather than both, it
+must not ship `roles/`, `agents/`, or `pi-agents/`, and every skill must declare
+`plugin:crew@>=X.Y.Z`. With no arguments the script still validates Crew itself,
+exactly as before.
+
+## Moving a skill from Crew to a pack
+
+Moving a skill changes its namespaced name. Claude Code and Codex load plugin
+skills as `<plugin>:<name>`, so `crew:<skill>` becomes `<pack>:<skill>`; pi.dev's
+flat namespace keeps the bare name. Consumers install the pack beside Crew — the
+skill no longer arrives with Crew — and update any `AGENTS.md` concern →
+local-skill map, role overlay, or note that names `crew:<skill>`. Crew records
+the move in its release notes and bumps its version as for any `skills/` change.
