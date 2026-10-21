@@ -85,6 +85,12 @@ For a project without `AGENTS.md`, report that apply mode would start from
 `templates/AGENTS.md`, infer verification commands and repository facts, and
 leave judgment slots with concrete suggestions. Do not create the file in audit.
 
+The reporting contract is required spine, not optional template text: every
+onboarded `AGENTS.md` carries the `## Reporting contract` section, so reports
+lead with decisions from adoption rather than by per-session correction. Audit
+it with `scripts/onboarding_contract.py --check-reporting <AGENTS.md>`; a
+`MISSING` or `DEGRADED` result is a proposed addition.
+
 For existing files, report what behavior is present, missing, duplicated, or
 ambiguous. Propose moves as a mapping of source content → destination skill or
 runbook → retained pointer. Flag every proposed deletion separately. Preserve
@@ -134,7 +140,9 @@ Before the first edit:
    external state unless separately authorized.
 
 For a new project, merge the filled `templates/AGENTS.md` scaffold and optional
-one-line `CLAUDE.md` shim. For a mature project, edit surgically: preserve its
+one-line `CLAUDE.md` shim. For a mature project missing the reporting contract, merge
+the template's section with `ensure_reporting_contract` — it lands before the
+tripwires and never replaces a project's own reporting section. For a mature project, edit surgically: preserve its
 entry files, safety tripwires, delivery contracts, verification commands, and
 runbook pointers. When moving detail, establish and validate the destination
 first, retain an actionable pointer, then remove source text only if that

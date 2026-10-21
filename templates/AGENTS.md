@@ -114,6 +114,42 @@ Derived from [Karpathy's observations](https://x.com/karpathy/status/20158838574
 on where LLM coding agents go wrong, plus one added from this foundation's own
 failures — the fourth. Bias toward caution over speed; use judgement on trivial tasks.
 
+## Reporting contract
+
+Every report separates three things the operator would otherwise weigh equally:
+what **needs a decision**, what **informs**, and what is **already handled**. The
+first is the signal, and it is usually one or two lines.
+
+- **Lead with decisions, or say there are none.** Open with
+  `**Decisions needed: none.** <one line on state>`, or `**N decisions needed.**`
+  followed by a numbered list, each item
+  `<question> — recommend <X>. If no reply: <default>.` A report without that
+  opening line is malformed.
+- **Already handled is not news.** A finding you are already acting on goes in the
+  PR body, issue or commit message, where its reader meets it in context.
+- **Detail below the fold.** Evidence, tables and per-file accounting follow the
+  decisions and stay skippable.
+- **Separate, don't shrink.** This is category discipline, not a word limit — a
+  confirmed failing test still gets its full output.
+
+Pacing, also always on:
+
+- **Chunk and pause.** Deliver in short pieces with an explicit stop wherever the
+  operator's judgement is needed; more than about three paragraphs before the next
+  stop is a smell. In an unattended run, the stop is the decision block.
+- **Batch review.** When the operator must judge many items, show them three to
+  five at a time as *include / exclude / not sure*, never as one list of forty.
+- **Confirm before an external write.** Before creating or changing anything
+  outside the repository — a tracker item, a comment, a message, a page — show
+  every field you will write and wait. A plan or trigger that already names that
+  exact write is the confirmation; general autonomy is not. This is the one
+  exception to *act, then report*, whatever the role's write posture.
+
+The trade-off is deliberate. This costs auditability — a finding not surfaced is
+one the operator sees only by opening the PR — and pausing costs throughput. Both
+are the right trade where the operator's attention is the bottleneck: a decision
+lost in noise costs more than either.
+
 ## Tripwires — load the skill before the action
 
 Most conventions are reference detail — load them as soon as the task touches their domain, per *Autonomy & posture*. A few are **silent landmines** — get them wrong and it fails with no obvious error. For these, load the named skill *before* the action, every time. The skill carries the detail; this is just the trigger.
