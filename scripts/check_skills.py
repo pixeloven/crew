@@ -80,7 +80,7 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
     errors: list[str] = []
     root = pathlib.Path(root)
     provides_slots = expected_local_slots()
-    declares_crew = False
+    undeclared: list[str] = []
 
     manifests = [".claude-plugin/plugin.json", "package.json"]
     if pack:
@@ -137,6 +137,7 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
         if fm.get("tier") not in TIERS:
             errors.append(f"{rel}: tier must be one of {sorted(TIERS)}, got {fm.get('tier')!r}")
         req = fm.get("requires")
+        declares_crew = False
         if not isinstance(req, list):
             errors.append(f"{rel}: requires must be a list (may be empty)")
         else:
@@ -145,6 +146,10 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
                     errors.append(f"{rel}: invalid requires entry {r!r}")
                 elif r.startswith(CREW_REQUIREMENT):
                     declares_crew = True
+        if pack and not declares_crew:
+            # Every skill, not any: a skill is installed, listed, and moved on
+            # its own, so each one carries the Crew it was checked against.
+            undeclared.append(rel)
         if "expects-local" in fm:
             slots = fm["expects-local"]
             if not (isinstance(slots, list) and slots and set(slots) <= LOCAL_SLOT_VOCABULARY):
@@ -160,8 +165,8 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
                     f"{sorted(provides_slots)} (roles/expected-local-skills.txt), got {slots!r}"
                 )
 
-    if pack and not declares_crew:
-        errors.append(f"pack declares no crew dependency: add requires: [{CREW_REQUIREMENT}X.Y.Z] to its skills")
+    for rel in undeclared:
+        errors.append(f"{rel}: pack skill declares no crew dependency: add {CREW_REQUIREMENT}X.Y.Z to its requires")
     return errors
 
 
