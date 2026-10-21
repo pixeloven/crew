@@ -2183,6 +2183,294 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
     }
 
 
+def _skills_catalogue(root: pathlib.Path) -> pathlib.Path:
+    root = pathlib.Path(root)
+    return root if root.name == "skills" else root / "skills"
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _read_skill_catalogue(
+    root: pathlib.Path,
+) -> tuple[list[tuple[pathlib.Path, dict[str, Any]]], list[dict[str, str]]]:
+    skills: list[tuple[pathlib.Path, dict[str, Any]]] = []
+    reads: list[dict[str, str]] = []
+    for path in sorted(_skills_catalogue(root).glob("*/SKILL.md")):
+        try:
+            metadata, error = read_frontmatter(path)
+        except (OSError, UnicodeDecodeError) as exception:
+            reads.append({"state": "unreadable", "source": str(path), "detail": str(exception)})
+            continue
+        if error or not isinstance(metadata, dict):
+            reads.append(
+                {
+                    "state": "malformed",
+                    "source": str(path),
+                    "detail": error or "frontmatter must be a mapping",
+                }
+            )
+            continue
+        skills.append((path, metadata))
+    return skills, reads
+
+
+def _package_label(root: pathlib.Path) -> str:
+    for manifest in (".claude-plugin/plugin.json", "package.json"):
+        read = _read_json(pathlib.Path(root) / manifest, {})
+        if isinstance(read.value, dict) and isinstance(read.value.get("name"), str) and read.value["name"]:
+            return read.value["name"]
+    return pathlib.Path(root).name
+
+
+# Always-on listing budgets are DATED evidence, never permanent limits
+# (docs/MAINTAINERS.md). Claude Code is absent on purpose: it was not observed
+# to cap the listing, though every description is still paid every session.
+HARNESS_DESCRIPTION_BUDGETS = (
+    {
+        "harness": "codex",
+        "budget_chars": 22_000,
+        "measured": "2026-09-05",
+        "evidence": "pixeloven/crew#72",
+        "scope": "one ~22 KB skills-listing budget divided across every entry",
+    },
+)
+CREW_REQUIREMENT = re.compile(r"^plugin:crew@>=(\S+)$")
+
+
+def description_cost(package_root: pathlib.Path, label: str | None = None) -> dict[str, Any]:
+    """Sum the always-on description characters one installed root contributes."""
+    root = pathlib.Path(package_root)
+    skills, reads = _read_skill_catalogue(root)
+    rows = [
+        {
+            "name": path.parent.name,
+            "chars": len(metadata["description"]) if isinstance(metadata.get("description"), str) else 0,
+            "source": str(path),
+        }
+        for path, metadata in skills
+    ]
+    return {
+        "label": label or _package_label(root),
+        "root": str(root),
+        "skills": rows,
+        "total": sum(row["chars"] for row in rows),
+        "reads": reads,
+    }
+
+
+def inspect_packs(candidate_roots: list[pathlib.Path], crew_root: pathlib.Path) -> list[dict[str, Any]]:
+    """Identify packs among installed roots and verify their crew requirement.
+
+    A root is a pack when a skill declares `plugin:crew@>=X` or `provides:`. The
+    caller supplies the roots it already enumerated; this reads, never installs.
+    """
+    crew_root = pathlib.Path(crew_root)
+    crew_version = _manifest_version(crew_root).value
+    packs: list[dict[str, Any]] = []
+    for root in dict.fromkeys(pathlib.Path(candidate) for candidate in candidate_roots):
+        if _path_within(root, crew_root) and _path_within(crew_root, root):
+            continue
+        skills, reads = _read_skill_catalogue(root)
+        minimums: set[str] = set()
+        provides: dict[str, list[dict[str, str]]] = {}
+        sources: list[str] = []
+        for path, metadata in skills:
+            declared = False
+            for requirement in _string_list(metadata.get("requires")):
+                match = CREW_REQUIREMENT.fullmatch(requirement)
+                if match:
+                    minimums.add(match.group(1))
+                    declared = True
+            for slot in _string_list(metadata.get("provides")):
+                provides.setdefault(slot, []).append({"skill": path.parent.name, "source": str(path)})
+                declared = True
+            if declared:
+                sources.append(str(path))
+        if not minimums and not provides:
+            continue
+        current = _version_tuple(crew_version)
+        if not minimums:
+            state = "undeclared"
+        elif current is None:
+            state = "not tested"
+        elif all(
+            (minimum := _version_tuple(value)) is not None and minimum <= current
+            for value in minimums
+        ):
+            state = "satisfied"
+        else:
+            state = "unsatisfied"
+        packs.append(
+            {
+                "name": _package_label(root),
+                "root": str(root),
+                "requirements": sorted(f"plugin:crew@>={value}" for value in minimums),
+                "crew_version": crew_version,
+                "crew_source": str(crew_root / ".claude-plugin/plugin.json"),
+                "state": state,
+                "provides": provides,
+                "sources": sources,
+                "reads": reads,
+            }
+        )
+    return packs
+
+
+def slot_fills(
+    declared: list[str],
+    *,
+    local_roots: list[pathlib.Path],
+    packs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Report who fills each declared slot. A local overlay outranks a pack.
+
+    A local skill fills a slot by declaring `provides:` or by the `<project>-<slot>`
+    naming convention (templates/local-skills/README.md); a pack only by `provides:`.
+    """
+    slots: dict[str, dict[str, Any]] = {
+        slot: {"local": [], "packs": [], "effective": None} for slot in declared
+    }
+    seen: set[pathlib.Path] = set()
+    reads: list[dict[str, str]] = []
+    inspection_sources: list[str] = []
+    for root in local_roots:
+        inspection_sources.append(str(_skills_catalogue(root)))
+        skills, root_reads = _read_skill_catalogue(root)
+        reads.extend(root_reads)
+        for path, metadata in skills:
+            # .claude/skills/<name> is usually a symlink into .agents/skills/.
+            resolved = path.resolve(strict=False)
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            name = path.parent.name
+            provided = set(_string_list(metadata.get("provides")))
+            for slot, entry in slots.items():
+                basis = (
+                    "provides"
+                    if slot in provided
+                    else "name" if name == slot or name.endswith(f"-{slot}") else None
+                )
+                if basis:
+                    entry["local"].append({"skill": name, "source": str(path), "basis": basis})
+    for pack in packs:
+        inspection_sources.append(pack["root"])
+        for slot, fills in pack.get("provides", {}).items():
+            if slot in slots:
+                slots[slot]["packs"].extend({"pack": pack["name"], **fill} for fill in fills)
+    for entry in slots.values():
+        entry["effective"] = "local" if entry["local"] else "pack" if entry["packs"] else None
+    return {"slots": slots, "reads": reads, "inspection_sources": inspection_sources}
+
+
+def _slot_fill_check(slot: str, entry: dict[str, Any], fallback_sources: list[str]) -> dict[str, Any]:
+    local = entry["local"]
+    packs = entry["packs"]
+    pack_names = ", ".join(f"`{name}`" for name in dict.fromkeys(fill["pack"] for fill in packs))
+    if local:
+        skill = local[0]
+        convention = " (by naming convention)" if skill["basis"] == "name" else ""
+        fact = f"slot `{slot}` filled by local skill `{skill['skill']}`{convention}"
+        if packs:
+            fact += f"; pack {pack_names} also provides it — local outranks pack"
+    elif packs:
+        fact = f"slot `{slot}` filled by pack {pack_names} (skill `{packs[0]['skill']}`)"
+    else:
+        fact = f"slot `{slot}` is unfilled"
+    if local and packs:
+        inference = (
+            "pi loads the nearest entry; Claude and Codex load both copies, so the "
+            "AGENTS.md concern map must point at the local skill"
+        )
+    elif local or packs:
+        inference = "a declared slot has a filling skill"
+    else:
+        inference = "no local skill or pack provides this declared slot"
+    sources = [fill["source"] for fill in [*local, *packs]] or fallback_sources
+    return {
+        "check": f"local-slots.fill.{slot}",
+        "status": "OK" if local or packs else "MISSING",
+        "fact": fact,
+        "inference": inference,
+        "recommendation": (
+            "" if local or packs else f"Fill slot `{slot}` in the local overlay or install a pack that provides it"
+        ),
+        "untested": "",
+        "evidence": [{"claim": fact, "source": source} for source in dict.fromkeys(sources) if source],
+    }
+
+
+def _pack_check(pack: dict[str, Any]) -> dict[str, Any]:
+    name = pack["name"]
+    state = pack["state"]
+    requirements = ", ".join(pack["requirements"]) or "none"
+    if state == "satisfied":
+        status, fact = "OK", f"pack `{name}` requires {requirements}; installed crew is {pack['crew_version']}"
+        recommendation = ""
+    elif state == "unsatisfied":
+        status, fact = "DEGRADED", f"pack `{name}` requires {requirements}; installed crew is {pack['crew_version']}"
+        recommendation = f"Upgrade crew or pin an older `{name}` so {requirements} holds"
+    elif state == "undeclared":
+        status, fact = "DEGRADED", f"pack `{name}` provides slots but declares no plugin:crew requirement"
+        recommendation = f"Ask `{name}` to declare requires: [plugin:crew@>=X.Y.Z]"
+    else:
+        status, fact = "N/A", f"pack `{name}` requires {requirements}; installed crew version is not tested"
+        recommendation = ""
+    sources = [*pack["sources"], pack["crew_source"], pack["root"]]
+    return {
+        "check": f"pack.{name}.requires",
+        "status": status,
+        "fact": fact,
+        "inference": "" if status == "N/A" else "pack requirement compared with the resolved crew manifest",
+        "recommendation": recommendation,
+        "untested": fact if status == "N/A" else "",
+        "evidence": [{"claim": fact, "source": source} for source in dict.fromkeys(sources) if source],
+    }
+
+
+def _description_cost_check(costs: list[dict[str, Any]]) -> dict[str, Any]:
+    total = sum(cost["total"] for cost in costs)
+    parts = "; ".join(
+        f"{cost['label']} {cost['total']:,} across {len(cost['skills'])} skills" for cost in costs
+    )
+    fact = f"always-on description chars: {total:,} ({parts})"
+    comparisons = []
+    over = False
+    for budget in HARNESS_DESCRIPTION_BUDGETS:
+        share = total / budget["budget_chars"] * 100
+        over = over or total > budget["budget_chars"]
+        comparisons.append(
+            f"{share:.0f}% of the ~{budget['budget_chars']:,}-char {budget['harness']} budget "
+            f"measured {budget['measured']} ({budget['evidence']}; {budget['scope']}) — "
+            "a dated measurement, not a permanent limit"
+        )
+    candidates = [
+        cost["label"]
+        for cost in sorted(costs, key=lambda cost: cost["total"], reverse=True)
+        if cost["label"] != PLUGIN_NAME
+    ]
+    # Reported, never failed: the budget is the operator's to spend.
+    return {
+        "check": "description-cost.always-on",
+        "status": "OK",
+        "fact": fact,
+        "inference": "; ".join(comparisons)
+        + ("; over budget, so that harness shortens every description" if over else ""),
+        "recommendation": (
+            f"For headroom, candidates to disable: {', '.join(candidates)}" if over and candidates else ""
+        ),
+        "untested": "",
+        "evidence": [
+            {"claim": f"{cost['label']} descriptions total {cost['total']:,} chars", "source": cost["root"]}
+            for cost in costs
+        ],
+    }
+
+
 def profile_for(working_capabilities: list[str], persona_evidence: list[str]) -> str:
     """One taxonomy: personas takes deterministic precedence over platform."""
     if persona_evidence:
@@ -2630,8 +2918,15 @@ def compose_doctor_report(
     local_slots: dict[str, Any],
     role_postures: list[dict[str, Any]],
     persona_evidence: list[str],
+    slot_fills: dict[str, Any] | None = None,
+    packs: list[dict[str, Any]] | None = None,
+    description_costs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Compose all Doctor checks into one deterministic, non-persisted report."""
+    """Compose all Doctor checks into one deterministic, non-persisted report.
+
+    `slot_fills`, `packs`, and `description_costs` are optional: omitted, the
+    report carries no fill, pack, or cost rows.
+    """
     report = deepcopy(installation_report)
     checks = report["checks"]
 
@@ -2729,6 +3024,20 @@ def compose_doctor_report(
             "evidence": slot_evidence,
         }
     )
+    if slot_fills is not None:
+        # An unfilled slot's evidence is where Doctor looked for a fill.
+        fallback = (
+            slot_fills.get("inspection_sources")
+            or local_slots.get("sources")
+            or local_slots.get("inspection_sources")
+            or report_inspection_sources
+        )
+        for slot, entry in sorted(slot_fills["slots"].items()):
+            checks.append(_slot_fill_check(slot, entry, fallback))
+    for pack in packs or []:
+        checks.append(_pack_check(pack))
+    if description_costs:
+        checks.append(_description_cost_check(description_costs))
 
     capability_checks = [
         capability
