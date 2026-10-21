@@ -1,11 +1,23 @@
+import pathlib
+import subprocess
+import sys
+import tempfile
 import unittest
 
 from scripts.onboarding_contract import (
+    REQUIRED_SPINE_SECTIONS,
     ApplyAuthorizationRequired,
     HostApplyAuthorizationSignal,
+    audit_reporting_contract,
     consume_doctor_profile,
+    ensure_reporting_contract,
+    reporting_contract_section,
     resolve_mode,
 )
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+TEMPLATE = (ROOT / "templates/AGENTS.md").read_text(encoding="utf-8")
 
 
 class OnboardingLifecycleTests(unittest.TestCase):
@@ -75,6 +87,74 @@ class OnboardingLifecycleTests(unittest.TestCase):
             self.assertEqual(profile, consume_doctor_profile(profile))
         with self.assertRaises(ValueError):
             consume_doctor_profile("platform-personas")
+
+
+class ReportingContractTests(unittest.TestCase):
+    MATURE = (
+        "# AGENTS.md\n\n## Autonomy\n\nProject posture.\n\n"
+        "## Tripwires — load the skill before the action\n\nProject landmines.\n"
+    )
+
+    def test_template_carries_a_complete_reporting_contract(self) -> None:
+        self.assertEqual("OK", audit_reporting_contract(TEMPLATE)["status"])
+        section = reporting_contract_section(TEMPLATE)
+        self.assertTrue(section.startswith("## Reporting contract"))
+        self.assertIn("Decisions needed", section)
+        self.assertNotIn("## Tripwires", section)
+
+    def test_onboarding_requires_the_reporting_contract_section(self) -> None:
+        self.assertIn("reporting-contract", REQUIRED_SPINE_SECTIONS)
+        self.assertEqual(REQUIRED_SPINE_SECTIONS, resolve_mode().required_spine_sections)
+
+    def test_absent_entry_file_or_section_is_missing_drift(self) -> None:
+        for text in (None, self.MATURE):
+            with self.subTest(text=text):
+                finding = audit_reporting_contract(text)
+                self.assertEqual("MISSING", finding["status"])
+                self.assertIn("reporting contract", finding["fact"])
+                self.assertIn("onboarding", finding["recommendation"])
+
+    def test_heading_without_decision_block_is_degraded(self) -> None:
+        text = self.MATURE + "\n## Reporting contract\n\nBe concise.\n"
+        self.assertEqual("DEGRADED", audit_reporting_contract(text)["status"])
+
+    def test_project_phrasing_of_the_decision_line_is_accepted(self) -> None:
+        text = self.MATURE + "\n### Reporting Contract\n\nOpen with **1 decision needed.**\n"
+        self.assertEqual("OK", audit_reporting_contract(text)["status"])
+
+    def test_insert_lands_before_tripwires_preserves_content_and_is_idempotent(self) -> None:
+        merged = ensure_reporting_contract(self.MATURE, TEMPLATE)
+        self.assertEqual("OK", audit_reporting_contract(merged)["status"])
+        self.assertLess(merged.index("## Reporting contract"), merged.index("## Tripwires"))
+        self.assertIn("Project posture.", merged)
+        self.assertIn("Project landmines.", merged)
+        self.assertEqual(merged, ensure_reporting_contract(merged, TEMPLATE))
+
+    def test_insert_appends_when_there_is_no_tripwires_anchor(self) -> None:
+        merged = ensure_reporting_contract("# AGENTS.md\n\nProject text.\n", TEMPLATE)
+        self.assertTrue(merged.startswith("# AGENTS.md\n\nProject text.\n"))
+        self.assertEqual("OK", audit_reporting_contract(merged)["status"])
+
+    def test_existing_project_section_is_never_replaced(self) -> None:
+        text = self.MATURE + "\n## Reporting contract\n\nOur own words.\n"
+        self.assertEqual(text, ensure_reporting_contract(text, TEMPLATE))
+
+    def test_cli_check_is_read_only_and_exit_coded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "AGENTS.md"
+            target.write_text(self.MATURE, encoding="utf-8")
+            cases = ((target, 1, "MISSING"), (ROOT / "templates/AGENTS.md", 0, "OK"),
+                     (pathlib.Path(tmp) / "absent.md", 1, "MISSING"))
+            for path, code, status in cases:
+                with self.subTest(path=path):
+                    completed = subprocess.run(
+                        [sys.executable, str(ROOT / "scripts/onboarding_contract.py"),
+                         "--check-reporting", str(path)],
+                        cwd=ROOT, text=True, capture_output=True, check=False,
+                    )
+                    self.assertEqual(code, completed.returncode, completed.stdout + completed.stderr)
+                    self.assertIn(status, completed.stdout)
+            self.assertEqual(self.MATURE, target.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
