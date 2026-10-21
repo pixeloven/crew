@@ -19,7 +19,7 @@ Crew must be `v0.35.0` or newer. Earlier rendered Pi roles omitted frontmatter
 settings and the resolved version from the checkout's
 `.claude-plugin/plugin.json`. Do not use `git describe` for package version.
 
-Crew `v0.38.0` and newer require `pi-subagents` `>=0.62.0`. The roles express
+Crew `v0.39.0` and newer require `pi-subagents` `>=0.62.0`. The roles express
 their write posture with `excludeTools`, which older pi-subagents ignores, so
 every role would silently receive pi's full default tool set, `write` and `edit`
 included.
