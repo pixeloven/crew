@@ -71,7 +71,7 @@ the resolved checkout separately. Read the resolved version from that checkout's
 **DEGRADED**, not missing: pi-subagents silently drops roles without frontmatter
 `name:`, so the Crew fleet is invisible below the first role-discoverable
 release. A configured `pi-subagents` pin below `0.62.0` is **DEGRADED** for
-Crew `v0.38.0`+: it ignores the roles' `excludeTools`, so every role silently
+Crew `v0.39.0`+: it ignores the roles' `excludeTools`, so every role silently
 gets `write` and `edit`. Also report duplicate project/user scopes and which scope the current
 runtime actually resolved, if this Pi session exposes it.
 
