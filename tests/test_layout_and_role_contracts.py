@@ -719,5 +719,27 @@ class RolePostureTests(unittest.TestCase):
                 self.assertIn(f"forbidden runtime knob '{key}'", completed.stdout + completed.stderr)
 
 
+class RoleReportingContractTests(unittest.TestCase):
+    @staticmethod
+    def section(body: str) -> str:
+        start = body.index("## Reporting contract")
+        end = body.find("\n## ", start + 1)
+        return body[start:] if end == -1 else body[start:end]
+
+    def test_every_role_body_carries_one_identical_reporting_contract(self) -> None:
+        bodies = sorted((ROOT / "roles").glob("*/body.md"))
+        self.assertEqual(7, len(bodies))
+        sections = {}
+        for body in bodies:
+            text = body.read_text(encoding="utf-8")
+            with self.subTest(role=body.parent.name):
+                self.assertEqual(1, text.count("## Reporting contract"))
+                sections[body.parent.name] = self.section(text)
+                for phrase in ("Decisions needed", "If no reply", "Chunk and pause",
+                               "Batch review", "Confirm before an external write", "auditability"):
+                    self.assertIn(phrase, sections[body.parent.name])
+        self.assertEqual(1, len(set(sections.values())), "role reporting contracts have drifted apart")
+
+
 if __name__ == "__main__":
     unittest.main()
