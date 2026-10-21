@@ -3,6 +3,7 @@ name: github-repo-workflow
 description: Use when editing a GitHub repository, opening or reviewing a PR, or operating on issues. Covers clone → branch → edit → commit → push → PR using pre-wired GH_TOKEN and git credentials.
 tier: subject
 requires: [external:github]
+expects-local: [secret-paths]
 ---
 
 # GitHub Repo Workflow

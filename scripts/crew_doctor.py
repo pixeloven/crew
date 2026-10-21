@@ -60,6 +60,21 @@ SEMVER = re.compile(
     r"(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?"
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
+# Skills that left Crew for a pack, as skill -> pack. Historical migration
+# metadata, not a dependency: Doctor and Onboarding use it only to point a
+# consumer that still references a moved skill at its new home (MAINTAINERS.md).
+MOVED_SKILLS = {
+    "terraform-conventions": "infra-skills",
+    "ansible-conventions": "infra-skills",
+    "k8s-kustomize-conventions": "infra-skills",
+    "k8s-workload-patterns": "infra-skills",
+    "github-actions-conventions": "infra-skills",
+}
+# A moved skill named bare (pi's flat namespace) or as `<namespace>:<skill>`.
+MOVED_SKILL_REFERENCE = re.compile(
+    r"(?<![\w:.-])(?:(?P<namespace>[a-z0-9][a-z0-9-]*):)?"
+    r"(?P<skill>" + "|".join(re.escape(name) for name in MOVED_SKILLS) + r")(?![\w-])"
+)
 # Pi has no marketplace: it installs this repo as a package and keys off its name.
 PI_CREW_PACKAGE = re.compile(
     r"^(?:(?:git:)?github\.com/|github:)?" + re.escape(CREW_REPO) + r"(?:@[^@\s]+)?$"
@@ -2615,6 +2630,94 @@ def _proposal_checks(proposals: dict[str, Any]) -> list[dict[str, Any]]:
     return checks
 
 
+def moved_skill_references(consumer_root: pathlib.Path) -> dict[str, Any]:
+    """Find consumer references to skills that moved out of Crew. Reads only.
+
+    Scans the entry files, local skills, and role overlays a consumer owns.
+    """
+    root = pathlib.Path(consumer_root)
+    candidates: list[pathlib.Path] = [root / "AGENTS.md", root / "CLAUDE.md"]
+    candidates.extend(sorted((root / ".agents/skills").rglob("*.md")))
+    # .claude/skills/<name> is usually a directory symlink into .agents/skills/.
+    candidates.extend(sorted((root / ".claude/skills").glob("*/SKILL.md")))
+    for agents in ("agents", ".claude/agents", ".pi/agents"):
+        candidates.extend(sorted((root / agents).rglob("*.md")))
+    references: list[dict[str, Any]] = []
+    reads: list[dict[str, str]] = []
+    seen: set[pathlib.Path] = set()
+    for path in candidates:
+        resolved = path.resolve(strict=False)
+        if resolved in seen or not path.is_file():
+            continue
+        seen.add(resolved)
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exception:
+            reads.append({"state": "unreadable", "source": str(path), "detail": str(exception)})
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            for match in MOVED_SKILL_REFERENCE.finditer(line):
+                references.append(
+                    {
+                        "skill": match.group("skill"),
+                        "namespace": match.group("namespace") or "",
+                        "pack": MOVED_SKILLS[match.group("skill")],
+                        "source": str(path),
+                        "line": number,
+                    }
+                )
+    return {"references": references, "reads": reads, "inspection_sources": [str(root)]}
+
+
+def _moved_skill_checks(moved: dict[str, Any], packs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_skill: dict[str, list[dict[str, Any]]] = {}
+    for reference in moved["references"]:
+        by_skill.setdefault(reference["skill"], []).append(reference)
+    installed = {pack["name"] for pack in packs}
+    carried = {
+        path.parent.name
+        for pack in packs
+        for path in _skills_catalogue(pathlib.Path(pack["root"])).glob("*/SKILL.md")
+    }
+    checks = []
+    for skill, references in sorted(by_skill.items()):
+        pack = MOVED_SKILLS[skill]
+        detected = pack in installed or skill in carried
+        stale = any(ref["namespace"] == PLUGIN_NAME for ref in references)
+        rename = f"update `{PLUGIN_NAME}:{skill}` to `{pack}:{skill}`"
+        where = ", ".join(f"{pathlib.Path(ref['source']).name}:{ref['line']}" for ref in references)
+        if not detected:
+            status = "DEGRADED"
+            fact = f"`{skill}` is referenced ({where}) but no installed pack carries it"
+            recommendation = f"`{skill}` moved to pack {pack}; install it" + (f", then {rename}" if stale else "")
+        elif stale:
+            status = "DEGRADED"
+            fact = f"pack {pack} carries `{skill}`, but references still name `{PLUGIN_NAME}:{skill}` ({where})"
+            recommendation = rename[0].upper() + rename[1:]
+        else:
+            status = "OK"
+            fact = f"`{skill}` moved to pack {pack}, which is installed ({where})"
+            recommendation = ""
+        checks.append(
+            {
+                "check": f"moved-skills.{skill}",
+                "status": status,
+                "fact": fact,
+                "inference": "consumer references resolved against the moved-skills table and detected packs",
+                "recommendation": recommendation,
+                "untested": "",
+                "evidence": [
+                    {
+                        "claim": f"line {ref['line']} names `{ref['namespace'] + ':' if ref['namespace'] else ''}{skill}`",
+                        "source": ref["source"],
+                    }
+                    for ref in references
+                ],
+            }
+        )
+    return checks
+
+
 def profile_for(working_capabilities: list[str], persona_evidence: list[str]) -> str:
     """One taxonomy: personas takes deterministic precedence over platform."""
     if persona_evidence:
@@ -3092,13 +3195,14 @@ def compose_doctor_report(
     slot_fills: dict[str, Any] | None = None,
     packs: list[dict[str, Any]] | None = None,
     description_costs: list[dict[str, Any]] | None = None,
+    moved_skill_refs: dict[str, Any] | None = None,
     inventory: dict[str, Any] | None = None,
     proposals: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose all Doctor checks into one deterministic, non-persisted report.
 
-    `slot_fills`, `packs`, and `description_costs` are optional: omitted, the
-    report carries no fill, pack, or cost rows.
+    `slot_fills`, `packs`, `description_costs`, and `moved_skill_refs` are
+    optional: omitted, the report carries no fill, pack, cost, or moved-skill rows.
     `inventory` (a `crew-inventory/1` document) adds `inventory.capability-map`.
     `proposals` (from `learn_contract.inspect_proposals`) adds the proposals.* and
     learned.skills rows; omitted, it adds none.
@@ -3214,6 +3318,8 @@ def compose_doctor_report(
         checks.append(_pack_check(pack))
     if description_costs:
         checks.append(_description_cost_check(description_costs))
+    if moved_skill_refs is not None:
+        checks.extend(_moved_skill_checks(moved_skill_refs, packs or []))
     if inventory is not None:
         checks.append(_capability_map_check(inventory))
     if proposals is not None:
