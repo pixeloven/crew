@@ -21,9 +21,11 @@ from typing import Any
 try:
     from .check_skills import LOCAL_SLOT_VOCABULARY
     from .frontmatter import parse_simple_mapping, read_frontmatter
+    from .role_contract import PI_PACKAGE_NAME
 except ImportError:  # Direct script execution.
     from check_skills import LOCAL_SLOT_VOCABULARY
     from frontmatter import parse_simple_mapping, read_frontmatter
+    from role_contract import PI_PACKAGE_NAME
 
 
 CREW_REPO = "pixeloven/crew"
@@ -47,6 +49,10 @@ EXPECTED_ROLE_NAMES = (
     "reviewer",
     "triage",
 )
+# pi-subagents ships built-in agents under these bare names. A bare-named pi
+# project agent replaces the built-in (project beats builtin); it never shadows
+# Crew's `crew.<role>`.
+PI_BUILTIN_AGENT_NAMES = ("researcher", "reviewer")
 LOADED_RUNTIME_STATES = {"present", "working", "loaded-but-undiscoverable", "truncated"}
 SEMVER = re.compile(
     r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
@@ -2684,36 +2690,51 @@ def inspect_role_postures(
                 if not resolved_name:
                     unresolved_roles.append(path)
                     continue
+                # pi-subagents registers `<package>.<name>`, or the bare name
+                # when no package is declared. Only `package: crew` with the
+                # same name shadows a Crew role; anything else is a separate
+                # agent beside it.
                 identity = resolved_name
-                consumer_roles.setdefault(identity, []).append(path)
+                package = metadata.get("package") if harness == "pi" else None
+                if isinstance(package, str) and package.strip():
+                    identity = f"{package.strip()}.{resolved_name}"
+                consumer_roles.setdefault(identity, []).append((resolved_name, path))
         for name in EXPECTED_ROLE_NAMES:
-            paths = consumer_roles.pop(name, [])
+            identity = f"{PI_PACKAGE_NAME}.{name}" if harness == "pi" else name
+            paths = consumer_roles.pop(identity, [])
             if paths:
                 targets.extend(
-                    (name, harness, path, True, harness != "claude", len(paths) > 1)
-                    for path in paths
+                    (name, identity, harness, path, True, harness != "claude", len(paths) > 1)
+                    for _, path in paths
                 )
             else:
                 targets.append(
-                    (name, harness, distributed / f"{name}.md", False, True, False)
+                    (name, identity, harness, distributed / f"{name}.md", False, True, False)
                 )
-        for name, paths in sorted(consumer_roles.items()):
+        for identity, paths in sorted(consumer_roles.items()):
             targets.extend(
-                (name, harness, path, True, harness != "claude", len(paths) > 1)
-                for path in paths
+                (name, identity, harness, path, True, harness != "claude", len(paths) > 1)
+                for name, path in paths
             )
         targets.extend(
-            (None, harness, path, True, False, False)
+            (None, None, harness, path, True, False, False)
             for path in unresolved_roles
         )
     if has_consumer_root:
         neutral_root = consumer_root / "agents"
         targets.extend(
-            (path.stem, "neutral", path, True, True, False)
+            (path.stem, path.stem, "neutral", path, True, True, False)
             for path in sorted(neutral_root.glob("*.md"))
         )
 
-    for name, harness, path, is_consumer_role, enforce_filename, duplicate in targets:
+    for name, identity, harness, path, is_consumer_role, enforce_filename, duplicate in targets:
+        pi_identity: dict[str, str] = {}
+        if harness == "pi" and identity is not None:
+            pi_identity["runtime_identity"] = identity
+            if identity != f"{PI_PACKAGE_NAME}.{name}" and name in EXPECTED_ROLE_NAMES:
+                pi_identity["separate_from"] = f"{PI_PACKAGE_NAME}.{name}"
+            if identity == name and name in PI_BUILTIN_AGENT_NAMES:
+                pi_identity["overrides_builtin"] = name
         errors: list[str] = []
         try:
             metadata, error = read_frontmatter(path)
@@ -2820,6 +2841,7 @@ def inspect_role_postures(
                     "scope": "consumer" if is_consumer_role else "crew",
                     "role_valid": False,
                     "validation_errors": errors,
+                    **pi_identity,
                 }
             )
         else:
@@ -2863,6 +2885,7 @@ def inspect_role_postures(
                     "source": str(path),
                     "scope": "consumer" if is_consumer_role else "crew",
                     "role_valid": True,
+                    **pi_identity,
                 }
             )
     return rows
@@ -3086,11 +3109,20 @@ def compose_doctor_report(
         if posture.get("scope") == "consumer" and not isinstance(name, str):
             unresolved_postures.append(posture)
             continue
-        key = (str(posture.get("harness") or ""), str(name or ""))
-        posture_index.setdefault(key, []).append(posture)
+        harness_name = str(posture.get("harness") or "")
+        identity = str(name or "")
+        if harness_name == "pi":
+            # pi registers by runtime identity, so a bare `reviewer` overlay and
+            # Crew's `crew.reviewer` are two agents, not a collision.
+            identity = str(posture.get("runtime_identity") or f"{PI_PACKAGE_NAME}.{identity}")
+        posture_index.setdefault((harness_name, identity), []).append(posture)
+
+    def fleet_identity(harness: str, name: str) -> str:
+        return f"{PI_PACKAGE_NAME}.{name}" if harness == "pi" else name
+
     for harness in ("claude", "pi"):
         for name in EXPECTED_ROLE_NAMES:
-            matches = posture_index.get((harness, name), [])
+            matches = posture_index.get((harness, fleet_identity(harness, name)), [])
             ready = len(matches) == 1 and _complete_role_posture(matches[0], harness, name)
             if ready:
                 posture = matches[0]
@@ -3128,7 +3160,7 @@ def compose_doctor_report(
             )
 
     fleet_keys = {
-        (harness, name)
+        (harness, fleet_identity(harness, name))
         for harness in ("claude", "pi")
         for name in EXPECTED_ROLE_NAMES
     }
@@ -3141,10 +3173,18 @@ def compose_doctor_report(
     )
     for harness, name in consumer_keys:
         matches = posture_index[(harness, name)]
-        ready = len(matches) == 1 and _complete_role_posture(matches[0], harness, name)
+        local_name = str(matches[0].get("name")) if harness == "pi" else name
+        ready = len(matches) == 1 and _complete_role_posture(matches[0], harness, local_name)
         if ready:
             posture = matches[0]
             fact = f"{harness} consumer role {name}: {posture['write_effect']}; {posture['caveat']}"
+            if posture.get("separate_from"):
+                fact += (
+                    f"; registers as {name}, a separate agent that does not shadow "
+                    f"{posture['separate_from']} (declare package: {PI_PACKAGE_NAME} to shadow it)"
+                )
+            if posture.get("overrides_builtin"):
+                fact += f"; it overrides pi-subagents' built-in {posture['overrides_builtin']}"
             inference = (
                 "neutral role metadata is valid; effective tools remain harness-dependent"
                 if harness == "neutral"
