@@ -162,7 +162,10 @@ Validate package roles plus consumer `agents/*.md`, `.claude/agents/**/*.md`, an
 frontmatter `name` and `description`. Neutral and Pi role names must match their
 filenames; a Claude consumer role's frontmatter `name` owns its resolved identity
 and may differ from its filename. Claude role names use lowercase letters and
-hyphens. Reject missing, malformed, or duplicate resolved identities. A missing
+hyphens. Reject missing, malformed, or duplicate resolved identities. A Pi
+overlay shadows a Crew role only when it declares `package: crew` with the same
+name (identity `crew.<role>`); report a bare-named one as a separate agent, and a
+bare `reviewer` or `researcher` as overriding the pi-subagents built-in. A missing
 Pi name is a silent-drop finding. Reject `model`, `thinking`,
 `effort`, `model_reasoning_effort`, `turnBudget`, and `maxTurns`: dispatch owns them.
 

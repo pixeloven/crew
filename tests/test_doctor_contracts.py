@@ -4146,7 +4146,7 @@ class DerivedContractTests(unittest.TestCase):
             overlay = consumer / ".pi/agents/custom-file.md"
             overlay.parent.mkdir(parents=True)
             overlay.write_text(
-                "---\nname: reviewer\ndescription: Consumer override.\n"
+                "---\nname: reviewer\npackage: crew\ndescription: Consumer override.\n"
                 "tools: read, bash, grep, find\n---\n",
                 encoding="utf-8",
             )
@@ -4160,6 +4160,130 @@ class DerivedContractTests(unittest.TestCase):
             self.assertEqual(str(overlay), reviewers[0]["source"])
             self.assertFalse(reviewers[0]["role_valid"])
             self.assertIn("name must be custom-file", reviewers[0]["validation_errors"])
+
+    def pi_overlay_report(self, consumer: pathlib.Path, home: pathlib.Path) -> dict:
+        return compose_doctor_report(
+            inspect_installations(consumer, home),
+            runtime_comparisons=[],
+            local_slots={"declared": [], "recommended_vocabulary": [], "sources": []},
+            role_postures=inspect_role_postures(ROOT, consumer),
+            persona_evidence=[],
+        )
+
+    def test_pi_overlay_shadows_a_crew_role_only_with_package_crew(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".pi/agents/reviewer.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: reviewer\npackage: crew\ndescription: Consumer reviewer.\n"
+                "tools: read, bash, grep, find\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = [row for row in inspect_role_postures(ROOT, consumer) if row["harness"] == "pi"]
+            reviewers = [row for row in rows if row["name"] == "reviewer"]
+            self.assertEqual(1, len(reviewers))
+            self.assertEqual(str(overlay), reviewers[0]["source"])
+            self.assertEqual("crew.reviewer", reviewers[0]["runtime_identity"])
+            self.assertTrue(reviewers[0]["role_valid"])
+
+            checks = {
+                row["check"]: row
+                for row in self.pi_overlay_report(consumer, pathlib.Path(tmp) / "home")["checks"]
+            }
+            self.assertEqual("OK", checks["role.pi.reviewer"]["status"])
+            self.assertEqual(
+                [str(overlay)], [item["source"] for item in checks["role.pi.reviewer"]["evidence"]]
+            )
+            self.assertNotIn("role.consumer.pi.reviewer", checks)
+
+    def test_bare_pi_overlay_is_a_separate_agent_that_overrides_the_builtin(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".pi/agents/reviewer.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: reviewer\ndescription: Consumer reviewer.\n"
+                "tools: read, bash, grep, find\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = [row for row in inspect_role_postures(ROOT, consumer) if row["harness"] == "pi"]
+            packaged = next(row for row in rows if row["runtime_identity"] == "crew.reviewer")
+            bare = next(row for row in rows if row["runtime_identity"] == "reviewer")
+            self.assertEqual(str(ROOT / "pi-agents/reviewer.md"), packaged["source"])
+            self.assertEqual("crew", packaged["scope"])
+            self.assertEqual(str(overlay), bare["source"])
+            self.assertEqual("consumer", bare["scope"])
+            self.assertTrue(bare["role_valid"])
+            self.assertEqual("reviewer", bare["overrides_builtin"])
+
+            checks = {
+                row["check"]: row
+                for row in self.pi_overlay_report(consumer, pathlib.Path(tmp) / "home")["checks"]
+            }
+            fleet = checks["role.pi.reviewer"]
+            self.assertEqual("OK", fleet["status"])
+            self.assertEqual(
+                [str(ROOT / "pi-agents/reviewer.md")], [item["source"] for item in fleet["evidence"]]
+            )
+            separate = checks["role.consumer.pi.reviewer"]
+            self.assertEqual("OK", separate["status"])
+            self.assertIn("does not shadow crew.reviewer", separate["fact"])
+            self.assertIn("overrides pi-subagents' built-in reviewer", separate["fact"])
+
+    def test_bare_pi_overlay_of_a_non_builtin_role_is_separate_without_builtin_note(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".pi/agents/lead.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: lead\ndescription: Consumer lead.\n"
+                "tools: read, bash\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            bare = next(row for row in rows if row["source"] == str(overlay))
+            self.assertEqual("lead", bare["runtime_identity"])
+            self.assertNotIn("overrides_builtin", bare)
+
+            checks = {
+                row["check"]: row
+                for row in self.pi_overlay_report(consumer, pathlib.Path(tmp) / "home")["checks"]
+            }
+            self.assertEqual(
+                [str(ROOT / "pi-agents/lead.md")],
+                [item["source"] for item in checks["role.pi.lead"]["evidence"]],
+            )
+            separate = checks["role.consumer.pi.lead"]
+            self.assertIn("does not shadow crew.lead", separate["fact"])
+            self.assertNotIn("built-in", separate["fact"])
+
+    def test_pi_overlay_in_another_package_is_separate_and_overrides_nothing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "consumer"
+            overlay = consumer / ".pi/agents/reviewer.md"
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: reviewer\npackage: acme\ndescription: Acme reviewer.\n"
+                "tools: read, bash\n---\n",
+                encoding="utf-8",
+            )
+
+            rows = inspect_role_postures(ROOT, consumer)
+            acme = next(row for row in rows if row["source"] == str(overlay))
+            self.assertEqual("acme.reviewer", acme["runtime_identity"])
+            self.assertNotIn("overrides_builtin", acme)
+
+            checks = {
+                row["check"]: row
+                for row in self.pi_overlay_report(consumer, pathlib.Path(tmp) / "home")["checks"]
+            }
+            self.assertEqual("OK", checks["role.pi.reviewer"]["status"])
+            self.assertEqual("OK", checks["role.consumer.pi.acme.reviewer"]["status"])
+            self.assertNotIn("built-in", checks["role.consumer.pi.acme.reviewer"]["fact"])
 
     def test_malformed_pi_overlay_does_not_suppress_packaged_role(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
