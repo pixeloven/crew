@@ -102,8 +102,8 @@ jobs:
   #     - run: uvx semgrep scan --config .semgrep/rules.yml --error --metrics=off
 
   # ── AGGREGATOR (a convenient single check) ────────────────────────────────
-  # https://github.com/marketplace/actions/alls-green#why
-  # Green only if everything it `needs` passed. If you decide to make Security
+  # Inline rather than a third-party action: the logic is a few lines, so it
+  # carries no external ref at all. Green only if everything it `needs` passed. If you decide to make Security
   # block merges, requiring this single check covers the whole floor.
   security-alls-green:
     name: Security all green
@@ -116,8 +116,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether the needed jobs succeeded or failed
-        uses: re-actors/alls-green@release/v1
-        with:
-          jobs: ${{ toJSON(needs) }}
+        env:
+          NEEDS: ${{ toJSON(needs) }}
           # dependency-review is skipped on push (PR-only); allow that.
-          allowed-skips: dependency-review
+          ALLOWED_SKIPS: dependency-review
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          needs = json.loads(os.environ["NEEDS"])
+          allowed = set(os.environ["ALLOWED_SKIPS"].split())
+          bad = {job: r["result"] for job, r in needs.items()
+                 if r["result"] != "success" and not (r["result"] == "skipped" and job in allowed)}
+          for job, r in needs.items():
+              print(f"{job}: {r['result']}")
+          sys.exit(f"not all green: {bad}" if bad else 0)
+          PY
