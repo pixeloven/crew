@@ -169,7 +169,7 @@ class StubSectionGrammarTests(unittest.TestCase):
             "## A\n<!-- crew:discoverable capability=tracker -->\n": "capability",
             "## A\n<!-- crew:discoverable capability=plugin:crew@>=0.1.0 -->\n": "capability",
             "## A\n<!-- crew:discoverable capability=mcp:a capability=mcp:b -->\n": "malformed",
-            "## A\n<!-- crew:discoverable capability=mcp:a -->\n<!-- crew:discoverable capability=cli:b -->\n": "one",
+            "## A\n<!-- crew:discoverable capability=mcp:a -->\n<!-- crew:discoverable capability=mcp:a -->\n": "repeats",
             "<!-- crew:optional -->\n## A\n": "before",
             "## A\n<!-- crew:optional please -->\n": "malformed",
         }
@@ -178,6 +178,15 @@ class StubSectionGrammarTests(unittest.TestCase):
                 _, errors = stub_sections(text)
                 self.assertEqual(1, len(errors), errors)
                 self.assertIn(needle, errors[0])
+
+    def test_several_discoverable_markers_mean_any_of_these_sources(self) -> None:
+        sections, errors = stub_sections(
+            "## A\n<!-- crew:discoverable capability=mcp:warehouse -->\n"
+            "<!-- crew:discoverable capability=mcp:analytics -->\n> **▸ Fill:** events.\n"
+        )
+        self.assertEqual([], errors)
+        self.assertEqual(["mcp:warehouse", "mcp:analytics"], sections[0]["capabilities"])
+        self.assertEqual("mcp:warehouse", sections[0]["discoverable"])
 
     def test_every_capability_kind_in_the_requires_vocabulary_is_accepted(self) -> None:
         for capability in ("mcp:tracker", "cli:gh", "external:github", "external:web", "cluster"):
@@ -212,7 +221,7 @@ class PackSlotProposalTests(unittest.TestCase):
         self.assertEqual(
             str(self.world.project / ".agents/skills/project-tracker-fields/SKILL.md"), proposal["target"]
         )
-        self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker"}], proposal["discoverable_sections"])
+        self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker", "capabilities": ["mcp:tracker"]}], proposal["discoverable_sections"])
         self.assertEqual(["Owners"], proposal["human_sections"])
         self.assertEqual(["Escalation"], proposal["deferred_sections"])
         self.assertEqual("scaffold", proposal["depth"])
@@ -257,7 +266,7 @@ class PackSlotProposalTests(unittest.TestCase):
         tracker = proposals["tracker-fields"]
         self.assertEqual("complete", tracker["action"])
         self.assertEqual(str(target), tracker["target"])
-        self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker"}], tracker["discoverable_sections"])
+        self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker", "capabilities": ["mcp:tracker"]}], tracker["discoverable_sections"])
         self.assertEqual([], tracker["human_sections"])
         self.assertEqual(["Escalation"], tracker["deferred_sections"])
         self.assertIsNone(self.world.proposals(apply_contract())["tracker-fields"]["text"],

@@ -378,7 +378,7 @@ class DigestAndGapTests(InventoryTestCase):
         }
         tracker = proposals["tracker-fields"]
         self.assertEqual(("create", "toolkit", str(stub)), (tracker["action"], tracker["pack"], tracker["stub"]))
-        self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker"}], tracker["discoverable_sections"])
+        self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker", "capabilities": ["mcp:tracker"]}], tracker["discoverable_sections"])
         self.assertNotIn("agent-runtime", proposals, "capability_map_proposal creates that fill")
 
     def test_engine_writes_nothing(self) -> None:

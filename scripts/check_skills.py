@@ -97,8 +97,10 @@ STUB_FENCE = re.compile(r"^\s*(```|~~~)")
 def stub_sections(text: str) -> tuple[list[dict], list[str]]:
     """A stub's (or fill's) sections, their markers and fill state, and grammar errors.
 
-    Each section is {heading, level, discoverable, optional, unfilled}. The
-    discoverable capability uses the `requires:` vocabulary, minus `plugin:` (a
+    Each section is {heading, level, discoverable, capabilities, optional,
+    unfilled}. `capabilities` lists every discoverable marker in order (any one of
+    them can supply the section); `discoverable` is the first, or None. Each
+    capability uses the `requires:` vocabulary, minus `plugin:` (a
     plugin is a dependency, not a source of facts). Fenced code is skipped, and so
     is a leading frontmatter block. Content before the first heading belongs to no
     section; a marker there is an error.
@@ -124,7 +126,7 @@ def stub_sections(text: str) -> tuple[list[dict], list[str]]:
         if heading:
             sections.append(
                 {"heading": heading.group(2), "level": len(heading.group(1)),
-                 "discoverable": None, "optional": False, "unfilled": False}
+                 "discoverable": None, "capabilities": [], "optional": False, "unfilled": False}
             )
             continue
         current = sections[-1] if sections else None
@@ -143,10 +145,11 @@ def stub_sections(text: str) -> tuple[list[dict], list[str]]:
                     f"line {number}: discoverable capability {capability!r} must be a requires: capability "
                     "(mcp:<group>, cli:<tool>, external:github|web, cluster)"
                 )
-            elif current["discoverable"]:
-                errors.append(f"line {number}: section {current['heading']!r} allows one discoverable marker")
+            elif capability in current["capabilities"]:
+                errors.append(f"line {number}: section {current['heading']!r} repeats discoverable capability {capability!r}")
             else:
-                current["discoverable"] = capability
+                current["capabilities"].append(capability)
+                current["discoverable"] = current["discoverable"] or capability
         elif OPTIONAL_MARKER.match(line):
             current["optional"] = True
         else:

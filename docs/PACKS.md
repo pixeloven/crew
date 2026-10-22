@@ -192,7 +192,10 @@ Two markers, each alone on its own line inside a section, say how it gets filled
 
 The grammar is strict, so the split between sections is declared and never guessed:
 
-- **One capability per marker, and one discoverable marker per section.**
+- **One capability per marker. A section may carry several markers**, meaning
+  any one of those sources can supply it. `learn` uses the first one the
+  capability map shows as present, and the section stays a human question when
+  none is. A capability may not repeat within a section.
   `<cap>` uses the `requires:` vocabulary: `mcp:<group>`, `cli:<tool>`,
   `external:github`, `external:web` or `cluster`. `plugin:` is not accepted,
   because a plugin is a dependency, not a source of facts.
