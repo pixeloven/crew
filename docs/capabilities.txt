@@ -1,0 +1,18 @@
+# Crew's capability vocabulary: the names skills use for a kind of source.
+#
+# Single source of truth, documented in docs/CAPABILITIES.md (a test keeps the
+# two in step). check_skills.py warns on an `mcp:` name in `requires:` or a
+# `crew:discoverable` marker that is not listed here; crew_inventory.py labels a
+# gap on an unlisted `mcp:` or `external:` name. `cli:<tool>` stays open: any
+# binary may be named; the common ones are listed. One name per line.
+
+mcp:tracker
+mcp:docs
+mcp:warehouse
+mcp:analytics
+mcp:logs
+cli:gh
+cli:git
+external:github
+external:web
+cluster

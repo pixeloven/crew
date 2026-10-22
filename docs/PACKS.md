@@ -36,7 +36,9 @@ privileged: the same rules apply to every one.
    against. `plugin:<name>@>=X.Y.Z` is part of the `requires` vocabulary; only `>=`
    on a full `X.Y.Z` is accepted. Pack mode fails each skill that omits it. Doctor
    compares it with the resolved Crew manifest and reports an unmet minimum as
-   `DEGRADED`.
+   `DEGRADED`. Beyond the Crew dependency, `requires:` is rare: name sources in
+   the skill body instead, so the skill degrades when one is missing (see
+   [Capabilities](CAPABILITIES.md)).
 6. **User-invoked utilities stay user-invoked.** Setup, scaffolding, and other
    one-shot skills should be invoked by the user where the harness allows it,
    so they do not trigger on ordinary work. Where a harness has no such switch,
@@ -198,7 +200,9 @@ The grammar is strict, so the split between sections is declared and never guess
   none is. A capability may not repeat within a section.
   `<cap>` uses the `requires:` vocabulary: `mcp:<group>`, `cli:<tool>`,
   `external:github`, `external:web` or `cluster`. `plugin:` is not accepted,
-  because a plugin is a dependency, not a source of facts.
+  because a plugin is a dependency, not a source of facts. Use a name from
+  [Capabilities](CAPABILITIES.md): an unlisted `mcp:` name gets a warning, not a
+  failure.
 - **Exact spelling.** No other attributes and no extra words. Anything else
   starting `<!-- crew:discoverable` or `<!-- crew:optional` is malformed.
 - **Inside a section.** A marker before the first heading belongs to no section,

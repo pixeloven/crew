@@ -87,7 +87,10 @@ jobs:
 ```
 
 A local overlay still outranks a pack. See [Packs](docs/PACKS.md) for the
-contract, the required README sections, and moving a skill out of Crew.
+contract, the required README sections, and moving a skill out of Crew. Skills
+name capabilities (`mcp:tracker`, `cli:gh`), never products, and degrade when one
+is missing; [Capabilities](docs/CAPABILITIES.md) lists the shared names and how
+an agent adapts.
 
 ### Migrating to 0.44.0: stack skills moved to `infra-skills`
 
