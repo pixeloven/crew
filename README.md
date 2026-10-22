@@ -68,6 +68,13 @@ python3 /absolute/resolved/crew/root/scripts/check_skill_layout.py /absolute/con
 The validator parses YAML frontmatter, checks directory-form skills, and validates
 consumer roles in `agents/`, `.claude/agents/`, and `.pi/agents/`.
 
+## Packs
+
+Domain, stack, and craft skills belong in **packs**: sibling `<domain>-skills`
+plugins that ship skills only, may fill Crew's slots with `provides:`, declare
+`requires: [plugin:crew@>=X.Y.Z]`, and run Crew's own checks in pack mode. A
+local overlay still outranks a pack. See [Packs](docs/PACKS.md) for the contract.
+
 ## Doctor and Onboarding
 
 Ask an agent to “run Crew Doctor” for a fully read-only report. Doctor separates

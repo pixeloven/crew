@@ -10,6 +10,8 @@ A consumer fills a slot by creating a local skill in its overlay
 (`.agents/skills/<name>/SKILL.md`, symlinked into `.claude/skills/`) — conventionally
 named `<project>-<slot>`, though any name works. What matters is that the content
 exists locally and the project's `AGENTS.md` concern → local-skill map points at it.
+A [pack](../../docs/PACKS.md) skill can also fill a slot by declaring `provides:`.
+When both a local skill and a pack fill the same slot, the local one outranks the pack.
 Local skills **shadow** foundation skills on name collision in pi's flat namespace;
 under Claude Code and Codex the plugin copy is namespaced `crew:skill`, so both are visible.
 
