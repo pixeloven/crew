@@ -132,12 +132,18 @@ declared set is `platform-conventions`, `topology`, `protected-seams`,
 slots, and must never appear as unfilled unless a future installed skill actually
 declares them.
 
+Pass the other installed plugin and package roots found in check 1 to
+`inspect_packs`. A root is a pack when a skill declares `plugin:crew@>=X` or
+`provides:`. Then pass the packs to `declared_local_slots(..., packs=...)`: each
+pack's `slots.txt` adds its own slots to the declared set, labelled with the
+pack, and an unfilled one is reported as that pack's slot. A slot name two packs
+declare, or a pack declares over a Crew slot, is `DEGRADED`; never pick an owner.
+
 Then report who fills each declared slot. A local overlay skill fills a slot by
 `provides:` or by the `<project>-<slot>` naming convention; a pack skill fills one
-only by `provides:`. Pass the other installed plugin and package roots found in
-check 1 to `inspect_packs`. A root is a pack when a skill declares
-`plugin:crew@>=X` or `provides:`. Report "slot X filled by pack Y" alongside
-local fills. **A local overlay outranks a pack.** On Claude and Codex both copies
+only by `provides:`, including a slot another pack declares. Report "slot X
+filled by pack Y" alongside local fills. **A local overlay outranks a pack.** On
+Claude and Codex both copies
 load, so name both. Verify every pack's `plugin:crew@>=X` against the resolved
 Crew manifest; an unmet minimum is `DEGRADED`.
 

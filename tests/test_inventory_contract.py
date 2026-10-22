@@ -335,6 +335,23 @@ class DigestAndGapTests(InventoryTestCase):
         self.assertTrue(all(gap["evidence"] for gap in found.values()))
         self.assertEqual(sorted(found), sorted((gap["kind"], gap["name"]) for gap in inventory["gaps"]))
 
+    def test_pack_declared_slots_are_inventoried_with_their_owner(self) -> None:
+        toolkit = self.fixture.home / ".claude/plugins/cache/acme/toolkit/1.2.0"
+        (toolkit / "slots.txt").write_text("tracker-fields\n", encoding="utf-8")
+        skill = toolkit / "skills/toolkit-gh/SKILL.md"
+        skill.write_text(
+            skill.read_text(encoding="utf-8").replace(
+                "requires: [cli:gh, mcp:tracker]\n",
+                "requires: [cli:gh, mcp:tracker, plugin:crew@>=0.38.0]\nexpects-local: [tracker-fields]\n",
+            ),
+            encoding="utf-8",
+        )
+        inventory = self.fixture.build()
+        self.assertIsNone(inventory["slots"]["slots"]["tracker-fields"]["effective"])
+        self.assertEqual({"tracker-fields": ["toolkit"]}, inventory["slots"]["pack_slots"])
+        found = {(gap["kind"], gap["name"]): gap for gap in inventory["gaps"]}
+        self.assertIn("pack `toolkit`", found[("slot-unfilled", "tracker-fields")]["evidence"])
+
     def test_engine_writes_nothing(self) -> None:
         def snapshot():
             return {

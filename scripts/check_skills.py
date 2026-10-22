@@ -13,13 +13,19 @@ Schema v2 fields (exactly these, in any order):
                (see templates/local-skills/README.md); the onboarding doctor
                reports unfilled slots
   provides     OPTIONAL, packs only — the slots this skill fills; each must be
-               listed in roles/expected-local-skills.txt. Crew itself fills none.
+               listed in roles/expected-local-skills.txt or the pack's own
+               slots.txt. Crew itself fills none.
 
 Legacy fields (category, durability) are forbidden — they carried no signal.
 
 Pack mode (`--root <pack> --pack`) runs this same gate against a sibling pack's
-skills (see docs/PACKS.md). The slot list always comes from THIS crew install,
-never from the pack, so a pack cannot widen the vocabulary it is checked against.
+skills (see docs/PACKS.md). Crew's slot list always comes from THIS crew install,
+never from the pack, so a pack cannot widen Crew's vocabulary. A pack may declare
+slots of its own in `slots.txt` at its root (same format as
+roles/expected-local-skills.txt); those widen `expects-local` and `provides` for
+that pack only, and must be kebab-case, unique, not a Crew slot name, stubbed at
+`templates/local-skills/<slot>.md`, and deferred to by at least one pack skill.
+Crew mode never reads a `slots.txt`.
 `--report-cost` prints always-on description sizes; it never affects the exit code.
 
 Local mode (`--local <consumer-root>`) checks a consumer's learned skills: only
@@ -61,13 +67,53 @@ LOCAL_SLOT_VOCABULARY = {
 }
 
 
-def expected_local_slots(path: pathlib.Path = ROOT / "roles" / "expected-local-skills.txt") -> set[str]:
-    """Slot names crew's roles cite — the only names a `provides:` may fill."""
-    return {
+# A slot name is plain kebab-case: never prefixed with its pack's name.
+SLOT_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+PACK_SLOTS_FILE = "slots.txt"
+PACK_SLOT_STUBS = "templates/local-skills"
+
+
+def slot_lines(path: pathlib.Path) -> list[str]:
+    """Slot names in a slot list, in file order: one per line, `#` comments skipped."""
+    return [
         line.strip()
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
-    }
+    ]
+
+
+def expected_local_slots(path: pathlib.Path = ROOT / "roles" / "expected-local-skills.txt") -> set[str]:
+    """Slot names crew's roles cite — the only crew names a `provides:` may fill."""
+    return set(slot_lines(path))
+
+
+def pack_slots(root: pathlib.Path) -> tuple[set[str], list[str]]:
+    """A pack's own declared slots (its `slots.txt`) and the errors in that list.
+
+    No `slots.txt` declares none, which is valid. Crew's names are reserved: a pack
+    that reuses one would make a fill ambiguous between two contracts.
+    """
+    path = pathlib.Path(root) / PACK_SLOTS_FILE
+    if not path.is_file():
+        return set(), []
+    crew_slots = LOCAL_SLOT_VOCABULARY | expected_local_slots()
+    declared: set[str] = set()
+    errors: list[str] = []
+    for slot in slot_lines(path):
+        if not SLOT_NAME_RE.fullmatch(slot):
+            errors.append(f"{PACK_SLOTS_FILE}: slot {slot!r} must be plain kebab-case (no pack prefix)")
+            continue
+        if slot in declared:
+            errors.append(f"{PACK_SLOTS_FILE}: duplicate slot {slot!r}")
+            continue
+        if slot in crew_slots:
+            errors.append(f"{PACK_SLOTS_FILE}: {slot!r} is a crew slot; a pack declares only slots of its own")
+            continue
+        declared.add(slot)
+        stub = f"{PACK_SLOT_STUBS}/{slot}.md"
+        if not (pathlib.Path(root) / stub).is_file():
+            errors.append(f"{PACK_SLOTS_FILE}: slot {slot!r} has no stub template at {stub}")
+    return declared, errors
 
 
 def yaml_module():
@@ -82,10 +128,11 @@ def yaml_module():
 
 
 def skill_field_errors(
-    rel: str, fm: dict, dirname: str, provides_slots: set[str]
+    rel: str, fm: dict, dirname: str, provides_slots: set[str], own_slots: frozenset[str] = frozenset()
 ) -> tuple[list[str], bool]:
     """Schema-v2 field errors for one parsed frontmatter mapping, and whether it
-    declares a crew dependency. Shared by catalogue, pack, and --local modes."""
+    declares a crew dependency. Shared by catalogue, pack, and --local modes.
+    `own_slots` is a pack's `slots.txt`; it widens expects-local and provides."""
     errors: list[str] = []
     declares_crew = False
     unknown = set(fm) - ALLOWED_FIELDS
@@ -114,17 +161,20 @@ def skill_field_errors(
                 declares_crew = True
     if "expects-local" in fm:
         slots = fm["expects-local"]
-        if not (isinstance(slots, list) and slots and set(slots) <= LOCAL_SLOT_VOCABULARY):
+        accepted = LOCAL_SLOT_VOCABULARY | own_slots
+        if not (isinstance(slots, list) and slots and set(slots) <= accepted):
             errors.append(
                 f"{rel}: expects-local must be a non-empty subset of "
-                f"{sorted(LOCAL_SLOT_VOCABULARY)}, got {slots!r}"
+                f"{sorted(accepted)}{' (crew + slots.txt)' if own_slots else ''}, got {slots!r}"
             )
     if "provides" in fm:
         slots = fm["provides"]
-        if not (isinstance(slots, list) and slots and set(slots) <= provides_slots):
+        accepted = provides_slots | own_slots
+        source = "roles/expected-local-skills.txt" + (" + slots.txt" if own_slots else "")
+        if not (isinstance(slots, list) and slots and set(slots) <= accepted):
             errors.append(
                 f"{rel}: provides must be a non-empty subset of "
-                f"{sorted(provides_slots)} (roles/expected-local-skills.txt), got {slots!r}"
+                f"{sorted(accepted)} ({source}), got {slots!r}"
             )
     return errors, declares_crew
 
@@ -135,6 +185,9 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
     root = pathlib.Path(root)
     provides_slots = expected_local_slots()
     undeclared: list[str] = []
+    # Crew mode never reads a slots.txt: crew's slots are roles/expected-local-skills.txt.
+    own_slots: set[str] = set()
+    deferred_to: set[str] = set()
 
     manifests = [".claude-plugin/plugin.json", "package.json"]
     if pack:
@@ -145,6 +198,8 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
         for d in PACK_FORBIDDEN_DIRS:
             if (root / d).exists():
                 errors.append(f"{d}/: a pack ships no roles — crew's roles pick its skills up through slots")
+        own_slots, slot_errors = pack_slots(root)
+        errors.extend(slot_errors)
     for m in manifests:
         try:
             json.loads((root / m).read_text())
@@ -175,8 +230,10 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
         if not isinstance(fm, dict):
             errors.append(f"{rel}: frontmatter must be a mapping")
             continue
-        field_errors, declares_crew = skill_field_errors(rel, fm, dirname, provides_slots)
+        field_errors, declares_crew = skill_field_errors(rel, fm, dirname, provides_slots, frozenset(own_slots))
         errors.extend(field_errors)
+        if isinstance(fm.get("expects-local"), list):
+            deferred_to.update(slot for slot in fm["expects-local"] if isinstance(slot, str))
         if pack and not declares_crew:
             # Every skill, not any: a skill is installed, listed, and moved on
             # its own, so each one carries the Crew it was checked against.
@@ -184,6 +241,9 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
 
     for rel in undeclared:
         errors.append(f"{rel}: pack skill declares no crew dependency: add {CREW_REQUIREMENT}X.Y.Z to its requires")
+    for slot in sorted(own_slots - deferred_to):
+        # A declared slot nothing defers to is a fill no skill reads.
+        errors.append(f"{PACK_SLOTS_FILE}: slot {slot!r} is in no pack skill's expects-local")
     return errors
 
 
