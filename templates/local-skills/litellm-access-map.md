@@ -1,6 +1,6 @@
 ---
 name: <project>-litellm-access-map
-description: <Project>'s concrete LiteLLM access map — which surface holds which virtual key, each key's MCP access groups, team ceilings, and where the credentials live. Load before changing any VK scope or granting a surface a new capability. The generic mechanism is the foundation's litellm-routing-model skill.
+description: <Project>'s concrete LiteLLM access map — which surface holds which virtual key, each key's MCP access groups, team ceilings, and where the credentials live. Load before changing any VK scope or granting a surface a new capability.
 ---
 
 ## Surfaces ↔ keys ↔ groups
