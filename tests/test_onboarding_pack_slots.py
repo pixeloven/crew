@@ -224,17 +224,17 @@ class PackSlotProposalTests(unittest.TestCase):
         self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker", "capabilities": ["mcp:tracker"]}], proposal["discoverable_sections"])
         self.assertEqual(["Owners"], proposal["human_sections"])
         self.assertEqual(["Escalation"], proposal["deferred_sections"])
-        self.assertEqual("scaffold", proposal["depth"])
+        self.assertEqual("quick", proposal["depth"])
         self.assertIn("+name: project-tracker-fields", proposal["diff"])
         self.assertIsNone(proposal["text"], "audit never carries text to write")
 
-    def test_deepen_asks_every_section(self) -> None:
+    def test_thorough_asks_every_section(self) -> None:
         self.world.pack()
-        proposal = self.world.proposals(depth="deepen")["tracker-fields"]
+        proposal = self.world.proposals(depth="thorough")["tracker-fields"]
         self.assertEqual(["Owners", "Escalation"], proposal["human_sections"])
         self.assertEqual([], proposal["deferred_sections"])
         with self.assertRaises(ValueError):
-            self.world.proposals(depth="thorough")
+            self.world.proposals(depth="exhaustive")
 
     def test_apply_returns_text_and_writes_nothing(self) -> None:
         self.world.pack()

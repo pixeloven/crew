@@ -174,7 +174,7 @@ Two markers, each alone on its own line inside a section, say how it gets filled
 | Marker | Meaning |
 |---|---|
 | `<!-- crew:discoverable capability=<cap> -->` | A tool can supply this section's facts. Onboarding hands the section to `learn`, which drafts it as a proposal with evidence; the operator promotes it. |
-| `<!-- crew:optional -->` | The pack's skills can start without this section. **Scaffold** leaves it `▸ Fill`; **Deepen** asks it. |
+| `<!-- crew:optional -->` | The pack's skills can start without this section. **Quick** leaves it `▸ Fill`; **Thorough** asks it. |
 
 ```markdown
 ## Fields
@@ -205,7 +205,7 @@ The grammar is strict, so the split between sections is declared and never guess
   and is an error.
 - **Unmarked sections are human facts.** An unmarked section that contains
   `▸ Fill` becomes an interview question. Both markers can be on one section:
-  Scaffold defers it, and Deepen hands it to `learn`.
+  Quick defers it, and Thorough hands it to `learn`.
 
 `check_skills.py` checks this grammar in every stub under `templates/local-skills/`,
 in pack mode and in Crew's own run.
@@ -214,8 +214,8 @@ in pack mode and in Crew's own run.
 `scripts/onboarding_contract.py` returns one proposal per slot. Each proposal splits
 the stub's unfilled sections into three lists: `discoverable_sections` (heading and
 capability, handed to `learn`), `human_sections` (the interview) and
-`deferred_sections` (optional ones that Scaffold leaves). A local fill that still
-carries `▸ Fill` gets a `complete` proposal: re-run onboarding with Deepen to finish
+`deferred_sections` (optional ones that Quick leaves). A local fill that still
+carries `▸ Fill` gets a `complete` proposal: re-run onboarding with Thorough to finish
 it. A slot already filled by a pack gets no proposal, because a local fill would
 outrank the pack, and that is a host decision. Doctor reports a fill that still
 carries `▸ Fill` as `DEGRADED` (partial) and names the unfilled sections.
