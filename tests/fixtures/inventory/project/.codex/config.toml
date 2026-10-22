@@ -1,0 +1,3 @@
+[mcp_servers.projtool]
+command = "/usr/local/bin/projtool"
+env = { PROJ = "canary-codex-project-env" }

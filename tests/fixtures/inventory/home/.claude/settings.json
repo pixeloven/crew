@@ -1,0 +1,6 @@
+{
+  "enabledPlugins": {
+    "toolkit@acme": true,
+    "elsewhere@acme": true
+  }
+}

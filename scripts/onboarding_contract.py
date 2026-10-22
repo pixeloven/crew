@@ -12,6 +12,22 @@ try:
     from .crew_doctor import PROFILE_TAXONOMY
 except ImportError:  # Direct script execution.
     from crew_doctor import PROFILE_TAXONOMY
+try:
+    from .crew_inventory import (
+        CAPABILITIES_HEADING,
+        FILL,
+        capability_map_rows,
+        parse_capability_map,
+        render_capability_map,
+    )
+except ImportError:  # Direct script execution.
+    from crew_inventory import (
+        CAPABILITIES_HEADING,
+        FILL,
+        capability_map_rows,
+        parse_capability_map,
+        render_capability_map,
+    )
 
 
 class ApplyAuthorizationRequired(ValueError):
@@ -173,6 +189,111 @@ def ensure_reporting_contract(text: str, template: str) -> str:
     if anchor:
         return text[:anchor.start()] + section + "\n" + text[anchor.start():]
     return text.rstrip("\n") + "\n\n" + section
+
+
+def merge_capability_map(slot_text: str, inventory: dict[str, Any], *, today: str | None = None) -> str:
+    """Merge the inventory's capability map into an `agent-runtime` slot; idempotent.
+
+    Only the text between the `crew:capability-map` markers changes. Operator-written
+    Fallback cells survive, a vanished capability stays as `absent` and is listed
+    for an authorized removal, and missing markers append a `## Capabilities`
+    section. An unchanged map keeps its date, so re-running never churns.
+    """
+    recorded = parse_capability_map(slot_text)
+    current = {row["capability"] for row in capability_map_rows(inventory)}
+    fallbacks: dict[str, str] = {}
+    retained: list[dict[str, str]] = []
+    generated = today
+    crew = None
+    if recorded:
+        for row in recorded["rows"]:
+            if row["fallback"] and row["fallback"] != FILL:
+                fallbacks[row["capability"]] = row["fallback"]
+            if row["capability"] not in current:
+                retained.append({**{key: row[key] for key in ("capability", "provider", "kind")}, "state": "absent"})
+        if recorded["digest"] == inventory["map_digest"] and recorded["generated"]:
+            generated, crew = recorded["generated"], recorded["crew"]
+    block = render_capability_map(
+        inventory, fallbacks=fallbacks, retained=retained, generated=generated, crew=crew
+    )
+    if recorded:
+        start, stop = recorded["span"]
+        return slot_text[:start] + block + slot_text[stop:]
+    heading = CAPABILITIES_HEADING.search(slot_text)
+    if heading:
+        following = re.compile(r"^#{1,2}[ \t]", re.MULTILINE).search(slot_text, heading.end())
+        cut = following.start() if following else len(slot_text)
+        head = slot_text[:cut].rstrip("\n")
+        tail = slot_text[cut:]
+        return head + "\n\n" + block + "\n" + ("\n" + tail if tail else "")
+    return slot_text.rstrip("\n") + "\n\n## Capabilities\n\n" + block + "\n"
+
+
+def _skill_slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "project"
+
+
+def capability_map_proposal(
+    inventory: dict[str, Any],
+    contract: OnboardingMode,
+    *,
+    template_text: str,
+    today: str | None = None,
+) -> dict[str, Any]:
+    """Audit reports the diff; apply also gets the text to write. Never writes.
+
+    With no `agent-runtime` fill, the proposal creates `<project>-agent-runtime`
+    from the stub. A pack-provided fill is a host decision: a new local fill
+    would outrank the pack.
+    """
+    import difflib
+
+    capability_map = inventory["capability_map"]
+    project = pathlib.Path(inventory["project_root"])
+    if capability_map["fill"] == "pack":
+        return {
+            "action": "decision-needed",
+            "target": None,
+            "diff": "",
+            "text": None,
+            "removals": [],
+            "reason": (
+                f"agent-runtime is filled by a pack ({capability_map['source']}); a local fill "
+                "carrying the map would outrank it"
+            ),
+        }
+    if capability_map["fill"] == "local":
+        target = pathlib.Path(capability_map["source"])
+        before = target.read_text(encoding="utf-8")
+        action = "merge"
+    else:
+        name = f"{_skill_slug(project.name)}-agent-runtime"
+        target = project / ".agents/skills" / name / "SKILL.md"
+        before = ""
+        action = "create"
+    base = before or template_text.replace("<project>", _skill_slug(project.name)).replace(
+        "<Project>", project.name
+    )
+    after = merge_capability_map(base, inventory, today=today)
+    if after == before:
+        action = "unchanged"
+    diff = "".join(
+        difflib.unified_diff(
+            before.splitlines(keepends=True),
+            after.splitlines(keepends=True),
+            fromfile=str(target) if before else "/dev/null",
+            tofile=str(target),
+        )
+    )
+    recorded = parse_capability_map(after) or {"removals": []}
+    return {
+        "action": action,
+        "target": str(target),
+        "diff": diff,
+        "text": after if contract.writes_allowed and action != "unchanged" else None,
+        "removals": recorded["removals"],
+        "reason": "",
+    }
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -2477,6 +2477,59 @@ def _description_cost_check(costs: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _capability_map_check(inventory: dict[str, Any]) -> dict[str, Any]:
+    """Compare the committed capability map with this machine's inventory. Read-only."""
+    capability_map = inventory.get("capability_map") or {}
+    recorded = capability_map.get("recorded")
+    source = capability_map.get("source") or str(
+        pathlib.Path(str(inventory.get("project_root") or ".")) / ".agents/skills"
+    )
+    recommendation = "Run onboarding to merge the capability map into the agent-runtime slot"
+    if not recorded or not recorded.get("digest"):
+        if capability_map.get("fill") is None:
+            fact = "agent-runtime slot is unfilled, so there is no capability map"
+        elif not recorded:
+            fact = "agent-runtime slot carries no crew:capability-map markers"
+        else:
+            fact = "agent-runtime capability map markers carry no digest; the map was never generated"
+        status, inference = "MISSING", "no committed capability map to compare with this machine"
+    elif recorded["digest"] == inventory.get("map_digest"):
+        fact = f"capability map matches this machine ({recorded['digest']})"
+        status, inference, recommendation = "OK", "committed map and inventory digest agree", ""
+    else:
+        removals = set(recorded.get("removals", []))
+        before = {
+            row["capability"]: f"{row['provider']}/{row['kind']}/{row['state']}"
+            for row in recorded.get("rows", [])
+            if row["capability"] not in removals
+        }
+        after = {
+            row["capability"]: f"{row['provider']}/{row['kind']}/{row['state']}"
+            for row in capability_map.get("rows", [])
+        }
+        changed = [
+            f"{name} ({before.get(name, 'not recorded')} -> {after.get(name, 'gone')})"
+            for name in sorted(set(before) | set(after))
+            if before.get(name) != after.get(name)
+        ]
+        shown = "; ".join(changed[:10]) + (f"; and {len(changed) - 10} more" if len(changed) > 10 else "")
+        fact = f"capability map differs on this machine: {shown or 'digest only'}"
+        status = "DEGRADED"
+        inference = "the committed map records another machine or an older inventory"
+        recommendation = (
+            "Re-run onboarding to refresh the capability map, or keep it if this machine is the odd one out"
+        )
+    return {
+        "check": "inventory.capability-map",
+        "status": status,
+        "fact": fact,
+        "inference": inference,
+        "recommendation": recommendation,
+        "untested": "",
+        "evidence": [{"claim": fact, "source": source}],
+    }
+
+
 def profile_for(working_capabilities: list[str], persona_evidence: list[str]) -> str:
     """One taxonomy: personas takes deterministic precedence over platform."""
     if persona_evidence:
@@ -2954,11 +3007,13 @@ def compose_doctor_report(
     slot_fills: dict[str, Any] | None = None,
     packs: list[dict[str, Any]] | None = None,
     description_costs: list[dict[str, Any]] | None = None,
+    inventory: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose all Doctor checks into one deterministic, non-persisted report.
 
     `slot_fills`, `packs`, and `description_costs` are optional: omitted, the
     report carries no fill, pack, or cost rows.
+    `inventory` (a `crew-inventory/1` document) adds `inventory.capability-map`.
     """
     report = deepcopy(installation_report)
     checks = report["checks"]
@@ -3071,6 +3126,8 @@ def compose_doctor_report(
         checks.append(_pack_check(pack))
     if description_costs:
         checks.append(_description_cost_check(description_costs))
+    if inventory is not None:
+        checks.append(_capability_map_check(inventory))
 
     capability_checks = [
         capability

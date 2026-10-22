@@ -1,0 +1,23 @@
+name: ci
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
+      - name: lint
+        run: |
+          echo "linting"
+          shellcheck scripts/*.sh
+          if true; then exit 0; fi
+      - run: FOO=bar gh pr checks
+      - name: heredoc bodies and substitutions are not commands
+        run: |
+          python3 - <<'PY'
+          import json
+          bad = []
+          PY
+          base_ver=$(git show HEAD:package.json)
+          tar -czf out.tgz \
+            vendored-arg

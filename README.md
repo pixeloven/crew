@@ -104,6 +104,22 @@ authorization tokens. Onboarding preserves mature entry files,
 safety tripwires, project delivery contracts, and runbook pointers, then defers
 implementation delivery to the project's existing workflow.
 
+Both read one inventory. `scripts/crew_inventory.py` is a read-only engine: it
+lists installed plugins and skill roots, MCP servers as configured, CLIs on
+`PATH`, and filled and empty slots. It writes nothing and prints to stdout.
+
+```sh
+python3 /absolute/resolved/crew/root/scripts/crew_inventory.py --project /absolute/consumer/repo --format gaps
+```
+
+Onboarding writes the inventory into the `agent-runtime` slot as a `## Capabilities`
+table that maps each capability to its provider and a fallback command. Doctor's
+`inventory.capability-map` row reports a table that differs on this machine. MCP
+records carry a server's name, transport, scope and command basename only, never
+its env, headers, args or URL. MCP tool lists are visible only inside a session, so
+the agent pipes what it sees with `--observations -`. The
+[Maintainers](docs/MAINTAINERS.md) page dates what each harness exposes.
+
 ## Maintenance
 
 One semver line drives the package and plugin manifests. Edit role sources rather

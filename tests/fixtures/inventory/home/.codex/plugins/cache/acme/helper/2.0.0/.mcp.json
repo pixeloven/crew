@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "helper-mcp": {
+      "command": "node",
+      "args": [
+        "server.js",
+        "--secret=canary-codex-plugin-arg"
+      ],
+      "env": {
+        "HELPER": "canary-codex-plugin-env"
+      }
+    }
+  }
+}

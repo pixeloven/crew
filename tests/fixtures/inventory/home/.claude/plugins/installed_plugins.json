@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "plugins": {
+    "toolkit@acme": [
+      {
+        "scope": "user",
+        "installPath": "@HOME@/.claude/plugins/cache/acme/toolkit/1.2.0",
+        "version": "1.2.0",
+        "installedAt": "2026-10-01T00:00:00Z",
+        "lastUpdated": "2026-10-01T00:00:00Z"
+      }
+    ],
+    "elsewhere@acme": [
+      {
+        "scope": "project",
+        "projectPath": "/somewhere/else",
+        "installPath": "@HOME@/.claude/plugins/cache/acme/elsewhere/0.1.0",
+        "version": "0.1.0"
+      }
+    ]
+  }
+}

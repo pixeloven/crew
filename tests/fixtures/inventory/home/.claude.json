@@ -1,0 +1,41 @@
+{
+  "numStartups": 3,
+  "mcpServers": {
+    "notes": {
+      "type": "stdio",
+      "command": "/opt/acme/bin/notes-server --api-key=canary-user-arg",
+      "args": [
+        "--token",
+        "canary-user-arg-2"
+      ],
+      "env": {
+        "NOTES_TOKEN": "canary-user-env"
+      }
+    }
+  },
+  "projects": {
+    "@PROJECT@": {
+      "mcpServers": {
+        "localdb": {
+          "type": "http",
+          "url": "https://db.internal.example/mcp?key=canary-local-query",
+          "headers": {
+            "Authorization": "canary-local-header"
+          }
+        }
+      },
+      "disabledMcpjsonServers": [
+        "retired"
+      ],
+      "disabledMcpServers": []
+    },
+    "/somewhere/else": {
+      "mcpServers": {
+        "other-project-only": {
+          "type": "stdio",
+          "command": "other"
+        }
+      }
+    }
+  }
+}

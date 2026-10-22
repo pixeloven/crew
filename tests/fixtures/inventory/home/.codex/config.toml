@@ -1,0 +1,21 @@
+model = "fixture"
+
+[projects."@PROJECT@"]
+trust_level = "trusted"
+
+[plugins."helper@acme"]
+enabled = true
+
+[mcp_servers.search]
+command = "uvx"
+args = ["search-server", "--key", "canary-codex-arg"]
+env = { SEARCH_KEY = "canary-codex-env" }
+
+[mcp_servers.remote]
+url = "https://remote.example/mcp?token=canary-codex-query"
+bearer_token_env_var = "REMOTE_TOKEN"
+http_headers = { "X-Org" = "canary-codex-header" }
+
+[mcp_servers.parked]
+command = "parked-server"
+enabled = false

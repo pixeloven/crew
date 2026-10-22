@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "harness": "claude",
+  "captured_at": "2026-10-21T09:00:00Z",
+  "source_command": "in-session MCP tool listing",
+  "mcp_servers": [
+    {
+      "name": "tracker",
+      "tools": [
+        "create_issue",
+        "list_issues"
+      ],
+      "env": {
+        "LEAK": "canary-observation-env"
+      }
+    },
+    {
+      "name": "connector-docs",
+      "tools": [
+        "search_docs"
+      ]
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "cli:gh",
+      "state": "working"
+    }
+  ]
+}
