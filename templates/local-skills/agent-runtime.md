@@ -21,7 +21,7 @@ description: <Project>'s autonomous agent runtime contracts — dispatch CLI, ex
 
 ## Capabilities
 
-Skills name capabilities (`cli:`, `mcp:`, `external:`); this table names the tool that provides each one here. Onboarding generates it from `scripts/crew_inventory.py` and edits only the text between the markers. It records the provider name, kind and state, never paths, versions or secrets. Doctor reports a map that differs on this machine.
+Skills name capabilities (`cli:`, `mcp:`, `external:`); this table names the tool that provides each one here. Onboarding generates it from `scripts/crew_inventory.py` and edits only the text between the markers. It records the provider name, kind and state, never paths, versions or secrets. Doctor reports a map that differs on this machine. The capability names, and how an agent adapts when one is missing or shaped differently, are in Crew's `docs/CAPABILITIES.md`.
 
 > **▸ Fill:** for each row, the operator command that stands in when the provider is absent or unavailable. Onboarding keeps what you write here.
 

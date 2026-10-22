@@ -181,6 +181,15 @@ The platform (corpus, LLM gateway, cluster) is the **default path — reach for 
 - **No MCP gateway** → fall back to direct CLIs.
 - **No cluster / live-infra access** → operate on the repo (code, manifests, plans); defer anything needing live infra and say so.
 
+**When a skill names a capability** (`mcp:tracker`, `mcp:warehouse`, `cli:gh`…), read the project's capability map (the `agent-runtime` slot's `## Capabilities` table) and adapt; never fail on a missing one:
+
+- **Present** → use the provider the map names, and record which source each fact came from.
+- **Absent** → in order: another capability that answers the same question; ask the operator to run a command or query you provide (the map's Fallback cell) and paste the result; proceed on method alone, naming the gap and lowering your confidence.
+- **Different shape** (analytics via the warehouse, a tracker via a CLI, an internal tool) → use the capability's *meaning*, not a provider name. If the map has no row for it, `learn` drafts one as a proposal.
+- **Never invent** a provider, table, event or field that neither the map nor the tool itself has shown you. Every report lists the sources used and the ones missing.
+
+The vocabulary and the full rules: `docs/CAPABILITIES.md` in the Crew package.
+
 Every role keeps its core value on a bare repo — `reviewer` reviews the diff, `researcher` evaluates from web + repo, `implementer` edits code — and sharpens that with platform capabilities wherever they're reachable.
 
 > **▸ Fill for your project:** any deployment-specific capabilities and their no-platform fallback (only if they differ from the above).
