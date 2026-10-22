@@ -15,6 +15,10 @@ except ImportError:  # Direct script execution.
     from crew_doctor import MOVED_SKILL_REFERENCE, MOVED_SKILLS, PLUGIN_NAME, PROFILE_TAXONOMY
     from learn_contract import queue_location, queue_location_errors
 try:
+    from .check_skills import PACK_SLOT_STUBS, stub_sections
+except ImportError:  # Direct script execution.
+    from check_skills import PACK_SLOT_STUBS, stub_sections
+try:
     from .crew_inventory import (
         CAPABILITIES_HEADING,
         FILL,
@@ -333,6 +337,117 @@ def capability_map_proposal(
         "removals": recorded["removals"],
         "reason": "",
     }
+
+
+DEPTH_MODES = ("scaffold", "deepen")
+# Filled by `capability_map_proposal`, which creates the fill from its stub.
+CAPABILITY_MAP_SLOT = "agent-runtime"
+
+
+def _section_split(sections: list[dict[str, Any]], depth: str) -> dict[str, Any]:
+    """Unfilled sections by who answers them. Scaffold defers `crew:optional` ones."""
+    discoverable: list[dict[str, str]] = []
+    human: list[str] = []
+    deferred: list[str] = []
+    for section in sections:
+        if not section["unfilled"]:
+            continue
+        if section["optional"] and depth == "scaffold":
+            deferred.append(section["heading"])
+        elif section["discoverable"]:
+            discoverable.append({"heading": section["heading"], "capability": section["discoverable"]})
+        else:
+            human.append(section["heading"])
+    return {"discoverable_sections": discoverable, "human_sections": human, "deferred_sections": deferred}
+
+
+def pack_slot_proposals(
+    inventory: dict[str, Any],
+    contract: OnboardingMode,
+    *,
+    crew_root: pathlib.Path,
+    depth: str = "scaffold",
+) -> list[dict[str, Any]]:
+    """Propose a local fill for each unfilled declared slot, from its owner's stub. Never writes.
+
+    A pack's slot starts from that pack's `templates/local-skills/<slot>.md`; a
+    Crew slot from Crew's. The fill is `<project>-<slot>` in `.agents/skills/`.
+    Unfilled stub sections split into `discoverable_sections` (handed to learn)
+    and `human_sections` (the interview); Scaffold puts `crew:optional` ones in
+    `deferred_sections`. A local fill still carrying `▸ Fill` is `complete`d in
+    place by the interview, so it gets no `text`. A slot a pack fills is not
+    proposed: a local fill would outrank it, which is a host decision. Only
+    apply carries `text`, and only for `create`.
+    """
+    import difflib
+
+    if depth not in DEPTH_MODES:
+        raise ValueError(f"unknown depth {depth!r}; expected one of {DEPTH_MODES}")
+    project = pathlib.Path(inventory["project_root"])
+    slug = _skill_slug(project.name)
+    slots = inventory["slots"]
+    pack_slots = slots.get("pack_slots", {})
+    collisions = {collision["slot"]: collision for collision in slots.get("collisions", [])}
+    pack_roots = {pack["name"]: pack["root"] for pack in inventory.get("packs", [])}
+    proposals: list[dict[str, Any]] = []
+    for slot, entry in sorted(slots["slots"].items()):
+        owners = pack_slots.get(slot, [])
+        proposal: dict[str, Any] = {
+            "slot": slot,
+            "pack": owners[0] if len(owners) == 1 else None,
+            "stub": None,
+            "target": None,
+            "action": "",
+            "depth": depth,
+            "discoverable_sections": [],
+            "human_sections": [],
+            "deferred_sections": [],
+            "diff": "",
+            "text": None,
+            "reason": "",
+        }
+        if entry["local"]:
+            fill = entry["local"][0]
+            if not fill.get("unfilled_sections"):
+                continue
+            sections, _ = stub_sections(pathlib.Path(fill["source"]).read_text(encoding="utf-8"))
+            proposals.append(
+                {**proposal, "target": fill["source"], "action": "complete", **_section_split(sections, depth)}
+            )
+            continue
+        if entry["packs"] or slot == CAPABILITY_MAP_SLOT:
+            continue
+        if slot in collisions:
+            named = ", ".join(f"`{name}`" for name in collisions[slot]["packs"])
+            by = f"Crew and pack {named}" if collisions[slot]["crew"] else f"packs {named}"
+            proposals.append({**proposal, "action": "decision-needed",
+                              "reason": f"slot `{slot}` is declared by {by}; its owner is ambiguous"})
+            continue
+        root = pathlib.Path(pack_roots[owners[0]]) if owners else pathlib.Path(crew_root)
+        stub = root / PACK_SLOT_STUBS / f"{slot}.md"
+        target = project / ".agents/skills" / f"{slug}-{slot}" / "SKILL.md"
+        proposal["target"] = str(target)
+        if not stub.is_file():
+            owner = f"pack `{owners[0]}`" if owners else "Crew"
+            proposals.append({**proposal, "action": "decision-needed",
+                              "reason": f"{owner} ships no stub for slot `{slot}` at {stub}"})
+            continue
+        text = stub.read_text(encoding="utf-8").replace("<project>", slug).replace("<Project>", project.name)
+        sections, _ = stub_sections(text)
+        diff = "".join(
+            difflib.unified_diff([], text.splitlines(keepends=True), fromfile="/dev/null", tofile=str(target))
+        )
+        proposals.append(
+            {
+                **proposal,
+                "stub": str(stub),
+                "action": "create",
+                "diff": diff,
+                "text": text if contract.writes_allowed else None,
+                **_section_split(sections, depth),
+            }
+        )
+    return proposals
 
 
 _LEARNING_HEADING = re.compile(r"^#{2,3}[ \t]+learning\b.*$", re.IGNORECASE | re.MULTILINE)

@@ -19,11 +19,25 @@ from dataclasses import dataclass
 from typing import Any
 
 try:
-    from .check_skills import LOCAL_SLOT_VOCABULARY, PACK_SLOT_STUBS, PACK_SLOTS_FILE, SLOT_NAME_RE, slot_lines
+    from .check_skills import (
+        LOCAL_SLOT_VOCABULARY,
+        PACK_SLOT_STUBS,
+        PACK_SLOTS_FILE,
+        SLOT_NAME_RE,
+        slot_lines,
+        stub_sections,
+    )
     from .frontmatter import parse_simple_mapping, read_frontmatter
     from .role_contract import PI_PACKAGE_NAME
 except ImportError:  # Direct script execution.
-    from check_skills import LOCAL_SLOT_VOCABULARY, PACK_SLOT_STUBS, PACK_SLOTS_FILE, SLOT_NAME_RE, slot_lines
+    from check_skills import (
+        LOCAL_SLOT_VOCABULARY,
+        PACK_SLOT_STUBS,
+        PACK_SLOTS_FILE,
+        SLOT_NAME_RE,
+        slot_lines,
+        stub_sections,
+    )
     from frontmatter import parse_simple_mapping, read_frontmatter
     from role_contract import PI_PACKAGE_NAME
 
@@ -2394,6 +2408,16 @@ def inspect_packs(candidate_roots: list[pathlib.Path], crew_root: pathlib.Path) 
     return packs
 
 
+def unfilled_sections(path: pathlib.Path) -> list[str]:
+    """Headings of a fill's sections that still carry `▸ Fill`, in file order. Read-only."""
+    try:
+        text = pathlib.Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return []
+    sections, _ = stub_sections(text)
+    return [section["heading"] for section in sections if section["unfilled"]]
+
+
 def slot_fills(
     declared: list[str],
     *,
@@ -2430,7 +2454,10 @@ def slot_fills(
                     else "name" if name == slot or name.endswith(f"-{slot}") else None
                 )
                 if basis:
-                    entry["local"].append({"skill": name, "source": str(path), "basis": basis})
+                    entry["local"].append(
+                        {"skill": name, "source": str(path), "basis": basis,
+                         "unfilled_sections": unfilled_sections(path)}
+                    )
     for pack in packs:
         inspection_sources.append(pack["root"])
         for slot, fills in pack.get("provides", {}).items():
@@ -2467,10 +2494,14 @@ def _slot_fill_check(
     owner_sources = owner_sources or []
     pack_names = ", ".join(f"`{name}`" for name in dict.fromkeys(fill["pack"] for fill in packs))
     subject = _slot_owner_label(slot, collision, owners)
+    # Only the fill of record is judged: a fill still carrying `▸ Fill` is partial.
+    partial = local[0].get("unfilled_sections", []) if local else []
     if local:
         skill = local[0]
         convention = " (by naming convention)" if skill["basis"] == "name" else ""
         fact = f"{subject} filled by local skill `{skill['skill']}`{convention}"
+        if partial:
+            fact += "; partial: " + ", ".join(f"`{heading}`" for heading in partial) + " still ▸ Fill"
         if packs:
             fact += f"; pack {pack_names} also provides it — local outranks pack"
     elif packs:
@@ -2483,11 +2514,18 @@ def _slot_fill_check(
         recommendation = f"Fill pack `{owners[0]}`'s slot `{slot}` in the local overlay{start}"
     else:
         recommendation = f"Fill slot `{slot}` in the local overlay or install a pack that provides it"
+    if partial:
+        recommendation = (
+            f"Fill the remaining sections of `{local[0]['skill']}`; onboarding (Deepen) interviews them "
+            "and hands discoverable ones to learn"
+        )
     if local and packs:
         inference = (
             "pi loads the nearest entry; Claude and Codex load both copies, so the "
             "AGENTS.md concern map must point at the local skill"
         )
+    elif partial:
+        inference = "skills that defer to this slot use their defaults for the unfilled sections"
     elif local or packs:
         inference = "a declared slot has a filling skill"
     else:
@@ -2495,10 +2533,10 @@ def _slot_fill_check(
     sources = [fill["source"] for fill in [*local, *packs]] or [*owner_sources, *fallback_sources]
     return {
         "check": f"local-slots.fill.{slot}",
-        "status": "OK" if local or packs else "MISSING",
+        "status": "DEGRADED" if partial else "OK" if local or packs else "MISSING",
         "fact": fact,
         "inference": inference,
-        "recommendation": "" if local or packs else recommendation,
+        "recommendation": recommendation if partial or not (local or packs) else "",
         "untested": "",
         "evidence": [{"claim": fact, "source": source} for source in dict.fromkeys(sources) if source],
     }

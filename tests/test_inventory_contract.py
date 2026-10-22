@@ -24,6 +24,7 @@ from scripts.onboarding_contract import (
     HostApplyAuthorizationSignal,
     capability_map_proposal,
     merge_capability_map,
+    pack_slot_proposals,
     resolve_mode,
 )
 
@@ -351,6 +352,34 @@ class DigestAndGapTests(InventoryTestCase):
         self.assertEqual({"tracker-fields": ["toolkit"]}, inventory["slots"]["pack_slots"])
         found = {(gap["kind"], gap["name"]): gap for gap in inventory["gaps"]}
         self.assertIn("pack `toolkit`", found[("slot-unfilled", "tracker-fields")]["evidence"])
+        self.assertEqual([], inventory["slots"]["collisions"])
+
+    def test_onboarding_proposes_a_pack_slot_fill_from_the_inventory(self) -> None:
+        toolkit = self.fixture.home / ".claude/plugins/cache/acme/toolkit/1.2.0"
+        (toolkit / "slots.txt").write_text("tracker-fields\n", encoding="utf-8")
+        stub = toolkit / "templates/local-skills/tracker-fields.md"
+        stub.parent.mkdir(parents=True)
+        stub.write_text(
+            "---\nname: <project>-tracker-fields\n---\n\n## Fields\n\n"
+            "<!-- crew:discoverable capability=mcp:tracker -->\n\n> **▸ Fill:** fields.\n",
+            encoding="utf-8",
+        )
+        skill = toolkit / "skills/toolkit-gh/SKILL.md"
+        skill.write_text(
+            skill.read_text(encoding="utf-8").replace(
+                "requires: [cli:gh, mcp:tracker]\n",
+                "requires: [cli:gh, mcp:tracker, plugin:crew@>=0.38.0]\nexpects-local: [tracker-fields]\n",
+            ),
+            encoding="utf-8",
+        )
+        proposals = {
+            proposal["slot"]: proposal
+            for proposal in pack_slot_proposals(self.fixture.build(), resolve_mode(), crew_root=ROOT)
+        }
+        tracker = proposals["tracker-fields"]
+        self.assertEqual(("create", "toolkit", str(stub)), (tracker["action"], tracker["pack"], tracker["stub"]))
+        self.assertEqual([{"heading": "Fields", "capability": "mcp:tracker"}], tracker["discoverable_sections"])
+        self.assertNotIn("agent-runtime", proposals, "capability_map_proposal creates that fill")
 
     def test_engine_writes_nothing(self) -> None:
         def snapshot():
