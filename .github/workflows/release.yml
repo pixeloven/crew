@@ -25,6 +25,10 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0  # need existing tags for the check
+      # Never tag a version only some manifests carry -- a pinned consumer would
+      # get a release whose package.json says otherwise.
+      - name: Version sources agree
+        run: python3 scripts/check_versions.py
       - name: Tag the current plugin.json version
         run: |
           set -euo pipefail
