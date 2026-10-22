@@ -76,8 +76,17 @@ consumer roles in `agents/`, `.claude/agents/`, and `.pi/agents/`.
 
 Domain, stack, and craft skills belong in **packs**: sibling `<domain>-skills`
 plugins that ship skills only, may fill Crew's slots with `provides:`, declare
-`requires: [plugin:crew@>=X.Y.Z]`, and run Crew's own checks in pack mode. A
-local overlay still outranks a pack. See [Packs](docs/PACKS.md) for the contract.
+`plugin:crew@>=X.Y.Z` in every skill's `requires:`, and run Crew's own checks —
+in CI, one job:
+
+```yaml
+jobs:
+  crew:
+    uses: pixeloven/crew/.github/workflows/pack-checks.yml@vX.Y.Z
+```
+
+A local overlay still outranks a pack. See [Packs](docs/PACKS.md) for the
+contract, the required README sections, and moving a skill out of Crew.
 
 ## Doctor and Onboarding
 

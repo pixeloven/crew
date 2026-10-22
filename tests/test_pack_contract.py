@@ -118,7 +118,7 @@ class PackModeTests(unittest.TestCase):
             pack = pathlib.Path(tmp)
             write_pack(pack)
             write_skill(pack, "pack-skill", "provides: [protected-seams]\n", "[plugin:crew@>=0.38.0]")
-            write_skill(pack, "pack-utility")
+            write_skill(pack, "pack-utility", requires="[cli:gh, plugin:crew@>=0.38.0]")
             self.assertEqual([], validate_root(pack, pack=True))
 
     def test_pack_must_declare_its_crew_requirement(self) -> None:
@@ -128,6 +128,16 @@ class PackModeTests(unittest.TestCase):
             write_skill(pack, "pack-skill")
             errors = validate_root(pack, pack=True)
             self.assertTrue(any("plugin:crew@>=" in error for error in errors), errors)
+
+    def test_every_pack_skill_declares_its_crew_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            pack = pathlib.Path(tmp)
+            write_pack(pack)
+            write_skill(pack, "declared", requires="[plugin:crew@>=0.38.0]")
+            write_skill(pack, "undeclared", requires="[cli:gh]")
+            errors = [error for error in validate_root(pack, pack=True) if "crew dependency" in error]
+            self.assertEqual(1, len(errors), errors)
+            self.assertTrue(errors[0].startswith("skills/undeclared/SKILL.md:"), errors)
 
     def test_pack_ships_no_roles(self) -> None:
         for directory in ("roles", "agents", "pi-agents"):
