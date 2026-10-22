@@ -346,7 +346,7 @@ CAPABILITY_MAP_SLOT = "agent-runtime"
 
 def _section_split(sections: list[dict[str, Any]], depth: str) -> dict[str, Any]:
     """Unfilled sections by who answers them. Scaffold defers `crew:optional` ones."""
-    discoverable: list[dict[str, str]] = []
+    discoverable: list[dict[str, Any]] = []
     human: list[str] = []
     deferred: list[str] = []
     for section in sections:
@@ -355,7 +355,11 @@ def _section_split(sections: list[dict[str, Any]], depth: str) -> dict[str, Any]
         if section["optional"] and depth == "scaffold":
             deferred.append(section["heading"])
         elif section["discoverable"]:
-            discoverable.append({"heading": section["heading"], "capability": section["discoverable"]})
+            discoverable.append({
+                "heading": section["heading"],
+                "capability": section["discoverable"],
+                "capabilities": list(section["capabilities"]),
+            })
         else:
             human.append(section["heading"])
     return {"discoverable_sections": discoverable, "human_sections": human, "deferred_sections": deferred}

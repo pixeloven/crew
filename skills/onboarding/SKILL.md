@@ -116,7 +116,9 @@ sections marked `crew:optional` stay `▸ Fill`, and the skills use their defaul
 and say so. **Deepen** asks every section. For each proposal:
 
 - `human_sections` become a short interview, one question per section;
-- for each of the `discoverable_sections`, run `learn` for its capability. It drafts
+- for each of the `discoverable_sections`, run `learn` with the first of its
+  `capabilities` the capability map shows as present (none present: ask it as a
+  human section instead). It drafts
   that section as a proposal, and the operator promotes it. Never write a
   discovered fact into the fill directly;
 - `complete` finishes a partial local fill in place. `decision-needed` (the owner
