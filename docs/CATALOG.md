@@ -2,7 +2,7 @@
 
 # Skill catalog
 
-26 skills — agent methodology, portable by construction. `requires` legend:
+27 skills — agent methodology, portable by construction. `requires` legend:
 empty = needs nothing but a repo; `external:github` = uses GitHub. Skills that depend on a
 platform's capabilities live in that consumer's own overlay, not here. `expects-local` names
 the consumer-local slot a skill defers concrete values to (see templates/local-skills/).
@@ -22,6 +22,7 @@ the consumer-local slot a skill defers concrete values to (see templates/local-s
 | `intake-process` | concept | external:github | — | Use when triaging issues or PRs, labeling an unsorted backlog, choosing a handler, or defining intake conventions. Classifies domain, work type, complexity, and routing decision. |
 | `k8s-kustomize-conventions` | subject | — | platform-conventions | Use when writing or changing Kubernetes manifests or Kustomize files. Defines base-and-overlay structure, patch patterns, manifest validation, and ArgoCD sync conventions. |
 | `k8s-workload-patterns` | subject | — | platform-conventions, topology | Use when writing or reviewing a Kubernetes workload, choosing Deployment vs StatefulSet vs DaemonSet vs Job, or sizing a pod. Covers resources, probes, storage, security context, and exposure. |
+| `learn` | concept | — | agent-runtime | Use when asked to learn a CLI, MCP server or vendor tool this project uses, or to turn a Crew inventory gap into a lesson. Drafts one proposal per lesson into the project's declared queue and never applies it; the operator promotes. Not for explaining or teaching a topic. |
 | `mcp-server-design` | subject | — | — | Use when building MCP tools or servers with FastMCP. Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision. |
 | `onboarding` | concept | — | — | Use when onboarding or re-auditing a project against Crew. Defaults to a read-only report; edits require explicit apply authorization. Preserves mature entry files, safety tripwires, delivery contracts, and runbook pointers. |
 | `orchestration-patterns` | concept | — | — | Use when planning multi-agent work, dispatching workers, or splitting and reconverging a task. Covers sequential, parallel, and mixed execution, dispatch packets, convergence, writer isolation, and harness bindings. |
