@@ -28,7 +28,8 @@ under Claude Code and Codex the plugin copy is namespaced `crew:skill`, so both 
 | `vault-ops` | recommended vocabulary | corpus lint/promote jobs, schedules, and placement conventions |
 
 Each `<slot>.md` file in this directory is a starter stub — copy it into your overlay,
-rename, and fill the ▸ blocks.
+rename, and fill the ▸ blocks. Onboarding proposes that copy for every unfilled slot, and
+Doctor reports a fill that still carries ▸ blocks as partial.
 
 **Two kinds of slot.** Five of these are *declared* — a foundation skill names them in its
 `expects-local` frontmatter, so the doctor can report them as unfilled: `platform-conventions`,

@@ -108,6 +108,23 @@ audit contract and the `templates/local-skills/agent-runtime.md` stub, then
 report its action (`create`, `merge`, `unchanged` or `decision-needed`) and its
 diff. Every capability it lists under pending removal is a proposed deletion.
 
+Every other unfilled slot, Crew's or a pack's, gets a proposed local fill
+`<project>-<slot>` built from its owner's stub. Pass the same inventory to
+`pack_slot_proposals` with the contract, the resolved Crew root and a depth.
+**Scaffold** is the default, and asks only what the pack's skills need to start:
+sections marked `crew:optional` stay `▸ Fill`, and the skills use their defaults
+and say so. **Deepen** asks every section. For each proposal:
+
+- `human_sections` become a short interview, one question per section;
+- for each of the `discoverable_sections`, run `learn` for its capability. It drafts
+  that section as a proposal, and the operator promotes it. Never write a
+  discovered fact into the fill directly;
+- `complete` finishes a partial local fill in place. `decision-needed` (the owner
+  is ambiguous, or there is no stub) goes to the host.
+
+A slot a pack already fills gets no proposal. The marker grammar is in
+docs/PACKS.md.
+
 The `## Learning` section is optional spine: it declares where `learn` queues
 proposals (docs/LEARNING.md). Audit it with
 `scripts/onboarding_contract.py --check-learning <AGENTS.md>`. `N/A` means learn
@@ -172,6 +189,9 @@ its target. It changes only the text between the `crew:capability-map` markers a
 keeps every Fallback cell the operator wrote. With no `agent-runtime` fill it
 creates `<project>-agent-runtime` from the stub. A pack-provided fill is a host
 decision. A vanished capability stays `absent` until its removal is authorized.
+For each slot proposal with action `create`, write its `text` to its target, then fill in the
+interview's answers. Discoverable sections stay `▸ Fill` until their `learn`
+proposals are promoted.
 When the operator accepts the optional Learning section, merge it with
 `ensure_learning_section` the same way. For a mature project, edit surgically: preserve its
 entry files, safety tripwires, delivery contracts, verification commands, and

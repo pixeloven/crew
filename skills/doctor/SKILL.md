@@ -144,7 +144,8 @@ Then report who fills each declared slot. A local overlay skill fills a slot by
 only by `provides:`, including a slot another pack declares. Report "slot X
 filled by pack Y" alongside local fills. **A local overlay outranks a pack.** On
 Claude and Codex both copies
-load, so name both. Verify every pack's `plugin:crew@>=X` against the resolved
+load, so name both. A local fill that still carries `▸ Fill` is `DEGRADED`
+(partial): name its unfilled section headings and point at onboarding (Deepen). Verify every pack's `plugin:crew@>=X` against the resolved
 Crew manifest; an unmet minimum is `DEGRADED`.
 
 Then check for skills that moved out of Crew. `moved_skill_references` scans the
