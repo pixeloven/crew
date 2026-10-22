@@ -120,6 +120,14 @@ its env, headers, args or URL. MCP tool lists are visible only inside a session,
 the agent pipes what it sees with `--observations -`. The
 [Maintainers](docs/MAINTAINERS.md) page dates what each harness exposes.
 
+Ask an agent to “learn `gh` for this project” (or any CLI, MCP server or vendor
+tool) and the `learn` skill reads the inventory's gaps, gathers the tool's own
+help, schemas and repository usage as untrusted evidence, and drafts one proposal
+per lesson into the queue the project's `AGENTS.md` declares — report-only when it
+declares none. The proposal must pass `learn_contract.py --check` and an
+adversarial `reviewer` pass, and only the operator promotes it. See
+[Learning](docs/LEARNING.md) for the contract.
+
 ## Maintenance
 
 One semver line drives the package and plugin manifests. Edit role sources rather
