@@ -53,10 +53,10 @@ class PackWorkflowShapeTests(unittest.TestCase):
         for script in PACK_CHECKS:
             self.assertTrue((ROOT / "scripts" / script).is_file(), script)
 
-    def test_actions_are_pinned_like_ci(self) -> None:
+    def test_actions_are_referenced_by_major_tag_like_ci(self) -> None:
         for step in steps():
             if "uses" in step:
-                self.assertRegex(step["uses"], r"^[\w.-]+/[\w.-]+@[0-9a-f]{40}$")
+                self.assertRegex(step["uses"], r"^[\w.-]+/[\w./-]+@(v\d+|release/v\d+)$")
 
     def test_crew_is_checked_out_into_a_dot_directory(self) -> None:
         crew = next(step for step in steps() if step.get("with", {}).get("repository") == "pixeloven/crew")

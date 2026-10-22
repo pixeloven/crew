@@ -76,3 +76,5 @@ One semver line drives all consumers. Claude Code re-fetches only when `plugin.j
 ## CI gates
 
 `validate` (manifests, schema-v2, description budget, layout self-test, consumer-role fixtures, Doctor/Onboarding and pack-workflow unit tests, relative Markdown links resolve inside the repo via `check_links.py`, and every manifest version agrees via `check_versions.py`), `roles-rendered` (render drift + skill-ref resolution), `generated-current` (catalog freshness + templates parse), `version-bump` (on content change), plus the security floor (gitleaks, osv-scanner, dependency-review). This repo is a **supply-chain root** — its skills and agents load as instructions into every consumer's agents; every change requires owner review.
+
+Workflows reference actions by **major tag** (`actions/checkout@v7`), never a commit SHA or an exact patch version, so fixes arrive without a PR. An owner can move a major tag, so every job keeps the narrowest `permissions:` it needs. An action that publishes no major tag is pinned to its latest release and noted inline. `tests/test_pack_workflow.py` enforces the form for the reusable pack workflow.

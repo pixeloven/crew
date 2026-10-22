@@ -41,7 +41,7 @@ jobs:
       PACK_ROOT: ${{ github.workspace }}/${{ inputs.pack-root }}
       CREW: ${{ github.workspace }}/.crew
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -68,7 +68,7 @@ jobs:
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       - name: Check out Crew
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@v7
         with:
           repository: pixeloven/crew
           ref: ${{ steps.crew.outputs.ref }}

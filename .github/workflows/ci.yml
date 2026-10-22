@@ -17,7 +17,7 @@ jobs:
     name: Validate plugin + skills
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Validate manifests, frontmatter, and description budget
         run: python3 scripts/check_skills.py
 
@@ -46,7 +46,7 @@ jobs:
     name: agents/ + pi-agents/ rendered from roles/
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Rendered files match roles/ source; skill refs resolve
         run: |
           python3 scripts/render_roles.py --check
@@ -56,7 +56,7 @@ jobs:
     name: Generated catalog + index current
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       - name: Templates parse
         run: |
           python3 - <<'PY'
@@ -79,7 +79,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Require a plugin.json version bump when skills/agents change
