@@ -27,7 +27,8 @@ privileged: the same rules apply to every one.
    itself (see [Maintainers](MAINTAINERS.md)): any project must benefit from a
    pack skill. Anything bound to one deployment's vault, gateway, cluster, secret
    paths, or domains becomes a slot the skill defers to with `expects-local:`,
-   and the consumer fills it.
+   and the consumer fills it. A concern Crew has no slot for becomes one the
+   pack declares itself (see [Pack-owned slots](#pack-owned-slots)).
 5. **Declare the Crew it needs — on every skill.** Each pack skill carries
    `plugin:crew@>=X.Y.Z` in its `requires:` (beside anything else it needs, e.g.
    `requires: [cli:gh, plugin:crew@>=X.Y.Z]`). Every skill, not some: a skill is
@@ -57,7 +58,8 @@ provides: [protected-seams]
 ```
 
 `provides:` is a non-empty list; every entry must be a slot listed in Crew's
-`roles/expected-local-skills.txt`. Crew itself fills no slots. Doctor reports
+`roles/expected-local-skills.txt` or one the pack declares itself (see
+[Pack-owned slots](#pack-owned-slots)). Crew itself fills no slots. Doctor reports
 *"slot `protected-seams` filled by pack `example-skills`"* next to local fills.
 
 **Citing a slot in a skill body.** A skill that defers to a slot (`expects-local:`)
@@ -81,6 +83,67 @@ project's `AGENTS.md` concern → local-skill map must point at the local skill,
 and Doctor names both copies. Do not rely on collision behaviour to disable a
 pack skill (the [README](../README.md) gives the same warning for Crew's own).
 If a harness later grows a real precedence mechanism, this table changes.
+
+## Pack-owned slots
+
+Crew's slots name concerns every project has. A pack's domain often has its own —
+the fields a tracker needs, the schema an event stream follows — that only that
+pack's skills defer to. A pack declares those in `slots.txt` at its root, in the
+same format as Crew's `roles/expected-local-skills.txt`: one name per line, `#`
+comments and blank lines ignored.
+
+```text
+# example-skills: slots this pack's skills defer to.
+tracker-fields
+identity-event-schema
+```
+
+Each declared slot ships a starter stub at `templates/local-skills/<slot>.md`,
+the file a consumer copies into its overlay and fills, exactly like Crew's stubs.
+Once declared, the slot is valid in that pack's `expects-local:` and `provides:`:
+
+```yaml
+---
+name: example-triage
+description: Use when ...
+tier: subject
+requires: [plugin:crew@>=0.45.0]
+expects-local: [tracker-fields, topology]
+---
+```
+
+`check_skills.py --pack` fails the pack unless every entry in `slots.txt` is:
+
+- **plain kebab-case**, and not prefixed with the pack's name — `tracker-fields`,
+  never `example-skills:tracker-fields` or `example-skills-tracker-fields`. The
+  consumer's fill is named `<project>-<slot>` by the same convention as Crew's;
+- **unique** within the file;
+- **not a Crew slot name** — neither a slot in `roles/expected-local-skills.txt`
+  nor Crew's recommended vocabulary. Crew's names are reserved, so one slot name
+  never means two contracts;
+- **stubbed** at `templates/local-skills/<slot>.md`;
+- **referenced** by at least one pack skill's `expects-local:`. A slot nothing
+  defers to is a fill no skill reads.
+
+A pack with no `slots.txt` declares none, and is checked exactly as before. Crew's
+own run never reads a `slots.txt`, and a pack's slots never widen what another
+pack is checked against: the check validates one pack alone, so it accepts only
+Crew's slots and that pack's own.
+
+**Uniqueness across packs.** Slot names share one namespace across every installed
+pack. Pick names specific enough not to collide — `tracker-fields`, not `fields`.
+If two installed packs declare the same name, Doctor reports the slot `DEGRADED`
+and names both packs. It never guesses which pack owns the slot.
+
+**How Doctor reports them.** Doctor adds each detected pack's slots to the
+declared set, labelled with the owning pack — *"declared local slots: topology,
+tracker-fields (pack `example-skills`)"*. An unfilled one is reported like Crew's,
+as the pack's slot — *"pack `example-skills`'s slot `tracker-fields` is
+unfilled"* — and the recommendation points at that pack's stub. Fills work exactly
+as for Crew's slots: a local skill fills it by `provides:` or by the
+`<project>-<slot>` name, another pack may `provides:` it, and a local overlay
+outranks a pack. A pack whose `slots.txt` reuses a Crew slot name is also
+`DEGRADED` in Doctor, for an install that never ran the check.
 
 ## Description cost is reported, never capped
 
@@ -190,11 +253,12 @@ python3 "$CREW/scripts/check_links.py" "$PACK"
 python3 "$CREW/scripts/check_versions.py" "$PACK"
 ```
 
-Pack mode differs from Crew's own run in three ways: a pack needs at least one
+Pack mode differs from Crew's own run in four ways: a pack needs at least one
 manifest (`.claude-plugin/plugin.json` and/or `package.json`) rather than both, it
-must not ship `roles/`, `agents/`, or `pi-agents/`, and every skill must declare
-`plugin:crew@>=X.Y.Z`. With no arguments the script still validates Crew itself,
-exactly as before.
+must not ship `roles/`, `agents/`, or `pi-agents/`, every skill must declare
+`plugin:crew@>=X.Y.Z`, and a `slots.txt` at the pack root is read and checked (see
+[Pack-owned slots](#pack-owned-slots)). With no arguments the script still
+validates Crew itself, exactly as before.
 
 ## Moving a skill from Crew to a pack
 
