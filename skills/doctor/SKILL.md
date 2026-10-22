@@ -207,6 +207,28 @@ if unavailable, say `not tested`. A matching count is insufficient: pass only
 when names, backing roots, and full descriptions match after applying the
 harness's namespace rules.
 
+### 8. Compare the capability map with this machine
+
+Run the read-only inventory engine from the resolved package root:
+`python3 /absolute/resolved/crew/root/scripts/crew_inventory.py --project
+/absolute/consumer/repo --format json`. Pipe what only this session can see
+with `--observations -`: the MCP servers and tool names visible to you, in the
+capture shape (`schema_version: 1`, `harness`, `captured_at`,
+`source_command`). Never run `claude mcp list` or `codex mcp list` to get
+them. An observation can raise a provider to `present`, never to `working`.
+
+Pass the result to `compose_doctor_report` as `inventory=`. The
+`inventory.capability-map` row compares the `## Capabilities` table in the
+`agent-runtime` slot with this machine:
+
+- **OK** when the digest in its markers matches;
+- **DEGRADED** when it differs on this machine, naming the changed rows. A
+  committed map can describe a teammate's machine, so recommend onboarding
+  and let the operator decide;
+- **MISSING** when there are no markers, or only the template's empty ones.
+
+Report only. Writing the map is Onboarding's job.
+
 ## Report contract
 
 Produce one row per check:

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "tracker-cloud": {
+      "type": "sse",
+      "url": "https://tracker.example/sse?access_token=canary-plugin-query",
+      "headers": {
+        "X-Api-Key": "canary-plugin-header"
+      }
+    }
+  }
+}

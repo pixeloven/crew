@@ -1,0 +1,5 @@
+{
+  "packages": [
+    "git:https://canary-userinfo@github.com/acme/pi-git@v1.0.0"
+  ]
+}

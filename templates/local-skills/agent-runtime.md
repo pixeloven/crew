@@ -18,3 +18,12 @@ description: <Project>'s autonomous agent runtime contracts — dispatch CLI, ex
 ## Commands
 
 > **▸ Fill:** the dispatch/reconcile commands an operator or Lead uses.
+
+## Capabilities
+
+Skills name capabilities (`cli:`, `mcp:`, `external:`); this table names the tool that provides each one here. Onboarding generates it from `scripts/crew_inventory.py` and edits only the text between the markers. It records the provider name, kind and state, never paths, versions or secrets. Doctor reports a map that differs on this machine.
+
+> **▸ Fill:** for each row, the operator command that stands in when the provider is absent or unavailable. Onboarding keeps what you write here.
+
+<!-- crew:capability-map begin -->
+<!-- crew:capability-map end -->

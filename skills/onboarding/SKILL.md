@@ -91,6 +91,16 @@ lead with decisions from adoption rather than by per-session correction. Audit
 it with `scripts/onboarding_contract.py --check-reporting <AGENTS.md>`; a
 `MISSING` or `DEGRADED` result is a proposed addition.
 
+The `agent-runtime` slot carries a `## Capabilities` table that maps each
+capability skills name (`cli:`, `mcp:`, `external:`) to the tool that provides it
+here, with a fallback command for the operator. Build it from the read-only
+inventory: run `scripts/crew_inventory.py --project <repo> --format json` from the
+resolved package root, piping the MCP servers and tools this session can see
+with `--observations -`. Pass the result to `capability_map_proposal` with the
+audit contract and the `templates/local-skills/agent-runtime.md` stub, then
+report its action (`create`, `merge`, `unchanged` or `decision-needed`) and its
+diff. Every capability it lists under pending removal is a proposed deletion.
+
 For existing files, report what behavior is present, missing, duplicated, or
 ambiguous. Propose moves as a mapping of source content → destination skill or
 runbook → retained pointer. Flag every proposed deletion separately. Preserve
@@ -142,7 +152,13 @@ Before the first edit:
 For a new project, merge the filled `templates/AGENTS.md` scaffold and optional
 one-line `CLAUDE.md` shim. For a mature project missing the reporting contract, merge
 the template's section with `ensure_reporting_contract` — it lands before the
-tripwires and never replaces a project's own reporting section. For a mature project, edit surgically: preserve its
+tripwires and never replaces a project's own reporting section. For the capability
+map, call `capability_map_proposal` with the apply contract and write its text to
+its target. It changes only the text between the `crew:capability-map` markers and
+keeps every Fallback cell the operator wrote. With no `agent-runtime` fill it
+creates `<project>-agent-runtime` from the stub. A pack-provided fill is a host
+decision. A vanished capability stays `absent` until its removal is authorized.
+For a mature project, edit surgically: preserve its
 entry files, safety tripwires, delivery contracts, verification commands, and
 runbook pointers. When moving detail, establish and validate the destination
 first, retain an actionable pointer, then remove source text only if that

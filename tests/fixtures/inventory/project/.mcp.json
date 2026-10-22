@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "tracker": {
+      "command": "npx -y @acme/tracker --token=canary-project-arg",
+      "args": [
+        "--api-key",
+        "canary-project-arg-2"
+      ],
+      "env": {
+        "TRACKER_TOKEN": "canary-project-env"
+      }
+    },
+    "retired": {
+      "command": "retired-server"
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "packages": [
+    "npm:@acme/pi-pack@1.0.0"
+  ],
+  "theme": "dark"
+}

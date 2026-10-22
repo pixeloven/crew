@@ -19,6 +19,7 @@ crew/
 ├── scripts/role_contract.py        # shared role posture/runtime-knob contract
 ├── scripts/frontmatter.py          # dependency-free leading-frontmatter field parser
 ├── scripts/crew_doctor.py          # deterministic read-only Doctor evidence helpers
+├── scripts/crew_inventory.py       # read-only inventory engine (crew-inventory/1) behind the capability map
 ├── scripts/onboarding_contract.py  # audit/apply lifecycle contract
 ├── scripts/gen_catalog.py          # docs/CATALOG.md generator; --check in CI
 ├── scripts/check_skills.py         # schema-v2 + 110–300 character description gate; --pack, --report-cost
@@ -55,6 +56,17 @@ crew/
   **The listing is not guaranteed complete, and roles must not claim it is.** Codex can truncate descriptions or omit skills, and Claude Code can elide descriptions under catalogue pressure. A skill can also be absent because it is in the wrong layout for that harness, has unparseable frontmatter, or sits behind a dangling symlink. So roles state the observable fact (*you have a list*) rather than the mechanism, and instruct agents to report an expected-but-missing skill as drift; `doctor`'s discovery check exists to answer why. Measurements belong in dated evidence, not permanent limit claims.
 
   Consequently `description` quality is a hard gate here and the catalogue stays small — those are the only two levers on discovery that actually exist.
+
+- **What the inventory can see is a harness dependency too, so it is dated.** `scripts/crew_inventory.py` reads config and skill files and nothing else. It starts a process only for `--probe-versions` (`<cli> --version`). It never runs `claude mcp list`, because that command connects to every configured server. It never runs `codex mcp list` either. MCP records keep name, transport, scope, command basename and source path; env, headers, args and URLs never enter the output, and a test feeds it secret-laden fixtures to prove that. Config shapes below were checked on 2026-10-21 by reading key names only on a maintainer machine:
+
+  | Harness | Read by the engine | Not observable (and why) |
+  |---|---|---|
+  | Claude Code | `~/.claude/plugins/installed_plugins.json` (`version: 2`, `plugins[id][]` with `scope`, `installPath`, `version`, `projectPath`) joined with `enabledPlugins` from local > project > user settings; skill roots `.claude/skills`, `~/.claude/skills` and each enabled plugin's `skills/`; MCP config from `.mcp.json`, `~/.claude.json` `mcpServers` (user) and `projects[<abs>].mcpServers` (local), honouring that entry's `disabledMcpServers` and `disabledMcpjsonServers`; each enabled plugin's `.mcp.json` or inline `plugin.json` `mcpServers` | MCP tool lists exist only in session. Account-granted connectors are in no config file. A plugin `.mcp.json` was not present on the checked machine, so that shape comes from the plugin docs. |
+  | Codex | `~/.codex/config.toml` `[mcp_servers.*]`, plus a project `.codex/config.toml` only when `projects."<abs>".trust_level = "trusted"`; `plugins."<name>@<marketplace>".enabled` resolved to `~/.codex/plugins/cache/<marketplace>/<name>/<version>/`, whose `.codex-plugin/plugin.json` `mcpServers` points at a `.mcp.json`; skill roots `.agents/skills`, `~/.agents/skills`, `~/.codex/skills` and each enabled plugin's `skills/` | MCP tool lists exist only in session. **Unverified:** whether `codex mcp list` only reads config or also connects to servers. Until someone verifies it, the engine does not run it. |
+  | pi.dev | `.pi/settings.json` and `~/.pi/agent/settings.json` `packages` (`npm:` under `npm/node_modules/`, `git:` under `git/<host>/<path>`), URL userinfo stripped; skill roots `.pi/skills`, `.agents/skills`, `~/.pi/agent/skills`, `~/.agents/skills` and each package's `skills/` | MCP is reported as `not_observable`: pi reaches MCP through extensions, and the engine reads no config surface for them. |
+  | CLIs | `shutil.which` over a bounded set: `cli:*` from installed `requires:`, `--cli` arguments, and the first command token of `.github/workflows/*` `run:` lines (heredoc bodies, continuations and `x=$(…)` skipped) | Versions, unless `--probe-versions` runs them. Whether a CLI is authenticated. |
+
+  An agent supplies what only a session can see with `--observations FILE|-`, using Doctor's capture shape (`schema_version: 1`, `harness`, `captured_at`, `source_command`, plus `mcp_servers[{name, tools}]` and `capabilities[{name, state}]`). An observation can raise a provider to `present`, never to `working`. `external:*` capabilities are matched to MCP servers and plugins by name only, so both a match and a miss are inferences. **Re-verify these shapes on a major harness upgrade.**
 
 ## Versioning
 
