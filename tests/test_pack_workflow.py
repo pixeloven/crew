@@ -87,6 +87,8 @@ class PackWorkflowRunTests(unittest.TestCase):
         # Crew sits inside the workspace, as actions/checkout puts it.
         shutil.copytree(ROOT / "scripts", pack / ".crew/scripts", ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copytree(ROOT / "roles", pack / ".crew/roles")
+        (pack / ".crew/docs").mkdir()
+        shutil.copy(ROOT / "docs/capabilities.txt", pack / ".crew/docs/capabilities.txt")
         return pack
 
     def run_check_steps(self, pack: pathlib.Path, summary: pathlib.Path) -> list[subprocess.CompletedProcess]:

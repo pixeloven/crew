@@ -28,6 +28,7 @@ import urllib.parse
 from typing import Any, Callable, Iterable, TextIO
 
 try:
+    from .check_skills import capability_vocabulary
     from .crew_doctor import (
         _manifest_version,
         _read_json,
@@ -39,6 +40,7 @@ try:
     )
     from .frontmatter import read_frontmatter
 except ImportError:  # Direct script execution.
+    from check_skills import capability_vocabulary
     from crew_doctor import (
         _manifest_version,
         _read_json,
@@ -763,6 +765,7 @@ def inventory_digest(inventory: dict[str, Any]) -> str:
 def gaps(inventory: dict[str, Any]) -> list[dict[str, str]]:
     """What `learn` reads: unprovided capabilities, unfilled slots, unskilled tools."""
     found: list[dict[str, str]] = []
+    known = capability_vocabulary()
     skill_requirements = {
         requirement for skill in inventory["skills"] for requirement in skill["requires"]
     }
@@ -778,6 +781,10 @@ def gaps(inventory: dict[str, Any]) -> list[dict[str, str]]:
                 label = "inference"
             else:
                 evidence, label = f"no MCP server or plugin matched {name!r} by name; declared by {declarers}", "inference"
+            if kind != "cli" and capability not in known:
+                # cli:<tool> is open; an mcp:/external: name outside the vocabulary
+                # may be a typo or a source the vocabulary lacks (docs/CAPABILITIES.md).
+                evidence += "; not in Crew's capability vocabulary (docs/CAPABILITIES.md)"
             found.append({"kind": "capability-unprovided", "name": capability, "evidence": evidence, "label": label})
         elif kind == "cli" and capability not in skill_requirements:
             path = next((provider.get("path") for provider in present if provider.get("path")), None)
