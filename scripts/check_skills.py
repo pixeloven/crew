@@ -26,8 +26,10 @@ roles/expected-local-skills.txt); those widen `expects-local` and `provides` for
 that pack only, and must be kebab-case, unique, not a Crew slot name, stubbed at
 `templates/local-skills/<slot>.md`, and deferred to by at least one pack skill.
 Crew mode never reads a `slots.txt`. Both modes check the section-marker grammar
-(`crew:discoverable`, `crew:optional`) of every stub in `templates/local-skills/`.
-`--report-cost` prints always-on description sizes; it never affects the exit code.
+(`crew:discoverable`, `crew:optional`) of every stub in `templates/local-skills/`,
+and both warn, without failing, on an `mcp:` name in `requires:` or a
+`crew:discoverable` marker that is not in Crew's docs/capabilities.txt
+(docs/CAPABILITIES.md). `--report-cost` prints always-on description sizes; it never affects the exit code.
 
 Local mode (`--local <consumer-root>`) checks a consumer's learned skills: only
 `.agents/skills/*/SKILL.md` (and `.claude/skills/`) files carrying a
@@ -167,6 +169,51 @@ def stub_marker_errors(root: pathlib.Path) -> list[str]:
         rel = f"{PACK_SLOT_STUBS}/{stub.name}"
         errors.extend(f"{rel}: {error}" for error in found)
     return errors
+
+
+# Capability vocabulary (docs/CAPABILITIES.md). Always read from THIS crew install,
+# like the slot list. Unknown `mcp:` names warn, never fail: a pack may need a
+# source the vocabulary lacks, and the fix is a PR to the vocabulary.
+CAPABILITY_VOCABULARY_FILE = ROOT / "docs" / "capabilities.txt"
+CAPABILITY_DOC = "docs/CAPABILITIES.md"
+
+
+def capability_vocabulary(path: pathlib.Path = CAPABILITY_VOCABULARY_FILE) -> set[str]:
+    """Crew's shared capability names, one per line in docs/capabilities.txt."""
+    return set(slot_lines(path))
+
+
+def capability_warnings(root: pathlib.Path) -> list[str]:
+    """`mcp:` names in `requires:` or `crew:discoverable` markers outside the vocabulary.
+
+    Advisory only: the caller prints these and keeps its exit code. Malformed
+    frontmatter or markers are validate_root's errors, so they are skipped here.
+    """
+    yaml = yaml_module()
+    root = pathlib.Path(root)
+    known = capability_vocabulary()
+    found: list[tuple[str, str]] = []
+    for skill_path in sorted(root.glob("skills/*/SKILL.md")):
+        try:
+            fm = yaml.safe_load(skill_path.read_text(encoding="utf-8").split("---", 2)[1])
+        except Exception:
+            continue
+        requires = fm.get("requires") if isinstance(fm, dict) else None
+        for name in requires if isinstance(requires, list) else []:
+            if isinstance(name, str):
+                found.append((str(skill_path.relative_to(root)), name))
+    for stub in sorted((root / PACK_SLOT_STUBS).glob("*.md")):
+        if stub.name == "README.md":
+            continue
+        sections, _ = stub_sections(stub.read_text(encoding="utf-8"))
+        rel = f"{PACK_SLOT_STUBS}/{stub.name}"
+        found.extend((rel, name) for section in sections for name in section["capabilities"])
+    return [
+        f"warning: {rel}: {name} is not in Crew's capability vocabulary ({CAPABILITY_DOC}); "
+        "reuse a listed name or propose one there"
+        for rel, name in found
+        if name.startswith("mcp:") and name not in known
+    ]
 
 
 def expected_local_slots(path: pathlib.Path = ROOT / "roles" / "expected-local-skills.txt") -> set[str]:
@@ -424,6 +471,9 @@ def main():
     errors = validate_root(root, pack=args.pack)
     if args.report_cost:
         print_cost_report(root)
+    # Warnings never change the exit code.
+    for warning in capability_warnings(root):
+        print(warning)
 
     if errors:
         print("\n".join(errors))
