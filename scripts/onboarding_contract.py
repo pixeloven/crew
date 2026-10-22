@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from typing import Any
 
 try:
-    from .crew_doctor import PROFILE_TAXONOMY
+    from .crew_doctor import MOVED_SKILL_REFERENCE, MOVED_SKILLS, PLUGIN_NAME, PROFILE_TAXONOMY
     from .learn_contract import queue_location, queue_location_errors
 except ImportError:  # Direct script execution.
-    from crew_doctor import PROFILE_TAXONOMY
+    from crew_doctor import MOVED_SKILL_REFERENCE, MOVED_SKILLS, PLUGIN_NAME, PROFILE_TAXONOMY
     from learn_contract import queue_location, queue_location_errors
 try:
     from .crew_inventory import (
@@ -193,6 +193,43 @@ def ensure_reporting_contract(text: str, template: str) -> str:
     return text.rstrip("\n") + "\n\n" + section
 
 
+def audit_moved_skill_references(text: str) -> list[dict[str, Any]]:
+    """Propose a namespace update for each reference to a skill that left Crew.
+
+    `crew:<skill>` becomes `<pack>:<skill>`; a bare name (pi's flat namespace)
+    keeps its spelling and only needs the pack installed. Already-updated
+    references are not proposals. Read-only.
+    """
+    proposals = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        for match in MOVED_SKILL_REFERENCE.finditer(line):
+            namespace, skill = match.group("namespace"), match.group("skill")
+            pack = MOVED_SKILLS[skill]
+            if namespace and namespace != PLUGIN_NAME:
+                continue
+            proposals.append(
+                {
+                    "line": number,
+                    "skill": skill,
+                    "pack": pack,
+                    "from": match.group(0),
+                    "to": f"{pack}:{skill}" if namespace else skill,
+                }
+            )
+    return proposals
+
+
+def rewrite_moved_skill_references(text: str) -> str:
+    """Apply-mode rewrite of `crew:<skill>` to `<pack>:<skill>`; idempotent."""
+    def replace(match: re.Match[str]) -> str:
+        if match.group("namespace") != PLUGIN_NAME:
+            return match.group(0)
+        skill = match.group("skill")
+        return f"{MOVED_SKILLS[skill]}:{skill}"
+
+    return MOVED_SKILL_REFERENCE.sub(replace, text)
+
+
 def merge_capability_map(slot_text: str, inventory: dict[str, Any], *, today: str | None = None) -> str:
     """Merge the inventory's capability map into an `agent-runtime` slot; idempotent.
 
@@ -368,7 +405,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="read-only: report whether this entry file carries the reporting contract")
     checks.add_argument("--check-learning", metavar="AGENTS_MD", type=pathlib.Path,
                         help="read-only: report the declared proposal queue (optional section)")
+    checks.add_argument("--check-moved-skills", metavar="FILE", type=pathlib.Path,
+                        help="read-only: propose updates for references to skills that moved to a pack")
     args = parser.parse_args(argv)
+    if args.check_moved_skills:
+        path = args.check_moved_skills
+        proposals = audit_moved_skill_references(path.read_text(encoding="utf-8")) if path.is_file() else []
+        for proposal in proposals:
+            print(
+                f"moved-skill | {path}:{proposal['line']} | {proposal['from']} -> {proposal['to']} | "
+                f"install pack {proposal['pack']}"
+            )
+        return 1 if proposals else 0
     if args.check_learning:
         path = args.check_learning
         finding = audit_learning_section(path.read_text(encoding="utf-8") if path.is_file() else None)

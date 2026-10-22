@@ -3,7 +3,7 @@ name: seam-detection
 description: Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects ExternalSecret, scheduling, MCP access, exit-code, and RBAC seam patterns.
 tier: concept
 requires: []
-expects-local: [protected-seams]
+expects-local: [protected-seams, secret-paths]
 ---
 
 A seam crossing is any change that touches a protected pattern in the project's seams registry without the crossing having been explicitly flagged by the author. The registry is a **consumer-local** skill; the seams below are common shapes, and a consumer's registry may add or drop entries. This skill defines how to detect crossings in practice.
