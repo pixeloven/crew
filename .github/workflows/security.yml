@@ -12,8 +12,10 @@
 #   semgrep            SAST — ships COMMENTED (needs a token or vendored ruleset)
 #
 # Additive: this does NOT touch the existing ci.yml (plugin + skill validation).
-# Every `uses:` is SHA-pinned — a floating tag on a write-capable workflow is a
-# real supply-chain surface.
+# Actions are referenced by MAJOR tag (`@vN`), so patch and minor fixes arrive
+# without a PR. The accepted trade-off: an owner can move a major tag, so every
+# job keeps the narrowest `permissions:` it needs. An action that publishes no
+# major tag is pinned to its latest release and noted inline.
 name: Security
 
 on:
@@ -30,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # gitleaks scans the full history, so fetch-depth: 0 is REQUIRED.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # gitleaks CLI, not gitleaks-action: the action is license-gated for
@@ -52,11 +54,11 @@ jobs:
     name: osv-scanner (dependency CVEs)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@v7
       # ONLINE osv.dev DB (github-hosted has egress). Reads the repo's manifests
       # natively (package.json here). Scans recursively; a non-zero exit blocks
       # the job. To grandfather accepted residue, add a repo-root osv-scanner.toml.
-      - uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+      - uses: google/osv-scanner-action/osv-scanner-action@v2.7.0  # publishes no major tag; latest release
         with:
           scan-args: |-
             --recursive
@@ -71,8 +73,8 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+      - uses: actions/checkout@v7
+      - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
 
@@ -90,8 +92,8 @@ jobs:
   #   name: semgrep (SAST)
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-  #     - uses: astral-sh/setup-uv@v6
+  #     - uses: actions/checkout@v7
+  #     - uses: astral-sh/setup-uv@v7
   #     # Variant A — registry rules via a token (requires SEMGREP_APP_TOKEN secret):
   #     # - run: uvx semgrep ci
   #     #   env:
@@ -114,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Decide whether the needed jobs succeeded or failed
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        uses: re-actors/alls-green@release/v1
         with:
           jobs: ${{ toJSON(needs) }}
           # dependency-review is skipped on push (PR-only); allow that.
