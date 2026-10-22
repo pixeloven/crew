@@ -811,11 +811,13 @@ def gaps(inventory: dict[str, Any]) -> list[dict[str, str]]:
     for slot, entry in sorted(slots.get("slots", {}).items()):
         if entry.get("effective") is None:
             where = ", ".join(slots.get("inspection_sources", [])) or inventory["project_root"]
+            owners = slots.get("pack_slots", {}).get(slot)
+            owned = f" (pack {', '.join(f'`{name}`' for name in owners)}'s slot)" if owners else ""
             found.append(
                 {
                     "kind": "slot-unfilled",
                     "name": slot,
-                    "evidence": f"no local skill or pack provides {slot}; inspected {where}",
+                    "evidence": f"no local skill or pack provides {slot}{owned}; inspected {where}",
                     "label": "fact",
                 }
             )
@@ -981,7 +983,7 @@ def build_inventory(
         if plugin["root"] and plugin["enabled"] is not False
     ]
     packs = inspect_packs(package_roots, crew_root)
-    declared = declared_local_slots(crew_root)
+    declared = declared_local_slots(crew_root, packs=packs)
     fills = slot_fills(
         declared["declared"],
         local_roots=[project / ".agents/skills", project / ".claude/skills"],
@@ -1006,7 +1008,12 @@ def build_inventory(
         "packs": packs,
         "skills": skills,
         "capabilities": capabilities,
-        "slots": {"slots": fills["slots"], "inspection_sources": fills["inspection_sources"]},
+        "slots": {
+            "slots": fills["slots"],
+            "inspection_sources": fills["inspection_sources"],
+            # slot -> the pack(s) whose slots.txt declares it; Crew's slots are absent.
+            "pack_slots": declared["pack_slots"],
+        },
         "observations": observations,
         "not_observable": [dict(entry) for entry in NOT_OBSERVABLE]
         + (

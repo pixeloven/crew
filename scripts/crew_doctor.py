@@ -19,11 +19,11 @@ from dataclasses import dataclass
 from typing import Any
 
 try:
-    from .check_skills import LOCAL_SLOT_VOCABULARY
+    from .check_skills import LOCAL_SLOT_VOCABULARY, PACK_SLOT_STUBS, PACK_SLOTS_FILE, SLOT_NAME_RE, slot_lines
     from .frontmatter import parse_simple_mapping, read_frontmatter
     from .role_contract import PI_PACKAGE_NAME
 except ImportError:  # Direct script execution.
-    from check_skills import LOCAL_SLOT_VOCABULARY
+    from check_skills import LOCAL_SLOT_VOCABULARY, PACK_SLOT_STUBS, PACK_SLOTS_FILE, SLOT_NAME_RE, slot_lines
     from frontmatter import parse_simple_mapping, read_frontmatter
     from role_contract import PI_PACKAGE_NAME
 
@@ -2130,7 +2130,14 @@ def compare_runtime_catalog(
     }
 
 
-def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
+def declared_local_slots(
+    package_root: pathlib.Path, *, packs: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Union the catalogue's `expects-local:` with each detected pack's `slots.txt`.
+
+    A slot two owners declare (two packs, or a pack and Crew) is a collision:
+    reported, never resolved, because Doctor cannot tell which contract a fill meets.
+    """
     declared: set[str] = set()
     sources: list[str] = []
     reads: list[dict[str, str]] = []
@@ -2195,13 +2202,55 @@ def declared_local_slots(package_root: pathlib.Path) -> dict[str, Any]:
         if slots:
             declared.update(slots)
             sources.append(str(path))
+    crew_slots = set(declared) | LOCAL_SLOT_VOCABULARY
+    pack_slots: dict[str, list[str]] = {}
+    pack_slot_sources: dict[str, list[str]] = {}
+    inspection_sources = [str(skills_root), *(str(path) for path in inspected_paths)]
+    for pack in packs or []:
+        reads.extend(pack.get("slot_reads", []))
+        if pack.get("slots_source"):
+            inspection_sources.append(pack["slots_source"])
+        for slot in pack.get("slots", []):
+            pack_slots.setdefault(slot, []).append(pack["name"])
+            pack_slot_sources.setdefault(slot, []).append(pack["slots_source"])
+    collisions = [
+        {"slot": slot, "crew": slot in crew_slots, "packs": owners, "sources": pack_slot_sources[slot]}
+        for slot, owners in sorted(pack_slots.items())
+        if slot in crew_slots or len(owners) > 1
+    ]
+    declared.update(pack_slots)
+    sources.extend(dict.fromkeys(source for owned in pack_slot_sources.values() for source in owned))
     return {
         "declared": sorted(declared),
         "recommended_vocabulary": list(RECOMMENDED_LOCAL_VOCABULARY),
         "sources": sources,
-        "inspection_sources": [str(skills_root), *(str(path) for path in inspected_paths)],
+        "inspection_sources": inspection_sources,
         "reads": reads,
+        "pack_slots": pack_slots,
+        "pack_slot_sources": pack_slot_sources,
+        "collisions": collisions,
     }
+
+
+def _read_pack_slots(root: pathlib.Path) -> tuple[list[str], str, list[dict[str, str]]]:
+    """A pack's `slots.txt`: its valid slot names, the file, and read problems.
+
+    `check_skills.py --pack` gates the file; Doctor reads what is installed and
+    reports an invalid entry as malformed instead of guessing what it meant.
+    """
+    path = pathlib.Path(root) / PACK_SLOTS_FILE
+    if not path.is_file():
+        return [], "", []
+    try:
+        names = slot_lines(path)
+    except (OSError, UnicodeDecodeError) as exception:
+        return [], str(path), [{"state": "unreadable", "source": str(path), "detail": str(exception)}]
+    reads = [
+        {"state": "malformed", "source": str(path), "detail": f"slot {name!r} must be plain kebab-case"}
+        for name in names
+        if not SLOT_NAME_RE.fullmatch(name)
+    ]
+    return list(dict.fromkeys(name for name in names if SLOT_NAME_RE.fullmatch(name))), str(path), reads
 
 
 def _skills_catalogue(root: pathlib.Path) -> pathlib.Path:
@@ -2325,6 +2374,7 @@ def inspect_packs(candidate_roots: list[pathlib.Path], crew_root: pathlib.Path) 
             state = "satisfied"
         else:
             state = "unsatisfied"
+        slots, slots_source, slot_reads = _read_pack_slots(root)
         packs.append(
             {
                 "name": _package_label(root),
@@ -2334,6 +2384,9 @@ def inspect_packs(candidate_roots: list[pathlib.Path], crew_root: pathlib.Path) 
                 "crew_source": str(crew_root / ".claude-plugin/plugin.json"),
                 "state": state,
                 "provides": provides,
+                "slots": slots,
+                "slots_source": slots_source,
+                "slot_reads": slot_reads,
                 "sources": sources,
                 "reads": reads,
             }
@@ -2388,20 +2441,48 @@ def slot_fills(
     return {"slots": slots, "reads": reads, "inspection_sources": inspection_sources}
 
 
-def _slot_fill_check(slot: str, entry: dict[str, Any], fallback_sources: list[str]) -> dict[str, Any]:
+def _slot_owner_label(slot: str, collision: dict[str, Any] | None, owners: list[str]) -> str:
+    """How a fill row names its slot: Crew's bare, a pack's by owner, a collision by every owner."""
+    if collision:
+        named = ", ".join(f"`{name}`" for name in collision["packs"])
+        by = f"Crew and pack {named}" if collision["crew"] else f"packs {named}"
+        return f"slot `{slot}` (declared by {by}; owner ambiguous)"
+    if owners:
+        return f"pack `{owners[0]}`'s slot `{slot}`"
+    return f"slot `{slot}`"
+
+
+def _slot_fill_check(
+    slot: str,
+    entry: dict[str, Any],
+    fallback_sources: list[str],
+    *,
+    owners: list[str] | None = None,
+    owner_sources: list[str] | None = None,
+    collision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     local = entry["local"]
     packs = entry["packs"]
+    owners = owners or []
+    owner_sources = owner_sources or []
     pack_names = ", ".join(f"`{name}`" for name in dict.fromkeys(fill["pack"] for fill in packs))
+    subject = _slot_owner_label(slot, collision, owners)
     if local:
         skill = local[0]
         convention = " (by naming convention)" if skill["basis"] == "name" else ""
-        fact = f"slot `{slot}` filled by local skill `{skill['skill']}`{convention}"
+        fact = f"{subject} filled by local skill `{skill['skill']}`{convention}"
         if packs:
             fact += f"; pack {pack_names} also provides it — local outranks pack"
     elif packs:
-        fact = f"slot `{slot}` filled by pack {pack_names} (skill `{packs[0]['skill']}`)"
+        fact = f"{subject} filled by pack {pack_names} (skill `{packs[0]['skill']}`)"
     else:
-        fact = f"slot `{slot}` is unfilled"
+        fact = f"{subject} is unfilled"
+    if owners and not collision:
+        stub = pathlib.Path(owner_sources[0]).parent / PACK_SLOT_STUBS / f"{slot}.md" if owner_sources else None
+        start = f", starting from its stub {stub}" if stub else ""
+        recommendation = f"Fill pack `{owners[0]}`'s slot `{slot}` in the local overlay{start}"
+    else:
+        recommendation = f"Fill slot `{slot}` in the local overlay or install a pack that provides it"
     if local and packs:
         inference = (
             "pi loads the nearest entry; Claude and Codex load both copies, so the "
@@ -2411,17 +2492,35 @@ def _slot_fill_check(slot: str, entry: dict[str, Any], fallback_sources: list[st
         inference = "a declared slot has a filling skill"
     else:
         inference = "no local skill or pack provides this declared slot"
-    sources = [fill["source"] for fill in [*local, *packs]] or fallback_sources
+    sources = [fill["source"] for fill in [*local, *packs]] or [*owner_sources, *fallback_sources]
     return {
         "check": f"local-slots.fill.{slot}",
         "status": "OK" if local or packs else "MISSING",
         "fact": fact,
         "inference": inference,
-        "recommendation": (
-            "" if local or packs else f"Fill slot `{slot}` in the local overlay or install a pack that provides it"
-        ),
+        "recommendation": "" if local or packs else recommendation,
         "untested": "",
         "evidence": [{"claim": fact, "source": source} for source in dict.fromkeys(sources) if source],
+    }
+
+
+def _slot_collision_check(collision: dict[str, Any]) -> dict[str, Any]:
+    slot = collision["slot"]
+    named = ", ".join(f"`{name}`" for name in collision["packs"])
+    if collision["crew"]:
+        fact = f"slot `{slot}` is declared by Crew and by pack {named}"
+        recommendation = f"Ask pack {named} to rename its `{slot}` slot; Crew's slot names are reserved"
+    else:
+        fact = f"slot `{slot}` is declared by packs {named}"
+        recommendation = f"Disable one of packs {named}, or ask one to rename its `{slot}` slot"
+    return {
+        "check": f"local-slots.owner.{slot}",
+        "status": "DEGRADED",
+        "fact": fact,
+        "inference": "one slot name has two owners, so Doctor cannot tell which contract a fill meets and names neither",
+        "recommendation": recommendation,
+        "untested": "",
+        "evidence": [{"claim": fact, "source": source} for source in dict.fromkeys(collision["sources"]) if source],
     }
 
 
@@ -3266,8 +3365,20 @@ def compose_doctor_report(
                 }
             )
 
+    pack_slots = local_slots.get("pack_slots", {})
+    pack_slot_sources = local_slots.get("pack_slot_sources", {})
+    collisions = {collision["slot"]: collision for collision in local_slots.get("collisions", [])}
+
+    def slot_label(slot: str) -> str:
+        owners = pack_slots.get(slot)
+        if not owners:
+            return slot
+        named = ", ".join(f"`{name}`" for name in owners)
+        crew = "Crew, " if collisions.get(slot, {}).get("crew") else ""
+        return f"{slot} ({crew}pack{'s' if len(owners) > 1 else ''} {named})"
+
     slot_fact = (
-        f"declared local slots: {', '.join(local_slots['declared']) or 'none'}; "
+        f"declared local slots: {', '.join(slot_label(slot) for slot in local_slots['declared']) or 'none'}; "
         f"recommended vocabulary: {', '.join(local_slots['recommended_vocabulary']) or 'none'}"
     )
     slot_reads = local_slots.get("reads", [])
@@ -3304,6 +3415,8 @@ def compose_doctor_report(
             "evidence": slot_evidence,
         }
     )
+    for collision in collisions.values():
+        checks.append(_slot_collision_check(collision))
     if slot_fills is not None:
         # An unfilled slot's evidence is where Doctor looked for a fill.
         fallback = (
@@ -3313,7 +3426,16 @@ def compose_doctor_report(
             or report_inspection_sources
         )
         for slot, entry in sorted(slot_fills["slots"].items()):
-            checks.append(_slot_fill_check(slot, entry, fallback))
+            checks.append(
+                _slot_fill_check(
+                    slot,
+                    entry,
+                    fallback,
+                    owners=pack_slots.get(slot),
+                    owner_sources=pack_slot_sources.get(slot),
+                    collision=collisions.get(slot),
+                )
+            )
     for pack in packs or []:
         checks.append(_pack_check(pack))
     if description_costs:
