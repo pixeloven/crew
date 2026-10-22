@@ -339,20 +339,20 @@ def capability_map_proposal(
     }
 
 
-DEPTH_MODES = ("scaffold", "deepen")
+DEPTH_MODES = ("quick", "thorough")
 # Filled by `capability_map_proposal`, which creates the fill from its stub.
 CAPABILITY_MAP_SLOT = "agent-runtime"
 
 
 def _section_split(sections: list[dict[str, Any]], depth: str) -> dict[str, Any]:
-    """Unfilled sections by who answers them. Scaffold defers `crew:optional` ones."""
+    """Unfilled sections by who answers them. Quick defers `crew:optional` ones."""
     discoverable: list[dict[str, Any]] = []
     human: list[str] = []
     deferred: list[str] = []
     for section in sections:
         if not section["unfilled"]:
             continue
-        if section["optional"] and depth == "scaffold":
+        if section["optional"] and depth == "quick":
             deferred.append(section["heading"])
         elif section["discoverable"]:
             discoverable.append({
@@ -370,14 +370,14 @@ def pack_slot_proposals(
     contract: OnboardingMode,
     *,
     crew_root: pathlib.Path,
-    depth: str = "scaffold",
+    depth: str = "quick",
 ) -> list[dict[str, Any]]:
     """Propose a local fill for each unfilled declared slot, from its owner's stub. Never writes.
 
     A pack's slot starts from that pack's `templates/local-skills/<slot>.md`; a
     Crew slot from Crew's. The fill is `<project>-<slot>` in `.agents/skills/`.
     Unfilled stub sections split into `discoverable_sections` (handed to learn)
-    and `human_sections` (the interview); Scaffold puts `crew:optional` ones in
+    and `human_sections` (the interview); Quick puts `crew:optional` ones in
     `deferred_sections`. A local fill still carrying `▸ Fill` is `complete`d in
     place by the interview, so it gets no `text`. A slot a pack fills is not
     proposed: a local fill would outrank it, which is a host decision. Only

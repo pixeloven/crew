@@ -111,9 +111,9 @@ diff. Every capability it lists under pending removal is a proposed deletion.
 Every other unfilled slot, Crew's or a pack's, gets a proposed local fill
 `<project>-<slot>` built from its owner's stub. Pass the same inventory to
 `pack_slot_proposals` with the contract, the resolved Crew root and a depth.
-**Scaffold** is the default, and asks only what the pack's skills need to start:
+**Quick** is the default, and asks only what the pack's skills need to start:
 sections marked `crew:optional` stay `▸ Fill`, and the skills use their defaults
-and say so. **Deepen** asks every section. For each proposal:
+and say so. **Thorough** asks every section. For each proposal:
 
 - `human_sections` become a short interview, one question per section;
 - for each of the `discoverable_sections`, run `learn` with the first of its

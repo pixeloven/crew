@@ -2516,7 +2516,7 @@ def _slot_fill_check(
         recommendation = f"Fill slot `{slot}` in the local overlay or install a pack that provides it"
     if partial:
         recommendation = (
-            f"Fill the remaining sections of `{local[0]['skill']}`; onboarding (Deepen) interviews them "
+            f"Fill the remaining sections of `{local[0]['skill']}`; onboarding (Thorough) interviews them "
             "and hands discoverable ones to learn"
         )
     if local and packs:
