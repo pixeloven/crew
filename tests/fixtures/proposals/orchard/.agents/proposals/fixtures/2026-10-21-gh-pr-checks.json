@@ -1,0 +1,21 @@
+{
+  "schema": "crew-lesson-fixture/1",
+  "proposal": "2026-10-21-gh-pr-checks",
+  "harness": "any",
+  "setup": {
+    "files": {
+      "README.md": "# orchard\n"
+    }
+  },
+  "prompt": "CI is running on this branch's pull request. Wait for it and tell me whether the required checks passed.",
+  "before": {
+    "excerpt": "gh pr view --json statusCheckRollup   (repeated 11 times, 40s apart)"
+  },
+  "expect": {
+    "loads_skill": "orchard-gh",
+    "must_include": ["gh pr checks", "--watch"],
+    "must_not_include": ["statusCheckRollup"]
+  },
+  "grader": "deterministic",
+  "cost": "billed"
+}

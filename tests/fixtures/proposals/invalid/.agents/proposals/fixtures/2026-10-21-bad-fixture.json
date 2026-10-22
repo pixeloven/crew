@@ -1,0 +1,11 @@
+{
+  "schema": "crew-lesson-fixture/1",
+  "proposal": "2026-10-21-bad-fixture",
+  "harness": ["claude", "cursor"],
+  "setup": {"files": {"../escape.md": "x"}},
+  "prompt": "Wait for CI.",
+  "before": {"excerpt": "polled eleven times"},
+  "expect": {"loads_skill": null, "must_include": [], "must_not_include": []},
+  "grader": "model",
+  "cost": "free"
+}

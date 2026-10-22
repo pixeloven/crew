@@ -21,8 +21,9 @@ crew/
 ├── scripts/crew_doctor.py          # deterministic read-only Doctor evidence helpers
 ├── scripts/crew_inventory.py       # read-only inventory engine (crew-inventory/1) behind the capability map
 ├── scripts/onboarding_contract.py  # audit/apply lifecycle contract
+├── scripts/learn_contract.py       # proposal-queue gates + Doctor evidence; docs/LEARNING.md is normative
 ├── scripts/gen_catalog.py          # docs/CATALOG.md generator; --check in CI
-├── scripts/check_skills.py         # schema-v2 + 110–300 character description gate; --pack, --report-cost
+├── scripts/check_skills.py         # schema-v2 + 110–300 character description gate; --pack, --report-cost, --local
 ├── scripts/check_skill_layout.py   # skill and consumer-role layout/frontmatter gate
 ├── scripts/check_links.py          # relative Markdown links resolve inside the repo
 ├── scripts/check_versions.py       # every manifest version agrees
