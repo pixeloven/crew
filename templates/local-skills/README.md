@@ -12,6 +12,8 @@ named `<project>-<slot>`, though any name works. What matters is that the conten
 exists locally and the project's `AGENTS.md` concern → local-skill map points at it.
 A [pack](../../docs/PACKS.md) skill can also fill a slot by declaring `provides:`.
 When both a local skill and a pack fill the same slot, the local one outranks the pack.
+A pack may also declare slots of its own, each with a stub in the pack's own
+`templates/local-skills/`; fill those the same way ([Pack-owned slots](../../docs/PACKS.md#pack-owned-slots)).
 Local skills **shadow** foundation skills on name collision in pi's flat namespace;
 under Claude Code and Codex the plugin copy is namespaced `crew:skill`, so both are visible.
 
