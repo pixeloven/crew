@@ -325,8 +325,10 @@ def _safe_package_ref(spec: str) -> str:
             host += f":{parts.port}"
         spec = urllib.parse.urlunsplit((parts.scheme, host, parts.path, "", ""))
     else:
+        spec = re.split(r"[?#]", spec, maxsplit=1)[0]
         head, slash, tail = spec.partition("/")
-        if "@" in head and slash:
+        # npm scopes start with "@"; elsewhere an "@" before the first "/" is userinfo.
+        if prefix != "npm:" and "@" in head:
             head = head.rsplit("@", 1)[1]
         spec = head + slash + tail
     return prefix + spec
@@ -599,6 +601,21 @@ def _norm(name: str) -> str:
 # --- capabilities and gaps -------------------------------------------------
 
 
+def _inside(path: str | None, root: pathlib.Path) -> bool:
+    if not path:
+        return False
+    try:
+        pathlib.Path(path).resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _probe_safe(path: str, project: pathlib.Path) -> bool:
+    """A binary is probed only from an absolute PATH entry outside the project."""
+    return pathlib.Path(path).is_absolute() and not _inside(path, project)
+
+
 def _capabilities(
     harnesses: dict[str, Any],
     skills: list[dict[str, Any]],
@@ -607,12 +624,19 @@ def _capabilities(
     observations: list[dict[str, Any]],
     which: Callable[[str], str | None],
     version_runner: Callable[[list[str]], str | None] | None,
+    project: pathlib.Path,
 ) -> dict[str, Any]:
     declared: dict[str, set[str]] = {}
+    # `--version` executes a binary, so only names the operator passed or an installed
+    # (non-project) skill requires may be probed. Workflow files, project skills and
+    # observations are repo or session content: they are inventoried, never executed.
+    probeable: set[str] = set(clis)
     for skill in skills:
         for requirement in skill["requires"]:
             if requirement.split(":", 1)[0] in CAPABILITY_KINDS and ":" in requirement:
                 declared.setdefault(requirement, set()).add(skill["name"])
+                if requirement.startswith("cli:") and not _inside(skill.get("path"), project):
+                    probeable.add(requirement.split(":", 1)[1])
     for cli in clis:
         declared.setdefault(f"cli:{cli}", set()).add("--cli")
     for cli, sources in workflow.items():
@@ -640,7 +664,11 @@ def _capabilities(
         providers: list[dict[str, Any]] = []
         if kind == "cli":
             path = which(name)
-            version = version_runner([path, "--version"]) if path and version_runner else None
+            version = (
+                version_runner([path, "--version"])
+                if path and version_runner and name in probeable and _probe_safe(path, project)
+                else None
+            )
             providers.append(
                 {"kind": "cli", "name": name, "state": "present" if path else "absent", "path": path, "version": version}
             )
@@ -967,6 +995,7 @@ def build_inventory(
         observations,
         which,
         (version_runner or _default_version_runner) if probe_versions else None,
+        project,
     )
     inventory: dict[str, Any] = {
         "schema": SCHEMA,

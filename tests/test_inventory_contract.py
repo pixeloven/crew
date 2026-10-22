@@ -120,6 +120,21 @@ class SecretTests(InventoryTestCase):
         self.assertNotIn("canary", json.dumps(ids))
 
 
+class PackageRefTests(unittest.TestCase):
+    def test_userinfo_query_and_fragment_never_survive(self) -> None:
+        _safe_package_ref = crew_inventory._safe_package_ref
+
+        for spec, expected in [
+            ("git:user:canary-token@github.com/acme/pack@v1", "git:github.com/acme/pack@v1"),
+            ("git:github.com/acme/pack?token=canary#frag", "git:github.com/acme/pack"),
+            ("git:canary@host", "git:host"),
+            ("npm:@scope/pkg@1.2.3", "npm:@scope/pkg@1.2.3"),
+            ("git:https://user:canary@github.com/acme/pack.git?x=canary", "git:https://github.com/acme/pack.git"),
+        ]:
+            self.assertEqual(expected, _safe_package_ref(spec))
+            self.assertNotIn("canary", _safe_package_ref(spec))
+
+
 class HarnessObservationTests(InventoryTestCase):
     def test_claude_plugins_scopes_and_mcp_config(self) -> None:
         inventory = self.fixture.build()
@@ -202,6 +217,37 @@ class ProbeTests(InventoryTestCase):
         self.assertEqual("gh version 2.81.0 (2026-10-01)", probed["capabilities"]["cli:gh"]["providers"][0]["version"])
         self.assertEqual(plain["map_digest"], probed["map_digest"])
         self.assertEqual(inventory_digest(plain), plain["map_digest"])
+
+
+    def test_workflow_only_clis_are_inventoried_but_never_probed(self) -> None:
+        calls = []
+
+        def runner(command):
+            calls.append(command)
+            return "v1"
+
+        inventory = self.fixture.build(probe_versions=True, version_runner=runner)
+        workflow_only = [
+            name for name, entry in inventory["capabilities"].items()
+            if name.startswith("cli:") and entry["declared_by"]
+            and all(source.startswith("workflow:") for source in entry["declared_by"])
+        ]
+        self.assertTrue(workflow_only, "fixture should declare a CLI only from a workflow")
+        probed = {pathlib.Path(command[0]).name for command in calls}
+        for name in workflow_only:
+            self.assertNotIn(name.split(":", 1)[1], probed)
+
+    def test_a_binary_inside_the_project_is_never_probed(self) -> None:
+        calls = []
+        planted = str(self.fixture.project / "bin" / "gh")
+        inventory = self.fixture.build(
+            probe_versions=True,
+            version_runner=lambda command: calls.append(command) or "v1",
+            which=lambda name: planted if name == "gh" else fake_which(name),
+            clis=["gh"],
+        )
+        self.assertNotIn([planted, "--version"], calls)
+        self.assertIsNone(inventory["capabilities"]["cli:gh"]["providers"][0]["version"])
 
 
 class ObservationTests(InventoryTestCase):
