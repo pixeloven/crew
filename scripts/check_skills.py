@@ -25,7 +25,8 @@ slots of its own in `slots.txt` at its root (same format as
 roles/expected-local-skills.txt); those widen `expects-local` and `provides` for
 that pack only, and must be kebab-case, unique, not a Crew slot name, stubbed at
 `templates/local-skills/<slot>.md`, and deferred to by at least one pack skill.
-Crew mode never reads a `slots.txt`.
+Crew mode never reads a `slots.txt`. Both modes check the section-marker grammar
+(`crew:discoverable`, `crew:optional`) of every stub in `templates/local-skills/`.
 `--report-cost` prints always-on description sizes; it never affects the exit code.
 
 Local mode (`--local <consumer-root>`) checks a consumer's learned skills: only
@@ -80,6 +81,89 @@ def slot_lines(path: pathlib.Path) -> list[str]:
         for line in path.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     ]
+
+
+# Stub section markers (docs/PACKS.md, "Marking stub sections"). A marker sits alone
+# on a line inside a section: the lines under one ATX heading, up to the next
+# heading of any level. `▸ Fill` in a section means it still needs content.
+FILL_MARKER = "▸ Fill"
+STUB_MARKER_PREFIX = re.compile(r"^\s*<!--\s*crew:(discoverable|optional)\b")
+DISCOVERABLE_MARKER = re.compile(r"^\s*<!--\s*crew:discoverable\s+capability=(\S+)\s*-->\s*$")
+OPTIONAL_MARKER = re.compile(r"^\s*<!--\s*crew:optional\s*-->\s*$")
+STUB_HEADING = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t#]*$")
+STUB_FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+def stub_sections(text: str) -> tuple[list[dict], list[str]]:
+    """A stub's (or fill's) sections, their markers and fill state, and grammar errors.
+
+    Each section is {heading, level, discoverable, optional, unfilled}. The
+    discoverable capability uses the `requires:` vocabulary, minus `plugin:` (a
+    plugin is a dependency, not a source of facts). Fenced code is skipped, and so
+    is a leading frontmatter block. Content before the first heading belongs to no
+    section; a marker there is an error.
+    """
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        closing = next((i for i, line in enumerate(lines[1:], 1) if line.strip() == "---"), None)
+        if closing is not None:
+            lines = lines[closing + 1:]
+    sections: list[dict] = []
+    errors: list[str] = []
+    fence = None
+    for number, line in enumerate(lines, 1):
+        opener = STUB_FENCE.match(line)
+        if fence:
+            if opener and opener.group(1) == fence:
+                fence = None
+            continue
+        if opener:
+            fence = opener.group(1)
+            continue
+        heading = STUB_HEADING.match(line)
+        if heading:
+            sections.append(
+                {"heading": heading.group(2), "level": len(heading.group(1)),
+                 "discoverable": None, "optional": False, "unfilled": False}
+            )
+            continue
+        current = sections[-1] if sections else None
+        if FILL_MARKER in line and current:
+            current["unfilled"] = True
+        if not STUB_MARKER_PREFIX.match(line):
+            continue
+        if current is None:
+            errors.append(f"line {number}: section marker before the first heading belongs to no section")
+            continue
+        discoverable = DISCOVERABLE_MARKER.match(line)
+        if discoverable:
+            capability = discoverable.group(1)
+            if capability.startswith("plugin:") or not REQUIRES_RE.match(capability):
+                errors.append(
+                    f"line {number}: discoverable capability {capability!r} must be a requires: capability "
+                    "(mcp:<group>, cli:<tool>, external:github|web, cluster)"
+                )
+            elif current["discoverable"]:
+                errors.append(f"line {number}: section {current['heading']!r} allows one discoverable marker")
+            else:
+                current["discoverable"] = capability
+        elif OPTIONAL_MARKER.match(line):
+            current["optional"] = True
+        else:
+            errors.append(f"line {number}: malformed section marker {line.strip()!r}")
+    return sections, errors
+
+
+def stub_marker_errors(root: pathlib.Path) -> list[str]:
+    """Grammar errors in every stub under `templates/local-skills/`, by path."""
+    errors: list[str] = []
+    for stub in sorted((pathlib.Path(root) / PACK_SLOT_STUBS).glob("*.md")):
+        if stub.name == "README.md":
+            continue
+        _, found = stub_sections(stub.read_text(encoding="utf-8"))
+        rel = f"{PACK_SLOT_STUBS}/{stub.name}"
+        errors.extend(f"{rel}: {error}" for error in found)
+    return errors
 
 
 def expected_local_slots(path: pathlib.Path = ROOT / "roles" / "expected-local-skills.txt") -> set[str]:
@@ -200,6 +284,7 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
                 errors.append(f"{d}/: a pack ships no roles — crew's roles pick its skills up through slots")
         own_slots, slot_errors = pack_slots(root)
         errors.extend(slot_errors)
+    errors.extend(stub_marker_errors(root))
     for m in manifests:
         try:
             json.loads((root / m).read_text())

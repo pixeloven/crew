@@ -1013,6 +1013,8 @@ def build_inventory(
             "inspection_sources": fills["inspection_sources"],
             # slot -> the pack(s) whose slots.txt declares it; Crew's slots are absent.
             "pack_slots": declared["pack_slots"],
+            # slots two owners declare; Onboarding proposes no fill for them.
+            "collisions": declared["collisions"],
         },
         "observations": observations,
         "not_observable": [dict(entry) for entry in NOT_OBSERVABLE]
