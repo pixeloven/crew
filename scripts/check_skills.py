@@ -21,6 +21,12 @@ Pack mode (`--root <pack> --pack`) runs this same gate against a sibling pack's
 skills (see docs/PACKS.md). The slot list always comes from THIS crew install,
 never from the pack, so a pack cannot widen the vocabulary it is checked against.
 `--report-cost` prints always-on description sizes; it never affects the exit code.
+
+Local mode (`--local <consumer-root>`) checks a consumer's learned skills: only
+`.agents/skills/*/SKILL.md` (and `.claude/skills/`) files carrying a
+`<!-- crew:learned ... -->` marker (docs/LEARNING.md), against this same schema.
+A hand-written local skill is not obliged to Crew's catalogue schema; a learned one
+is, because Crew's gate is what promoted it. Stdlib only, via frontmatter.py.
 """
 
 import argparse
@@ -75,6 +81,54 @@ def yaml_module():
     return yaml
 
 
+def skill_field_errors(
+    rel: str, fm: dict, dirname: str, provides_slots: set[str]
+) -> tuple[list[str], bool]:
+    """Schema-v2 field errors for one parsed frontmatter mapping, and whether it
+    declares a crew dependency. Shared by catalogue, pack, and --local modes."""
+    errors: list[str] = []
+    declares_crew = False
+    unknown = set(fm) - ALLOWED_FIELDS
+    if unknown:
+        errors.append(f"{rel}: unknown/legacy frontmatter fields {sorted(unknown)}")
+    if fm.get("name") != dirname:
+        errors.append(f"{rel}: name '{fm.get('name')}' != directory '{dirname}'")
+    desc = fm.get("description") or ""
+    if len(desc) < MIN_DESC:
+        errors.append(f"{rel}: description too short ({len(desc)} < {MIN_DESC} chars) — it's the load path")
+    if len(desc) > MAX_DESC:
+        errors.append(
+            f"{rel}: description too long ({len(desc)} > {MAX_DESC} chars) — "
+            "the repository policy preserves trigger language under catalogue pressure"
+        )
+    if fm.get("tier") not in TIERS:
+        errors.append(f"{rel}: tier must be one of {sorted(TIERS)}, got {fm.get('tier')!r}")
+    req = fm.get("requires")
+    if not isinstance(req, list):
+        errors.append(f"{rel}: requires must be a list (may be empty)")
+    else:
+        for r in req:
+            if not (isinstance(r, str) and REQUIRES_RE.match(r)):
+                errors.append(f"{rel}: invalid requires entry {r!r}")
+            elif r.startswith(CREW_REQUIREMENT):
+                declares_crew = True
+    if "expects-local" in fm:
+        slots = fm["expects-local"]
+        if not (isinstance(slots, list) and slots and set(slots) <= LOCAL_SLOT_VOCABULARY):
+            errors.append(
+                f"{rel}: expects-local must be a non-empty subset of "
+                f"{sorted(LOCAL_SLOT_VOCABULARY)}, got {slots!r}"
+            )
+    if "provides" in fm:
+        slots = fm["provides"]
+        if not (isinstance(slots, list) and slots and set(slots) <= provides_slots):
+            errors.append(
+                f"{rel}: provides must be a non-empty subset of "
+                f"{sorted(provides_slots)} (roles/expected-local-skills.txt), got {slots!r}"
+            )
+    return errors, declares_crew
+
+
 def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
     yaml = yaml_module()
     errors: list[str] = []
@@ -121,53 +175,56 @@ def validate_root(root: pathlib.Path, *, pack: bool = False) -> list[str]:
         if not isinstance(fm, dict):
             errors.append(f"{rel}: frontmatter must be a mapping")
             continue
-        unknown = set(fm) - ALLOWED_FIELDS
-        if unknown:
-            errors.append(f"{rel}: unknown/legacy frontmatter fields {sorted(unknown)}")
-        if fm.get("name") != dirname:
-            errors.append(f"{rel}: name '{fm.get('name')}' != directory '{dirname}'")
-        desc = fm.get("description") or ""
-        if len(desc) < MIN_DESC:
-            errors.append(f"{rel}: description too short ({len(desc)} < {MIN_DESC} chars) — it's the load path")
-        if len(desc) > MAX_DESC:
-            errors.append(
-                f"{rel}: description too long ({len(desc)} > {MAX_DESC} chars) — "
-                "the repository policy preserves trigger language under catalogue pressure"
-            )
-        if fm.get("tier") not in TIERS:
-            errors.append(f"{rel}: tier must be one of {sorted(TIERS)}, got {fm.get('tier')!r}")
-        req = fm.get("requires")
-        declares_crew = False
-        if not isinstance(req, list):
-            errors.append(f"{rel}: requires must be a list (may be empty)")
-        else:
-            for r in req:
-                if not (isinstance(r, str) and REQUIRES_RE.match(r)):
-                    errors.append(f"{rel}: invalid requires entry {r!r}")
-                elif r.startswith(CREW_REQUIREMENT):
-                    declares_crew = True
+        field_errors, declares_crew = skill_field_errors(rel, fm, dirname, provides_slots)
+        errors.extend(field_errors)
         if pack and not declares_crew:
             # Every skill, not any: a skill is installed, listed, and moved on
             # its own, so each one carries the Crew it was checked against.
             undeclared.append(rel)
-        if "expects-local" in fm:
-            slots = fm["expects-local"]
-            if not (isinstance(slots, list) and slots and set(slots) <= LOCAL_SLOT_VOCABULARY):
-                errors.append(
-                    f"{rel}: expects-local must be a non-empty subset of "
-                    f"{sorted(LOCAL_SLOT_VOCABULARY)}, got {slots!r}"
-                )
-        if "provides" in fm:
-            slots = fm["provides"]
-            if not (isinstance(slots, list) and slots and set(slots) <= provides_slots):
-                errors.append(
-                    f"{rel}: provides must be a non-empty subset of "
-                    f"{sorted(provides_slots)} (roles/expected-local-skills.txt), got {slots!r}"
-                )
 
     for rel in undeclared:
         errors.append(f"{rel}: pack skill declares no crew dependency: add {CREW_REQUIREMENT}X.Y.Z to its requires")
     return errors
+
+
+LOCAL_SKILL_DIRS = (".agents/skills", ".claude/skills")
+
+
+def validate_local(consumer_root: pathlib.Path) -> tuple[list[str], int]:
+    """Validate only the learned skills under a consumer root; return errors and count."""
+    try:
+        from .frontmatter import read_frontmatter
+        from .learn_contract import learned_markers
+    except ImportError:  # Direct script execution.
+        from frontmatter import read_frontmatter
+        from learn_contract import learned_markers
+
+    root = pathlib.Path(consumer_root)
+    provides_slots = expected_local_slots()
+    errors: list[str] = []
+    seen: set[pathlib.Path] = set()
+    count = 0
+    for rel_dir in LOCAL_SKILL_DIRS:
+        for skill_path in sorted((root / rel_dir).glob("*/SKILL.md")):
+            resolved = skill_path.resolve()
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            rel = skill_path.relative_to(root).as_posix()
+            markers, marker_errors = learned_markers(skill_path.read_text(encoding="utf-8"))
+            if not markers and not marker_errors:
+                continue
+            count += 1
+            errors.extend(f"{rel}: {error}" for error in marker_errors)
+            fm, error = read_frontmatter(skill_path)
+            if error:
+                errors.append(f"{rel}: {error}")
+                continue
+            field_errors, _ = skill_field_errors(rel, fm, skill_path.parent.name, provides_slots)
+            errors.extend(field_errors)
+            if "provides" in fm:
+                errors.append(f"{rel}: provides is pack-only; a local skill fills a slot by its name")
+    return errors, count
 
 
 def description_costs(root: pathlib.Path) -> list[tuple[str, int]]:
@@ -201,7 +258,20 @@ def main():
     parser.add_argument(
         "--report-cost", action="store_true", help="print per-skill and total description chars (never fails)"
     )
+    parser.add_argument(
+        "--local", type=pathlib.Path, metavar="CONSUMER_ROOT",
+        help="validate only the learned skills under a consumer root (docs/LEARNING.md)",
+    )
     args = parser.parse_args()
+    if args.local:
+        if args.pack or args.report_cost:
+            parser.error("--local runs alone: it checks a consumer's learned skills, not a package")
+        errors, count = validate_local(args.local.resolve())
+        if errors:
+            print("\n".join(errors))
+            sys.exit(1)
+        print(f"{count} learned skill(s) conform to schema v2 and the {MAX_DESC}-character description budget")
+        return
     root = args.root.resolve()
     errors = validate_root(root, pack=args.pack)
     if args.report_cost:

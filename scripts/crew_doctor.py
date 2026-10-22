@@ -2530,6 +2530,91 @@ def _capability_map_check(inventory: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _proposal_checks(proposals: dict[str, Any]) -> list[dict[str, Any]]:
+    """Rows for `learn_contract.inspect_proposals` evidence. Read-only; no age knob."""
+    agents_md = proposals["agents_md"]
+    queue = proposals.get("queue") or agents_md
+    entries = proposals.get("proposals", [])
+
+    def row(check: str, status: str, fact: str, inference: str, recommendation: str,
+            untested: str, sources: list[str]) -> dict[str, Any]:
+        return {
+            "check": check, "status": status, "fact": fact, "inference": inference,
+            "recommendation": recommendation, "untested": untested,
+            "evidence": [{"claim": fact, "source": source} for source in dict.fromkeys(sources) if source],
+        }
+
+    if not proposals.get("declared"):
+        fact = "AGENTS.md declares no proposal-queue; learn is report-only"
+        return [row("proposals.queue", "N/A", fact, "no queue, so learn writes nothing", "", "", [agents_md])]
+
+    malformed = [entry for entry in entries if entry["errors"]]
+    queue_errors = proposals.get("queue_errors", [])
+    counts: dict[str, int] = {}
+    for entry in entries:
+        counts[entry["status"] or "unknown"] = counts.get(entry["status"] or "unknown", 0) + 1
+    summary = ", ".join(f"{count} {status}" for status, count in sorted(counts.items())) or "empty"
+    if queue_errors or malformed:
+        problems = [*queue_errors, *(
+            f"{pathlib.Path(entry['path']).name}: {entry['errors'][0]}" for entry in malformed
+        )]
+        checks = [row(
+            "proposals.queue", "DEGRADED", f"proposal queue {queue}: " + "; ".join(problems),
+            "a queue in a skill root loads as instructions; a malformed proposal cannot be reviewed",
+            f"Run learn_contract.py --check {queue} and fix each finding",
+            "", [agents_md, queue, *(entry["path"] for entry in malformed)],
+        )]
+    else:
+        checks = [row("proposals.queue", "OK", f"proposal queue {queue}: {summary}",
+                      "every proposal passes the learn_contract gates", "", "", [agents_md, queue])]
+
+    open_entries = [entry for entry in entries if entry["status"] in {"draft", "needs-recurrence", "reviewed"}]
+    stale = [entry for entry in open_entries if entry["stale"]]
+    untested = [entry for entry in open_entries if entry["untested"]]
+    untested_text = "; ".join(f"{entry['id']}: {', '.join(entry['untested'])}" for entry in untested)
+    if stale:
+        fact = "; ".join(f"{entry['id']}: {', '.join(entry['stale'])}" for entry in stale)
+        checks.append(row("proposals.staleness", "DEGRADED", fact,
+                          "the evidence or the target moved after drafting",
+                          "Re-learn or rebase each stale proposal before review", untested_text,
+                          [entry["path"] for entry in stale]))
+    elif untested:
+        checks.append(row("proposals.staleness", "N/A", untested_text, "", "", untested_text,
+                          [entry["path"] for entry in untested]))
+    else:
+        fact = f"{len(open_entries)} open proposal(s) match their tool version and target"
+        checks.append(row("proposals.staleness", "OK" if open_entries else "N/A", fact, "", "", "",
+                          [queue, *(entry["path"] for entry in open_entries)]))
+
+    learned = proposals.get("learned_skills", [])
+    drifted = [skill for skill in learned if skill["tool"] and skill["current_version"]
+               and skill["current_version"] != skill["version"]]
+    unknown = [skill for skill in learned if skill["tool"] and not skill["current_version"]]
+    if drifted:
+        fact = "; ".join(
+            f"{pathlib.Path(skill['path']).parent.name} learned {skill['tool']} {skill['version']}, "
+            f"now {skill['current_version']}"
+            for skill in drifted
+        )
+        rollback = ", ".join(
+            f"{pathlib.Path(skill['path']).parent.name}: "
+            f"{skill['promoted_in'] or 'promoted-in unknown (no promoted proposal in the queue)'}"
+            for skill in drifted
+        )
+        checks.append(row("learned.skills", "DEGRADED", fact,
+                          "a learned skill describes a tool version this machine no longer runs",
+                          f"Re-learn it, or roll back by reverting its promoted-in commit ({rollback})",
+                          "", [skill["path"] for skill in drifted]))
+    elif unknown:
+        text = ", ".join(f"current {skill['tool']} version not supplied" for skill in unknown)
+        checks.append(row("learned.skills", "N/A", text, "", "", text, [skill["path"] for skill in unknown]))
+    else:
+        fact = f"{len(learned)} learned skill marker(s) match the current tool versions"
+        checks.append(row("learned.skills", "OK" if learned else "N/A", fact, "", "", "",
+                          [skill["path"] for skill in learned] or [agents_md]))
+    return checks
+
+
 def profile_for(working_capabilities: list[str], persona_evidence: list[str]) -> str:
     """One taxonomy: personas takes deterministic precedence over platform."""
     if persona_evidence:
@@ -3008,12 +3093,15 @@ def compose_doctor_report(
     packs: list[dict[str, Any]] | None = None,
     description_costs: list[dict[str, Any]] | None = None,
     inventory: dict[str, Any] | None = None,
+    proposals: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose all Doctor checks into one deterministic, non-persisted report.
 
     `slot_fills`, `packs`, and `description_costs` are optional: omitted, the
     report carries no fill, pack, or cost rows.
     `inventory` (a `crew-inventory/1` document) adds `inventory.capability-map`.
+    `proposals` (from `learn_contract.inspect_proposals`) adds the proposals.* and
+    learned.skills rows; omitted, it adds none.
     """
     report = deepcopy(installation_report)
     checks = report["checks"]
@@ -3128,6 +3216,8 @@ def compose_doctor_report(
         checks.append(_description_cost_check(description_costs))
     if inventory is not None:
         checks.append(_capability_map_check(inventory))
+    if proposals is not None:
+        checks.extend(_proposal_checks(proposals))
 
     capability_checks = [
         capability

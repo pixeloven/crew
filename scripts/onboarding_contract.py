@@ -10,8 +10,10 @@ from typing import Any
 
 try:
     from .crew_doctor import PROFILE_TAXONOMY
+    from .learn_contract import queue_location, queue_location_errors
 except ImportError:  # Direct script execution.
     from crew_doctor import PROFILE_TAXONOMY
+    from learn_contract import queue_location, queue_location_errors
 try:
     from .crew_inventory import (
         CAPABILITIES_HEADING,
@@ -296,11 +298,82 @@ def capability_map_proposal(
     }
 
 
+_LEARNING_HEADING = re.compile(r"^#{2,3}[ \t]+learning\b.*$", re.IGNORECASE | re.MULTILINE)
+
+
+def _learning_bounds(text: str) -> tuple[int, int] | None:
+    match = _LEARNING_HEADING.search(text)
+    if not match:
+        return None
+    level = len(match.group(0)) - len(match.group(0).lstrip("#"))
+    following = re.compile(rf"^#{{1,{level}}}[ \t]", re.MULTILINE)
+    end = following.search(text, match.end())
+    return match.start(), end.start() if end else len(text)
+
+
+def learning_section(text: str) -> str:
+    """Return the learning section of an entry file, or ``""``."""
+    bounds = _learning_bounds(text)
+    return text[bounds[0]:bounds[1]].rstrip() + "\n" if bounds else ""
+
+
+def audit_learning_section(text: str | None) -> dict[str, Any]:
+    """Read-only. Learning is optional spine: absence means learn is report-only."""
+    if text is None or not learning_section(text):
+        return {
+            "check": "learning",
+            "status": "N/A",
+            "fact": "AGENTS.md declares no learning section, so learn is report-only",
+            "recommendation": "optional: merge the Learning section from templates/AGENTS.md to queue proposals",
+        }
+    try:
+        location = queue_location(text)
+    except ValueError as error:
+        return {"check": "learning", "status": "DEGRADED", "fact": str(error),
+                "recommendation": "keep one `proposal-queue:` line"}
+    if location is None:
+        return {
+            "check": "learning",
+            "status": "N/A",
+            "fact": "learning section declares no proposal-queue, so learn is report-only",
+            "recommendation": "",
+        }
+    errors = queue_location_errors(location)
+    if errors:
+        return {"check": "learning", "status": "DEGRADED", "fact": "; ".join(errors),
+                "recommendation": "move the proposal queue out of any skills directory, relative to the root"}
+    return {"check": "learning", "status": "OK", "fact": f"proposals queue at {location}", "recommendation": ""}
+
+
+def ensure_learning_section(text: str, template: str) -> str:
+    """Merge the template's Learning section; never replaces a project's own.
+
+    Not a required spine section: apply offers it, audit never reports its absence as drift.
+    """
+    if _learning_bounds(text):
+        return text
+    section = learning_section(template)
+    if not section:
+        raise ValueError("template carries no learning section")
+    anchor = _TRIPWIRES_HEADING.search(text)
+    if anchor:
+        return text[:anchor.start()] + section + "\n" + text[anchor.start():]
+    return text.rstrip("\n") + "\n\n" + section
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check-reporting", metavar="AGENTS_MD", type=pathlib.Path, required=True,
+    checks = parser.add_mutually_exclusive_group(required=True)
+    checks.add_argument("--check-reporting", metavar="AGENTS_MD", type=pathlib.Path,
                         help="read-only: report whether this entry file carries the reporting contract")
+    checks.add_argument("--check-learning", metavar="AGENTS_MD", type=pathlib.Path,
+                        help="read-only: report the declared proposal queue (optional section)")
     args = parser.parse_args(argv)
+    if args.check_learning:
+        path = args.check_learning
+        finding = audit_learning_section(path.read_text(encoding="utf-8") if path.is_file() else None)
+        print(f"{finding['check']} | {finding['status']} | {finding['fact']} | {finding['recommendation']} | {path}")
+        return 1 if finding["status"] == "DEGRADED" else 0
     path: pathlib.Path = args.check_reporting
     text = path.read_text(encoding="utf-8") if path.is_file() else None
     finding = audit_reporting_contract(text)

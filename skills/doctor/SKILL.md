@@ -229,6 +229,25 @@ Pass the result to `compose_doctor_report` as `inventory=`. The
 
 Report only. Writing the map is Onboarding's job.
 
+### 9. Check the proposal queue and learned skills
+
+Read the consumer's declared `proposal-queue:` and learned skills with
+`learn_contract.inspect_proposals(<consumer-root>, tool_versions=...)` (or
+`python3 /absolute/resolved/crew/root/scripts/learn_contract.py --inspect
+<consumer-root> --tool-version gh=X.Y.Z`), and pass the result to
+`compose_doctor_report(proposals=...)`. Supply only versions this session
+observed, such as a `gh --version` you already ran; an unsupplied version stays
+untested. The rows follow docs/LEARNING.md:
+
+- `proposals.queue` — `N/A` when nothing is declared (learn is report-only);
+  `DEGRADED` when the queue sits in a skill root or holds a malformed proposal.
+- `proposals.staleness` — `DEGRADED` when an open proposal's target hash or tool
+  version moved since drafting.
+- `learned.skills` — `DEGRADED` when a learned skill's marker version differs
+  from the current tool; name its `promoted-in` commit to roll back.
+
+There is no age threshold. Report only: promotion and rollback are the operator's.
+
 ## Report contract
 
 Produce one row per check:

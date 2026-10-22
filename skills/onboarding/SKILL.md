@@ -101,6 +101,13 @@ audit contract and the `templates/local-skills/agent-runtime.md` stub, then
 report its action (`create`, `merge`, `unchanged` or `decision-needed`) and its
 diff. Every capability it lists under pending removal is a proposed deletion.
 
+The `## Learning` section is optional spine: it declares where `learn` queues
+proposals (docs/LEARNING.md). Audit it with
+`scripts/onboarding_contract.py --check-learning <AGENTS.md>`. `N/A` means learn
+stays report-only, which is a valid choice, so offer the section as an optional
+addition and never report it as drift. `DEGRADED` means the declared queue is
+unusable, for example under a `skills` directory.
+
 For existing files, report what behavior is present, missing, duplicated, or
 ambiguous. Propose moves as a mapping of source content → destination skill or
 runbook → retained pointer. Flag every proposed deletion separately. Preserve
@@ -158,7 +165,8 @@ its target. It changes only the text between the `crew:capability-map` markers a
 keeps every Fallback cell the operator wrote. With no `agent-runtime` fill it
 creates `<project>-agent-runtime` from the stub. A pack-provided fill is a host
 decision. A vanished capability stays `absent` until its removal is authorized.
-For a mature project, edit surgically: preserve its
+When the operator accepts the optional Learning section, merge it with
+`ensure_learning_section` the same way. For a mature project, edit surgically: preserve its
 entry files, safety tripwires, delivery contracts, verification commands, and
 runbook pointers. When moving detail, establish and validate the destination
 first, retain an actionable pointer, then remove source text only if that
