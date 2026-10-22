@@ -49,18 +49,25 @@ a concrete skill. A pack skill may fill one:
 
 ```yaml
 ---
-name: example-seams
+name: example-conventions
 description: Use when ...
 tier: subject
 requires: [plugin:crew@>=0.38.0]
-provides: [protected-seams]
+provides: [platform-conventions]
 ---
 ```
 
 `provides:` is a non-empty list; every entry must be a slot listed in Crew's
 `roles/expected-local-skills.txt` or one the pack declares itself (see
 [Pack-owned slots](#pack-owned-slots)). Crew itself fills no slots. Doctor reports
-*"slot `protected-seams` filled by pack `example-skills`"* next to local fills.
+*"slot `platform-conventions` filled by pack `example-skills`"* next to local fills.
+
+**`provides:` suits content that is generic by nature**, the same for every project
+that installs the pack: a stack's conventions, a vendor's defaults. It does not suit
+a per-project registry. A pack that knows common seams must not `provides:
+[protected-seams]`: that would stand in for the project's own registry. It extends
+the slot instead: its skills declare `expects-local: [protected-seams]`, and its
+seam shapes become `▸ Fill` guidance that Onboarding seeds into the project's fill.
 
 **Citing a slot in a skill body.** A skill that defers to a slot (`expects-local:`)
 says so once, in one hedged sentence near the top — for example *"Where the
@@ -100,6 +107,8 @@ identity-event-schema
 
 Each declared slot ships a starter stub at `templates/local-skills/<slot>.md`,
 the file a consumer copies into its overlay and fills, exactly like Crew's stubs.
+Mark its sections so Onboarding can fill it (see
+[Packs ship stubs, not setup skills](#packs-ship-stubs-not-setup-skills)).
 Once declared, the slot is valid in that pack's `expects-local:` and `provides:`:
 
 ```yaml
@@ -144,6 +153,69 @@ as for Crew's slots: a local skill fills it by `provides:` or by the
 `<project>-<slot>` name, another pack may `provides:` it, and a local overlay
 outranks a pack. A pack whose `slots.txt` reuses a Crew slot name is also
 `DEGRADED` in Doctor, for an install that never ran the check.
+
+## Packs ship stubs, not setup skills
+
+A pack's onboarding is its `templates/local-skills/` stubs. Crew's Onboarding
+drives them for every installed pack. It reads the inventory, and for each
+unfilled slot it proposes a local `<project>-<slot>` fill built from the owning
+pack's stub. It audits by default, and applying needs a distinct authorization. Do
+not ship a `<pack>-setup` skill: its description costs every session, and each
+pack's setup would behave differently. Put that setup into the stub, and mark the
+stub's sections so Onboarding knows who answers each one.
+
+### Marking stub sections
+
+A **section** is an ATX heading line (`#` to `######`) and every line after it, up
+to the next heading of any level. Headings inside fenced code and the frontmatter
+block do not count. A section still needs content while it contains `▸ Fill`.
+Two markers, each alone on its own line inside a section, say how it gets filled:
+
+| Marker | Meaning |
+|---|---|
+| `<!-- crew:discoverable capability=<cap> -->` | A tool can supply this section's facts. Onboarding hands the section to `learn`, which drafts it as a proposal with evidence; the operator promotes it. |
+| `<!-- crew:optional -->` | The pack's skills can start without this section. **Scaffold** leaves it `▸ Fill`; **Deepen** asks it. |
+
+```markdown
+## Fields
+
+<!-- crew:discoverable capability=mcp:tracker -->
+
+> **▸ Fill:** each field, its type, and whether it is required.
+
+## Escalation
+
+<!-- crew:optional -->
+
+> **▸ Fill:** where a blocked item goes.
+```
+
+The grammar is strict, so the split between sections is declared and never guessed:
+
+- **One capability per marker, and one discoverable marker per section.**
+  `<cap>` uses the `requires:` vocabulary: `mcp:<group>`, `cli:<tool>`,
+  `external:github`, `external:web` or `cluster`. `plugin:` is not accepted,
+  because a plugin is a dependency, not a source of facts.
+- **Exact spelling.** No other attributes and no extra words. Anything else
+  starting `<!-- crew:discoverable` or `<!-- crew:optional` is malformed.
+- **Inside a section.** A marker before the first heading belongs to no section,
+  and is an error.
+- **Unmarked sections are human facts.** An unmarked section that contains
+  `▸ Fill` becomes an interview question. Both markers can be on one section:
+  Scaffold defers it, and Deepen hands it to `learn`.
+
+`check_skills.py` checks this grammar in every stub under `templates/local-skills/`,
+in pack mode and in Crew's own run.
+
+**How Onboarding uses the markers.** `pack_slot_proposals` in
+`scripts/onboarding_contract.py` returns one proposal per slot. Each proposal splits
+the stub's unfilled sections into three lists: `discoverable_sections` (heading and
+capability, handed to `learn`), `human_sections` (the interview) and
+`deferred_sections` (optional ones that Scaffold leaves). A local fill that still
+carries `▸ Fill` gets a `complete` proposal: re-run onboarding with Deepen to finish
+it. A slot already filled by a pack gets no proposal, because a local fill would
+outrank the pack, and that is a host decision. Doctor reports a fill that still
+carries `▸ Fill` as `DEGRADED` (partial) and names the unfilled sections.
 
 ## Description cost is reported, never capped
 
