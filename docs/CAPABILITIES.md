@@ -42,7 +42,7 @@ not endorsements; any tool that answers the same question can provide the name.
 | `mcp:warehouse` | SQL data warehouse: tables, schemas, queries | Snowflake, BigQuery, Redshift, Databricks, Postgres | identity-skills (`auth-funnel-signatures`, `identity-event-schema` stub) |
 | `mcp:analytics` | Product analytics: events, funnels, cohorts | Amplitude, Mixpanel, PostHog, Heap, GA4 | identity-skills (`auth-funnel-signatures`, `identity-event-schema` stub) |
 | `mcp:logs` | Log search and observability: logs, traces, errors | Datadog, Grafana Loki, Elastic, Splunk, CloudWatch | identity-skills (`auth-flow-tracing`, `auth-funnel-signatures`) |
-| `cli:gh` | The GitHub CLI | `gh` | crew (`release-and-versioning`), identity-skills |
+| `cli:gh` | The GitHub CLI | `gh` | crew (`release-and-versioning`, `github-repo-workflow`), identity-skills |
 | `cli:git` | Git | `git` | any skill that reads history or branches |
 | `external:github` | GitHub itself: repos, PRs, Actions, releases | github.com, GitHub Enterprise | crew (five skills), identity-skills, infra-skills |
 | `external:web` | The public web: vendor docs, standards, advisories | web search or fetch tools | open research steps |
