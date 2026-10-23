@@ -23,33 +23,40 @@ Plain `git clone https://github.com/...` and `gh repo clone owner/repo` both aut
 
 The GH_TOKEN's scope determines which repos you can reach (read/write). In a deployment's worker images, the token is typically an operator PAT sourced from the deployment's secret manager (the concrete reference belongs in its secret-paths local skill) and scoped to push/issue/PR only for the intended organization.
 
-## When the repo isn't on disk
+## Start in the workspace you were given
 
-Clone it. Default to a path under the home directory: `~/<repo>`.
+If a harness, CI job or supervising tool has already prepared a checkout (a worktree, a container checkout, the current directory), work there. A second copy elsewhere is one the host doesn't know about: its work is never reviewed, shipped or cleaned up.
+
+Clone only when no workspace exists. Where the clone goes is the project's choice: check `AGENTS.md` for the canonical clone location and any pre-cloned paths.
 
 ```bash
-git clone https://github.com/<owner>/<repo> ~/<repo>
-# or
-gh repo clone <owner>/<repo> ~/<repo>
+git clone https://github.com/<owner>/<repo> <path>
+# or, with the GitHub CLI
+gh repo clone <owner>/<repo> <path>
 ```
 
-When the repo IS already on disk and you're starting fresh work, sync to current main:
+## Sync without discarding work
+
+An existing checkout may hold uncommitted edits, a stash in progress, or local commits you can't see the value of. Check before you touch it:
 
 ```bash
-cd ~/<repo>
+git status --porcelain                    # any output: the tree is dirty
 git fetch origin main
-git checkout main
-git reset --hard origin/main
+git rev-list --count origin/main..HEAD    # non-zero: local commits not on main
 ```
 
-## Branch + edit
-
-Use a conventional prefix matching the change type — `fix/`, `feat/`, `chore/`, `docs/`, `refactor/`.
+If the tree is dirty or ahead, **stop and report** what you found; don't stash, reset or discard it. Otherwise branch from the fresh remote main and leave local `main` alone:
 
 ```bash
-git checkout -b fix/short-description
+git switch -c <branch> origin/main
 # edit files
 ```
+
+Never `git reset --hard` or `git checkout -- .` to "start fresh". Both discard work with no prompt.
+
+## Name the branch
+
+Use the project's branch convention, from its `AGENTS.md` or a local skill. When it has none, use a prefix matching the change type: `fix/`, `feat/`, `chore/`, `docs/`, `refactor/`.
 
 ## Commit
 
@@ -74,6 +81,8 @@ git push -u origin <branch>
 ```
 
 ## Open the PR
+
+The commands below use the GitHub CLI (`cli:gh`). When it is absent, or the host gives GitHub through another tool, do the same operations through that tool; the steps and the marker rule are unchanged (see `docs/CAPABILITIES.md` in the crew repo).
 
 ```bash
 gh pr create --title "<type>(<scope>): <subject>" --body "$(cat <<'EOF'
@@ -139,12 +148,9 @@ gh issue close <N> --reason completed     # close with a reason
 
 ## What not to do
 
+- **Don't `git reset --hard`** an existing checkout. If it is dirty or ahead of `origin/main`, stop and report.
 - **Don't `--no-verify`** to skip pre-commit hooks. Hooks catch secrets, formatting, and lint issues — investigate failures, don't bypass.
 - **Don't `git add -A`** in repos with untracked files you didn't create. Add specific paths.
 - **Don't force-push** a branch with reviews unless rebase is the explicit intent. Push new commits instead.
 - **Don't commit secrets**. Treat `.env`, `*.key`, and anything with `secret` in its name as suspect.
 - **Don't embed `GH_TOKEN` in URLs or commit messages.** The credential helper handles auth invisibly.
-
-## Project-specific clone path
-
-For the active project, check `AGENTS.md` for the canonical clone location and any pre-cloned paths — each consumer documents its own repo and clone convention there.
