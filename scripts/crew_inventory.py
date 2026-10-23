@@ -77,7 +77,8 @@ SHELL_WORDS = frozenset(
     "dirs help history logout mapfile readarray shopt suspend times coproc".split()
 )
 POSIX_SHELLS = frozenset({"bash", "sh"})
-# PowerShell's Verb-Noun cmdlets, for a pwsh step whose shell is set outside the step.
+# PowerShell's Verb-Noun cmdlets, for a pwsh step on a runner the file cannot name
+# (`runs-on: ${{ matrix.os }}`).
 CMDLET = re.compile(r"[A-Z][a-z]+-[A-Z][A-Za-z]+")
 SHELL_FUNCTION = re.compile(r"^\s*(?:function\s+([A-Za-z_][\w.:-]*)|([A-Za-z_][\w.:-]*)\s*\(\s*\))")
 # An external: service a CLI on PATH reaches directly, beside any MCP server or plugin.
@@ -480,6 +481,57 @@ def _step_shell(lines: list[str], start: int, end: int, column: int) -> str | No
     return None
 
 
+def _block_end(lines: list[str], index: int, indent: int) -> int:
+    """First line at or after `index` indented no deeper than `indent`."""
+    while index < len(lines) and (
+        not lines[index].strip() or len(lines[index]) - len(lines[index].lstrip()) > indent
+    ):
+        index += 1
+    return index
+
+
+def _default_shells(lines: list[str]) -> tuple[str | None, list[tuple[int, str | None, bool]]]:
+    """Workflow `defaults.run.shell`, and per job: first line, `defaults.run.shell`, windows runner."""
+    workflow: str | None = None
+    jobs: list[tuple[int, str | None, bool]] = []
+    stack: list[tuple[int, str]] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        start = index
+        index += 1
+        if not stripped or stripped.startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        match = re.match(r"""([A-Za-z0-9_.-]+|'[^']*'|"[^"]*"):(?:\s+(.*))?$""", stripped)
+        if stripped.startswith("-") or not match:
+            index = _block_end(lines, index, indent)
+            continue
+        key, value = match.group(1).strip("'\""), re.sub(r"(^|\s+)#.*$", "", match.group(2) or "").strip()
+        path = (*(name for _, name in stack), key)
+        shell = re.match(r"""['"]?([^\s'"#]+)""", value)
+        if path == ("defaults", "run", "shell") and shell:
+            workflow = shell.group(1)
+        elif len(path) == 2 and path[0] == "jobs":
+            jobs.append((start, None, False))
+        elif len(path) == 3 and path[0] == "jobs" and path[2] == "runs-on" and jobs:
+            end = _block_end(lines, index, indent)
+            labels = [value, *lines[index:end]]
+            index = end
+            jobs[-1] = (*jobs[-1][:2], "windows" in " ".join(labels).lower())
+            continue
+        elif len(path) == 5 and path[0] == "jobs" and path[2:] == ("defaults", "run", "shell") and shell and jobs:
+            jobs[-1] = (jobs[-1][0], shell.group(1), jobs[-1][2])
+        if BLOCK_INDICATOR.fullmatch(value):
+            index = _block_end(lines, index, indent)
+            continue
+        stack.append((indent, key))
+    return workflow, jobs
+
+
 def workflow_clis(project: pathlib.Path) -> dict[str, list[str]]:
     """First tokens of `.github/workflows/*` `run:` lines, as cli -> workflow files."""
     found: dict[str, list[str]] = {}
@@ -491,6 +543,7 @@ def workflow_clis(project: pathlib.Path) -> dict[str, list[str]]:
         except (OSError, UnicodeDecodeError):
             continue
         source = str(path.relative_to(project))
+        workflow_shell, jobs = _default_shells(lines)
         index = 0
         while index < len(lines):
             match = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*)$", lines[index])
@@ -501,13 +554,15 @@ def workflow_clis(project: pathlib.Path) -> dict[str, list[str]]:
             value = match.group(2).strip()
             commands: list[str] = []
             if BLOCK_INDICATOR.fullmatch(value):
-                indent = len(match.group(1))
-                while index < len(lines) and (not lines[index].strip() or len(lines[index]) - len(lines[index].lstrip()) > indent):
-                    commands.append(lines[index])
-                    index += 1
+                end = _block_end(lines, index, _key_column(lines[start]))
+                commands.extend(lines[index:end])
+                index = end
             elif value and not value.startswith("#"):
                 commands.append(value.strip("'\""))
             shell = _step_shell(lines, start, index, _key_column(lines[start]))
+            job = [(default, windows) for first, default, windows in jobs if first < start]
+            default, windows = job[-1] if job else (None, False)
+            shell = shell or default or workflow_shell or ("pwsh" if windows else None)
             if shell is not None and shell not in POSIX_SHELLS:
                 continue
             functions = frozenset(

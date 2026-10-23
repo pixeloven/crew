@@ -537,8 +537,11 @@ def _validate_nested_mapping(lines: list[str], line_offset: int) -> None:
         raise ScalarParseError(f"invalid nested mapping on line {tokens[position][2]}")
 
 
-def parse_simple_mapping(text: str) -> dict[str, Any]:
-    """Parse top-level scalar/folded fields from a YAML mapping."""
+def parse_simple_mapping(text: str, *, flat: bool = False) -> dict[str, Any]:
+    """Parse top-level scalar/folded fields from a YAML mapping.
+
+    With `flat`, a field written as a nested block mapping is an error.
+    """
     lines = text.splitlines()
     values: dict[str, Any] = {}
     index = 0
@@ -613,6 +616,8 @@ def parse_simple_mapping(text: str) -> dict[str, Any]:
                 if line.strip() and not line.lstrip().startswith("#")
             ]
             opens_mapping = bool(body) and body[0] != "-" and not body[0].startswith("- ")
+            if flat and opens_mapping:
+                raise ScalarParseError(f"{key} must be a flat scalar, not a nested block")
             if body and (
                 key in OPAQUE_NESTED_FIELDS
                 or opens_mapping and key not in SCALAR_FIELDS
