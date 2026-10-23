@@ -46,6 +46,26 @@ jobs:
     steps:
       - run: |
           Get-ChildItem $env:RUNNER_TEMP | Sort-Object LastWriteTime
+      - name: a windows runner's default shell is pwsh
+        run: |
+          param ($target)
+          throw "no target"
       - run: >-
           bash ./scripts/probe.sh
         shell: bash
+  pwsh-defaults:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: |
+          foreach ($file in $files) { $file }
+          trap { continue }
+  windows-bash:
+    runs-on: [self-hosted, windows]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: choco install jq

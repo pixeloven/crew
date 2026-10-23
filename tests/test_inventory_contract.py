@@ -205,6 +205,13 @@ class HarnessObservationTests(InventoryTestCase):
         self.assertIn("workflow:.github/workflows/ci.yml", capabilities["cli:bash"]["declared_by"],
                       "a step whose shell: is bash is still read")
 
+    def test_a_job_default_or_windows_runner_shell_is_honoured(self) -> None:
+        capabilities = self.fixture.build()["capabilities"]
+        for not_a_cli in ("cli:param", "cli:throw", "cli:foreach", "cli:trap"):
+            self.assertNotIn(not_a_cli, capabilities)
+        self.assertIn("workflow:.github/workflows/ci.yml", capabilities["cli:choco"]["declared_by"],
+                      "a job default of bash overrides the windows runner's pwsh")
+
 
 class ProbeTests(InventoryTestCase):
     def test_no_subprocess_runs_without_probe_versions(self) -> None:
