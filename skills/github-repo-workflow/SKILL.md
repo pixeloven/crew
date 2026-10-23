@@ -37,6 +37,8 @@ gh repo clone <owner>/<repo> <path>
 
 ## Sync without discarding work
 
+This applies only when starting new work. If the workspace is already on a branch prepared for the task, or the task is to continue an existing branch (such as addressing review comments on a PR), stay on that branch and skip this sync.
+
 An existing checkout may hold uncommitted edits, a stash in progress, or local commits you can't see the value of. Check before you touch it:
 
 ```bash
@@ -148,7 +150,7 @@ gh issue close <N> --reason completed     # close with a reason
 
 ## What not to do
 
-- **Don't `git reset --hard`** an existing checkout. If it is dirty or ahead of `origin/main`, stop and report.
+- **Don't `git reset --hard`** an existing checkout. When starting new work there, if it is dirty or ahead of `origin/main`, stop and report.
 - **Don't `--no-verify`** to skip pre-commit hooks. Hooks catch secrets, formatting, and lint issues — investigate failures, don't bypass.
 - **Don't `git add -A`** in repos with untracked files you didn't create. Add specific paths.
 - **Don't force-push** a branch with reviews unless rebase is the explicit intent. Push new commits instead.
