@@ -64,13 +64,24 @@ MAP_HEADER = "| Capability | Provider | Kind | State | Fallback (operator comman
 REMOVAL_LINE = "Pending removal (authorized removal only):"
 CAPABILITIES_HEADING = re.compile(r"^##[ \t]+capabilities\b.*$", re.IGNORECASE | re.MULTILINE)
 # A workflow `run:` line's first token is a candidate CLI unless it is shell
-# syntax or a builtin every runner has.
+# syntax, a bash builtin, a function the same block defines, or a tool every
+# runner has. Only bash/sh steps are read: another `shell:` (pwsh, python, cmd)
+# is a language whose first tokens are not commands on PATH.
 SHELL_WORDS = frozenset(
     "if then else elif fi for while until do done case esac in function select "
     "echo printf cd export set unset exit return true false test source eval exec "
     "read shift local declare trap wait sleep pushd popd mkdir rm cp mv cat ls touch "
-    "chmod grep sed awk tee head tail sort uniq wc xargs find env sudo time".split()
+    "chmod grep sed awk tee head tail sort uniq wc xargs find env sudo time "
+    "break continue alias unalias bg fg jobs kill let ulimit umask typeset readonly "
+    "getopts hash type command builtin enable caller compgen complete compopt disown "
+    "dirs help history logout mapfile readarray shopt suspend times coproc".split()
 )
+POSIX_SHELLS = frozenset({"bash", "sh"})
+# PowerShell's Verb-Noun cmdlets, for a pwsh step whose shell is set outside the step.
+CMDLET = re.compile(r"[A-Z][a-z]+-[A-Z][A-Za-z]+")
+SHELL_FUNCTION = re.compile(r"^\s*(?:function\s+([A-Za-z_][\w.:-]*)|([A-Za-z_][\w.:-]*)\s*\(\s*\))")
+# An external: service a CLI on PATH reaches directly, beside any MCP server or plugin.
+EXTERNAL_CLIS = {"github": ("gh",)}
 CLI_TOKEN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
 ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=\S*")
 BLOCK_INDICATOR = re.compile(r"^[|>][-+0-9]*$")
@@ -103,7 +114,8 @@ NOT_OBSERVABLE = (
     },
     {
         "what": "external:* providers",
-        "why": "matched to MCP servers and plugins by name only, so a match or a miss is an inference",
+        "why": "matched to MCP servers and plugins by name, and to a known CLI on PATH (gh for "
+        "external:github), never by a connection; a match or a miss is an inference",
     },
 )
 
@@ -423,7 +435,7 @@ def _skills(roots: list[dict[str, str]], reads: list[dict[str, str]]) -> list[di
     return skills
 
 
-def _command_token(line: str) -> str | None:
+def _command_token(line: str, functions: frozenset[str] = frozenset()) -> str | None:
     tokens = line.strip().split()
     while tokens and ASSIGNMENT.fullmatch(tokens[0]):
         if "$(" in tokens[0] or "`" in tokens[0]:
@@ -432,9 +444,40 @@ def _command_token(line: str) -> str | None:
     if not tokens:
         return None
     token = tokens[0].strip("'\"")
-    if token in SHELL_WORDS or not CLI_TOKEN.fullmatch(token):
+    if token in SHELL_WORDS or token in functions or CMDLET.fullmatch(token) or not CLI_TOKEN.fullmatch(token):
         return None
     return token
+
+
+def _key_column(line: str) -> int:
+    """Column of a YAML key, past any `- ` sequence indicators."""
+    match = re.match(r"^(\s*(?:-\s+)*)", line)
+    return len(match.group(1)) if match else 0
+
+
+def _step_shell(lines: list[str], start: int, end: int, column: int) -> str | None:
+    """The `shell:` beside a `run:` key at `column`, within the step around lines[start:end]."""
+    pattern = re.compile(r"^(?:\s*(?:-\s+)?)shell:\s*['\"]?([^\s'\"#]+)")
+    for index in range(start - 1, -1, -1):
+        line = lines[index]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent < column and not line.lstrip().startswith("-"):
+            break
+        if _key_column(line) == column and (match := pattern.match(line)):
+            return match.group(1)
+        if line.lstrip().startswith("-") and _key_column(line) <= column:
+            break
+    for line in lines[end:]:
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent < column or line.lstrip().startswith("-") and indent <= column:
+            break
+        if indent == column and (match := pattern.match(line)):
+            return match.group(1)
+    return None
 
 
 def workflow_clis(project: pathlib.Path) -> dict[str, list[str]]:
@@ -451,6 +494,7 @@ def workflow_clis(project: pathlib.Path) -> dict[str, list[str]]:
         index = 0
         while index < len(lines):
             match = re.match(r"^(\s*)(?:-\s+)?run:\s*(.*)$", lines[index])
+            start = index
             index += 1
             if not match:
                 continue
@@ -463,6 +507,14 @@ def workflow_clis(project: pathlib.Path) -> dict[str, list[str]]:
                     index += 1
             elif value and not value.startswith("#"):
                 commands.append(value.strip("'\""))
+            shell = _step_shell(lines, start, index, _key_column(lines[start]))
+            if shell is not None and shell not in POSIX_SHELLS:
+                continue
+            functions = frozenset(
+                defined.group(1) or defined.group(2)
+                for command in commands
+                if (defined := SHELL_FUNCTION.match(command))
+            )
             heredoc: str | None = None
             continued = False
             for command in commands:
@@ -476,7 +528,7 @@ def workflow_clis(project: pathlib.Path) -> dict[str, list[str]]:
                 continued = stripped.endswith("\\")
                 opened = HEREDOC.search(stripped)
                 heredoc = opened.group(1) if opened else None
-                token = _command_token(stripped)
+                token = _command_token(stripped, functions)
                 if token and source not in found.setdefault(token, []):
                     found[token].append(source)
     return found
@@ -679,6 +731,11 @@ def _capabilities(
                 _mcp_provider(server) for server in servers if _norm(server["name"]) == _norm(name)
             )
         else:
+            for cli in EXTERNAL_CLIS.get(name, ()):
+                if path := which(cli):
+                    providers.append(
+                        {"kind": "cli", "name": cli, "state": "present", "path": path, "basis": "known-cli"}
+                    )
             needle = _norm(name)
             providers.extend(
                 {**_mcp_provider(server), "basis": "name-match"}
@@ -774,13 +831,24 @@ def gaps(inventory: dict[str, Any]) -> list[dict[str, str]]:
         present = [provider for provider in entry["providers"] if provider["state"] == "present"]
         declarers = ", ".join(entry["declared_by"])
         if not present:
-            if kind == "cli":
+            if kind == "cli" and all(source.startswith("workflow:") for source in entry["declared_by"]):
+                # A workflow step runs on a CI runner, not this machine, so its absence
+                # here says nothing about the step; and a run: line is read heuristically.
+                evidence = (
+                    f"shutil.which({name!r}) found nothing on PATH; declared only by {declarers}, "
+                    "whose run: steps execute on CI runners, not this machine"
+                )
+                label = "inference"
+            elif kind == "cli":
                 evidence, label = f"shutil.which({name!r}) found nothing on PATH; declared by {declarers}", "fact"
             elif kind == "mcp":
                 evidence = f"no enabled MCP server named {name} in the inspected configs; declared by {declarers}"
                 label = "inference"
             else:
-                evidence, label = f"no MCP server or plugin matched {name!r} by name; declared by {declarers}", "inference"
+                evidence = f"no MCP server or plugin matched {name!r} by name"
+                if EXTERNAL_CLIS.get(name):
+                    evidence += f" and {', '.join(EXTERNAL_CLIS[name])} is not on PATH"
+                evidence, label = f"{evidence}; declared by {declarers}", "inference"
             if kind != "cli" and capability not in known:
                 # cli:<tool> is open; an mcp:/external: name outside the vocabulary
                 # may be a typo or a source the vocabulary lacks (docs/CAPABILITIES.md).

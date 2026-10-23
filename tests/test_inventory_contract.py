@@ -196,6 +196,15 @@ class HarnessObservationTests(InventoryTestCase):
         tracker = [p for p in capabilities["mcp:tracker"]["providers"] if p["state"] == "present"]
         self.assertEqual(["tracker"], sorted({p["name"] for p in tracker}))
 
+    def test_builtins_block_functions_and_powershell_are_not_workflow_clis(self) -> None:
+        capabilities = self.fixture.build()["capabilities"]
+        for not_a_cli in ("cli:shopt", "cli:break", "cli:command", "cli:limit", "cli:try",
+                          "cli:Invoke-RestMethod", "cli:Installing", "cli:Tee-Object",
+                          "cli:Get-ChildItem", "cli:Sort-Object", "cli:throw"):
+            self.assertNotIn(not_a_cli, capabilities)
+        self.assertIn("workflow:.github/workflows/ci.yml", capabilities["cli:bash"]["declared_by"],
+                      "a step whose shell: is bash is still read")
+
 
 class ProbeTests(InventoryTestCase):
     def test_no_subprocess_runs_without_probe_versions(self) -> None:
@@ -325,8 +334,6 @@ class DigestAndGapTests(InventoryTestCase):
         found = {(gap["kind"], gap["name"]): gap for gap in gaps(inventory)}
         self.assertEqual("fact", found[("capability-unprovided", "cli:jq")]["label"])
         self.assertEqual("inference", found[("capability-unprovided", "external:linear")]["label"])
-        self.assertIn(("capability-unprovided", "external:github"), found,
-                      "a pi package hosted on github.com does not provide external:github")
         self.assertEqual("fact", found[("slot-unfilled", "agent-runtime")]["label"])
         self.assertNotIn(("slot-unfilled", "topology"), found)
         self.assertEqual("inference", found[("tool-unskilled", "cli:make")]["label"])
@@ -335,6 +342,30 @@ class DigestAndGapTests(InventoryTestCase):
         self.assertNotIn(("mcp-unskilled", "tracker"), found)
         self.assertTrue(all(gap["evidence"] for gap in found.values()))
         self.assertEqual(sorted(found), sorted((gap["kind"], gap["name"]) for gap in inventory["gaps"]))
+
+    def test_gh_on_path_provides_external_github(self) -> None:
+        provided = self.fixture.build()
+        providers = provided["capabilities"]["external:github"]["providers"]
+        self.assertIn(
+            {"kind": "cli", "name": "gh", "state": "present", "path": "/fake/bin/gh", "basis": "known-cli"},
+            providers,
+        )
+        self.assertNotIn(("capability-unprovided", "external:github"),
+                         {(gap["kind"], gap["name"]) for gap in gaps(provided)})
+        without_gh = self.fixture.build(which=lambda name: None if name == "gh" else fake_which(name))
+        found = {(gap["kind"], gap["name"]): gap for gap in gaps(without_gh)}
+        gap = found[("capability-unprovided", "external:github")]
+        self.assertEqual("inference", gap["label"],
+                         "a pi package hosted on github.com does not provide external:github")
+        self.assertIn("gh is not on PATH", gap["evidence"])
+
+    def test_a_cli_only_a_workflow_declares_is_never_a_fact_gap(self) -> None:
+        found = {(gap["kind"], gap["name"]): gap for gap in gaps(self.fixture.build(clis=["jq"]))}
+        tar = found[("capability-unprovided", "cli:tar")]
+        self.assertEqual("inference", tar["label"])
+        self.assertIn("CI runners", tar["evidence"])
+        self.assertEqual("fact", found[("capability-unprovided", "cli:jq")]["label"],
+                         "a CLI a skill or --cli declares is still a fact gap")
 
     def test_pack_declared_slots_are_inventoried_with_their_owner(self) -> None:
         toolkit = self.fixture.home / ".claude/plugins/cache/acme/toolkit/1.2.0"
