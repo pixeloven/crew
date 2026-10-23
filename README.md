@@ -92,6 +92,13 @@ name capabilities (`mcp:tracker`, `cli:gh`), never products, and degrade when on
 is missing; [Capabilities](docs/CAPABILITIES.md) lists the shared names and how
 an agent adapts.
 
+### Removed after 0.49.0: `character-and-worldbuilding`
+
+No Crew role used `character-and-worldbuilding`, so it no longer ships with
+Crew. It is parked in [crew#109](https://github.com/pixeloven/crew/issues/109),
+which keeps the full skill text and plans a creative skills pack where it will
+return. A project that relies on it can keep a local copy until then.
+
 ### Migrating to 0.44.0: stack skills moved to `infra-skills`
 
 `terraform-conventions`, `ansible-conventions`, `k8s-kustomize-conventions`,

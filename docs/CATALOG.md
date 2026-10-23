@@ -2,7 +2,7 @@
 
 # Skill catalog
 
-22 skills — agent methodology, portable by construction. `requires` legend:
+21 skills — agent methodology, portable by construction. `requires` legend:
 empty = needs nothing but a repo; `external:github` = uses GitHub. Skills that depend on a
 platform's capabilities live in that consumer's own overlay, not here. `expects-local` names
 the consumer-local slot a skill defers concrete values to (see templates/local-skills/).
@@ -12,7 +12,6 @@ the consumer-local slot a skill defers concrete values to (see templates/local-s
 | `activation-contracts` | concept | external:github | — | Use when a role must run without an interactive request, when wiring CI or a scheduler to an agent, or when choosing triggered versus interactive dispatch. Defines the event → dispatch → output contract. |
 | `agent-platform-design` | concept | — | — | Use when designing an agent capability, choosing MCP vs AXI vs CLI, deciding skill vs agent, or placing a surface at operator or autonomous-runtime scope. Covers naming and federation boundaries. |
 | `autonomous-agent-design` | concept | — | agent-runtime | Use when designing or evaluating an autonomous agent workflow. Covers task decomposition, tool scoping, result contracts, failure modes, and the shadow → draft → autonomous maturity sequence. |
-| `character-and-worldbuilding` | subject | — | — | Use when defining a fictional character, setting, creative-project canon, or dossier. Provides a Q&A-driven worldbuilding method for companion agents; it supplies methodology, not lore. |
 | `delta-handling` | concept | — | protected-seams | Use when a worker proposes deviating from an active plan, when deciding whether a change needs sign-off, or when recording a mid-execution change. Defines auto-approvable vs human-escalated deltas. |
 | `doctor` | concept | — | — | Use when asked to run Crew Doctor, verify installation or onboarding, debug missing roles/skills, or report what this session can reach. Separates installed, enabled, runtime-loaded, granted, degraded, and untested evidence. |
 | `github-repo-workflow` | subject | external:github | secret-paths | Use when editing a GitHub repository, opening or reviewing a PR, or operating on issues. Covers clone → branch → edit → commit → push → PR using pre-wired GH_TOKEN and git credentials. |
