@@ -93,7 +93,7 @@ Pick the class by *who the primary caller is* and *whose credentials the capabil
 
 ## Work quality
 
-Four rules, always on. They are here rather than in a skill because a skill has to
+Five rules, always on. They are here rather than in a skill because a skill has to
 be *triggered*, and these are true of every change — a trigger that matches
 everything discriminates nothing.
 
@@ -111,10 +111,15 @@ everything discriminates nothing.
 - **Verify, don't assert.** State the success criterion before starting, then check
   it. "Tests pass" means you ran them; "it loads" means you loaded it. Report what
   the check actually returned, including when it failed.
+- **Done means done, not "code written".** A change is done when its success
+  criterion is checked, the quality gate's verification commands pass, the docs and
+  generated files it made stale are updated, and anything left over is a named
+  follow-up rather than a silent TODO. Until then, report it as in progress. Under
+  a supervising host, the host's definition of done wins over this one.
 
 Derived from [Karpathy's observations](https://x.com/karpathy/status/2015883857489522876)
-on where LLM coding agents go wrong, plus one added from this foundation's own
-failures — the fourth. Bias toward caution over speed; use judgement on trivial tasks.
+on where LLM coding agents go wrong, plus two added from this foundation's own
+experience — the last two. Bias toward caution over speed; use judgement on trivial tasks.
 
 ## Reporting contract
 
