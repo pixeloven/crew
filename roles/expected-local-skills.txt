@@ -12,3 +12,4 @@ topology
 protected-seams
 secret-paths
 agent-runtime
+decision-record-format

@@ -127,7 +127,7 @@ a separate capability, not MCP parity.
 
 Union the installed catalogue's actual `expects-local:` declarations. Today the
 declared set is `platform-conventions`, `topology`, `protected-seams`,
-`secret-paths`, and `agent-runtime`; derive rather than hard-code it in a report.
+`secret-paths`, `agent-runtime`, and `decision-record-format`; derive rather than hard-code it in a report.
 `litellm-access-map` and `vault-ops` are recommended vocabulary, not declared
 slots, and must never appear as unfilled unless a future installed skill actually
 declares them.

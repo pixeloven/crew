@@ -2,7 +2,7 @@
 
 # Skill catalog
 
-21 skills — agent methodology, portable by construction. `requires` legend:
+22 skills — agent methodology, portable by construction. `requires` legend:
 empty = needs nothing but a repo; `external:github` = uses GitHub. Skills that depend on a
 platform's capabilities live in that consumer's own overlay, not here. `expects-local` names
 the consumer-local slot a skill defers concrete values to (see templates/local-skills/).
@@ -12,6 +12,7 @@ the consumer-local slot a skill defers concrete values to (see templates/local-s
 | `activation-contracts` | concept | external:github | — | Use when a role must run without an interactive request, when wiring CI or a scheduler to an agent, or when choosing triggered versus interactive dispatch. Defines the event → dispatch → output contract. |
 | `agent-platform-design` | concept | — | — | Use when designing an agent capability, choosing MCP vs AXI vs CLI, deciding skill vs agent, or placing a surface at operator or autonomous-runtime scope. Covers naming and federation boundaries. |
 | `autonomous-agent-design` | concept | — | agent-runtime | Use when designing or evaluating an autonomous agent workflow. Covers task decomposition, tool scoping, result contracts, failure modes, and the shadow → draft → autonomous maturity sequence. |
+| `decision-records` | concept | — | decision-record-format | Use when a change settles an architectural or hard-to-reverse choice, or when writing, reviewing or superseding an ADR. Covers when to record a decision, required content, and superseding. |
 | `delta-handling` | concept | — | protected-seams | Use when a worker proposes deviating from an active plan, when deciding whether a change needs sign-off, or when recording a mid-execution change. Defines auto-approvable vs human-escalated deltas. |
 | `doctor` | concept | — | — | Use when asked to run Crew Doctor, verify installation or onboarding, debug missing roles/skills, or report what this session can reach. Separates installed, enabled, runtime-loaded, granted, degraded, and untested evidence. |
 | `github-repo-workflow` | subject | external:github | secret-paths | Use when editing a GitHub repository, opening or reviewing a PR, or operating on issues. Covers clone → branch → edit → commit → push → PR using pre-wired GH_TOKEN and git credentials. |
@@ -21,7 +22,7 @@ the consumer-local slot a skill defers concrete values to (see templates/local-s
 | `mcp-server-design` | subject | — | — | Use when building MCP tools or servers with FastMCP. Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision. |
 | `onboarding` | concept | — | — | Use when onboarding or re-auditing a project against Crew. Defaults to a read-only report; edits require explicit apply authorization. Preserves mature entry files, safety tripwires, delivery contracts, and runbook pointers. |
 | `orchestration-patterns` | concept | — | — | Use when planning multi-agent work, dispatching workers, or splitting and reconverging a task. Covers sequential, parallel, and mixed execution, dispatch packets, convergence, writer isolation, and harness bindings. |
-| `plan-execution` | concept | — | protected-seams | Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, acceptance criteria, validation gates, delta routing, and completion evidence. |
+| `plan-execution` | concept | — | protected-seams | Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, test-first phases, acceptance criteria, validation gates, delta routing, and completion evidence. |
 | `plan-generation` | concept | — | — | Use when developing a plan with the operator before execution. Covers when planning is warranted, checklist → detailed-spec progression, phases, dependencies, success criteria, and execution handoff. |
 | `plan-validation` | concept | — | — | Use when deciding whether a phase can advance, whether work is complete, or what evidence “done” requires. Defines acceptance evaluation, validation-gate promotion, and invalid completion signals. |
 | `platform-glossary` | concept | — | — | Use when naming a platform concept, locating a workload, or writing docs/manifests with shared terms. Resolves app, surface, consumer, tenant, gateway, workload, deployment, project, skill, operator, and Crew vocabulary. |

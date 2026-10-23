@@ -18,9 +18,10 @@ descriptions, body text, and intended posture stay aligned.
 
 Crew contains portable agent methodology. Stack conventions live in packs (see
 [Packs](#packs)). Project topology,
-credentials, access maps, protected seams, and runtime contracts belong in the
+credentials, access maps, protected seams, runtime contracts, and decision-record
+formats belong in the
 consumer's local `.agents/skills/` overlay. The installed catalogue's
-`expects-local:` declarations identify the five currently required concern slots;
+`expects-local:` declarations identify the six currently required concern slots;
 `templates/local-skills/` also offers recommended vocabulary for common optional
 concerns.
 

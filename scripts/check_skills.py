@@ -67,6 +67,7 @@ LOCAL_SLOT_VOCABULARY = {
     "secret-paths",
     "vault-ops",
     "agent-runtime",
+    "decision-record-format",
 }
 
 

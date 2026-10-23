@@ -3720,7 +3720,14 @@ class DerivedContractTests(unittest.TestCase):
     def test_m6_slots_are_derived_and_vocabulary_is_separate(self) -> None:
         contract = declared_local_slots(ROOT)
         self.assertEqual(
-            {"agent-runtime", "platform-conventions", "protected-seams", "secret-paths", "topology"},
+            {
+                "agent-runtime",
+                "decision-record-format",
+                "platform-conventions",
+                "protected-seams",
+                "secret-paths",
+                "topology",
+            },
             set(contract["declared"]),
         )
         self.assertNotIn("litellm-access-map", contract["declared"])

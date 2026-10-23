@@ -24,6 +24,7 @@ under Claude Code and Codex the plugin copy is namespaced `crew:skill`, so both 
 | `protected-seams` | declared slot | patterns that require human sign-off |
 | `secret-paths` | declared slot | non-secret references to credential stores and paths |
 | `agent-runtime` | declared slot | autonomous exit codes, result format, retry, and dispatch contracts |
+| `decision-record-format` | declared slot | decision-record (ADR) location, numbering, template, and status values |
 | `litellm-access-map` | recommended vocabulary | concrete virtual-key ↔ access-group mapping |
 | `vault-ops` | recommended vocabulary | corpus lint/promote jobs, schedules, and placement conventions |
 
@@ -31,9 +32,9 @@ Each `<slot>.md` file in this directory is a starter stub — copy it into your 
 rename, and fill the ▸ blocks. Onboarding proposes that copy for every unfilled slot, and
 Doctor reports a fill that still carries ▸ blocks as partial.
 
-**Two kinds of slot.** Five of these are *declared* — a foundation skill names them in its
+**Two kinds of slot.** Six of these are *declared* — a foundation skill names them in its
 `expects-local` frontmatter, so the doctor can report them as unfilled: `platform-conventions`,
-`topology`, `protected-seams`, `secret-paths`, `agent-runtime`. The other two —
+`topology`, `protected-seams`, `secret-paths`, `agent-runtime`, `decision-record-format`. The other two —
 `litellm-access-map` and `vault-ops` — are *recommended vocabulary*: no foundation skill defers
 to them (the skills that did now live in consumer overlays), but they name concerns most
 platform-running consumers have, and using the same names keeps overlays legible to each other.
