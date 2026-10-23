@@ -34,7 +34,8 @@ catalogue pressure, not a permanent product byte limit.
 Use the harness quickstart and a published `vX.Y.Z` tag. Pi pins must be
 `v0.35.0` or newer: older Crew roles lack the identity frontmatter pi-subagents
 requires and disappear silently. From `v0.39.0`, Crew on Pi requires
-`pi-subagents` `>=0.62.0` for its `excludeTools` posture. On Pi, roles register
+`pi-subagents` `>=0.62.0` for its `excludeTools` posture; Crew pins the tested
+range `>=0.62.0 <0.82.0` so an upstream release cannot change roles unannounced. On Pi, roles register
 as `crew.<role>`. Dispatch the qualified name: a bare `reviewer` or `researcher`
 resolves to pi-subagents' own built-ins. On every harness, MCP side effects are
 governed by role behaviour, not by the `writes:` posture.

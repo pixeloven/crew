@@ -8,7 +8,7 @@ chosen tag:
 ```json
 {
   "packages": [
-    "npm:pi-subagents@0.80.0",
+    "npm:pi-subagents@0.81.0",
     "git:github.com/pixeloven/crew@vX.Y.Z"
   ]
 }
@@ -22,7 +22,10 @@ settings and the resolved version from the checkout's
 Crew `v0.39.0` and newer require `pi-subagents` `>=0.62.0`. The roles express
 their write posture with `excludeTools`, which older pi-subagents ignores, so
 every role would silently receive pi's full default tool set, `write` and `edit`
-included.
+included. Crew declares the tested range `>=0.62.0 <0.82.0` as its peer
+dependency; `0.81.0` is the newest release verified to discover every role as
+`crew.<role>` with its `excludeTools`. Treat a newer minor as untested until
+Crew widens the range.
 
 ## 2. Verify runtime discovery
 

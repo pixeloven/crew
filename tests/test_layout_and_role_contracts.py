@@ -746,11 +746,11 @@ class RolePostureTests(unittest.TestCase):
                     bool(role.get("dispatch")), metadata.get("allowNestedSubagents", False)
                 )
 
-    def test_pi_peer_floor_carries_exclude_tools(self) -> None:
+    def test_pi_peer_pins_tested_range_from_exclude_tools_floor(self) -> None:
         import json
 
         package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-        self.assertEqual(">=0.62.0", package["peerDependencies"]["pi-subagents"])
+        self.assertEqual(">=0.62.0 <0.82.0", package["peerDependencies"]["pi-subagents"])
 
     def test_every_runtime_knob_is_observably_rejected(self) -> None:
         for key in ("model", "thinking", "effort", "model_reasoning_effort", "turnBudget", "maxTurns"):
