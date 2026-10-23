@@ -135,6 +135,58 @@ class LayoutContractTests(unittest.TestCase):
                 self.assertNotEqual(0, completed.returncode)
                 self.assertIn("invalid YAML frontmatter", completed.stdout + completed.stderr)
 
+    def test_skill_with_nested_metadata_mapping_passes_layout(self) -> None:
+        cases = (
+            "metadata:\n  internal: true\n",
+            "metadata:\n  internal: true\n  owner: \"platform\"\n  tags: [ops, ci]\n",
+            "metadata: # harness extras\n  nested:\n    depth: 2\n  list:\n    - one\n",
+        )
+        for nested in cases:
+            with self.subTest(frontmatter=nested), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                skill = root / ".claude/skills/validation-supervision/SKILL.md"
+                skill.parent.mkdir(parents=True)
+                skill.write_text(
+                    "---\nname: validation-supervision\ndescription: Load when a ship starts.\n"
+                    f"user-invocable: false\n{nested}---\n",
+                    encoding="utf-8",
+                )
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
+    def test_malformed_nested_metadata_is_still_rejected(self) -> None:
+        cases = (
+            "metadata:\n  internal: true\n    stray: indented\n",
+            "metadata:\n  internal: [unterminated\n",
+            "metadata:\n  internal: true\n  internal: false\n",
+            "metadata:\n  internal: true\n  - mixed\n",
+            "metadata:\n  key: Valid: bad\n",
+        )
+        for malformed in cases:
+            with self.subTest(frontmatter=malformed), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                skill = root / ".agents/skills/probe/SKILL.md"
+                skill.parent.mkdir(parents=True)
+                skill.write_text(
+                    f"---\nname: probe\ndescription: probe\n{malformed}---\n",
+                    encoding="utf-8",
+                )
+                completed = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts/check_skill_layout.py"), str(root)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertNotEqual(0, completed.returncode)
+                self.assertIn("invalid YAML frontmatter", completed.stdout + completed.stderr)
+
     def test_reserved_plain_scalar_indicators_are_rejected(self) -> None:
         for value in ("-", "?", ">foo"):
             with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp:
