@@ -92,7 +92,7 @@ name capabilities (`mcp:tracker`, `cli:gh`), never products, and degrade when on
 is missing; [Capabilities](docs/CAPABILITIES.md) lists the shared names and how
 an agent adapts.
 
-### Removed after 0.49.0: `character-and-worldbuilding`
+### Removed after 0.49.1: `character-and-worldbuilding`
 
 No Crew role used `character-and-worldbuilding`, so it no longer ships with
 Crew. It is parked in [crew#109](https://github.com/pixeloven/crew/issues/109),
