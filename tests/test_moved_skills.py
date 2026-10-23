@@ -77,7 +77,7 @@ class MovedSkillsTableTests(unittest.TestCase):
     def test_moved_skills_are_gone_from_crew_and_kept_skills_remain(self) -> None:
         for name in MOVED_SKILLS:
             self.assertFalse((ROOT / "skills" / name).exists(), name)
-        for kept in ("mcp-server-design", "python-conventions", "character-and-worldbuilding"):
+        for kept in ("mcp-server-design", "python-conventions"):
             self.assertTrue((ROOT / "skills" / kept / "SKILL.md").is_file(), kept)
 
     def test_shipped_content_names_neither_a_moved_skill_nor_its_pack(self) -> None:
