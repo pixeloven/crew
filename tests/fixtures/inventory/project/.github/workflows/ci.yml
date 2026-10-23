@@ -21,3 +21,51 @@ jobs:
           base_ver=$(git show HEAD:package.json)
           tar -czf out.tgz \
             vendored-arg
+      - name: builtins and functions defined in the block are not commands
+        run: |
+          shopt -s nullglob
+          bad() { printf '::error::%s\n' "$1"; }
+          function limit {
+            echo "$1"
+          }
+          for attempt in 1 2; do
+            break
+          done
+          bad "failed"
+          limit 'capped'
+          command -v jq
+      - name: a PowerShell step is not read as shell
+        shell: pwsh
+        run: |
+          try {
+            Invoke-RestMethod https://example.invalid/install.ps1 | Invoke-Expression
+          } catch { throw }
+          "Installing the preview." | Tee-Object -FilePath $log
+  windows:
+    runs-on: windows-latest
+    steps:
+      - run: |
+          Get-ChildItem $env:RUNNER_TEMP | Sort-Object LastWriteTime
+      - name: a windows runner's default shell is pwsh
+        run: |
+          param ($target)
+          throw "no target"
+      - run: >-
+          bash ./scripts/probe.sh
+        shell: bash
+  pwsh-defaults:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - run: |
+          foreach ($file in $files) { $file }
+          trap { continue }
+  windows-bash:
+    runs-on: [self-hosted, windows]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: choco install jq

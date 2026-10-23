@@ -134,6 +134,18 @@ class ProposalGateTests(unittest.TestCase):
         text = "Run `gh pr checks --watch` from the branch; see AGENTS.md#git and scripts/check_skills.py."
         self.assertEqual([], context_leaks(text, project_names=["orchard"], remote_slugs=["example-org/orchard"]))
 
+    def test_a_field_written_as_a_nested_block_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "AGENTS.md").write_text("", encoding="utf-8")
+            path = root / VALID.name
+            text = VALID.read_text(encoding="utf-8")
+            line = next(line for line in text.splitlines() if line.startswith("observation:"))
+            path.write_text(text.replace(line, "observation:\n  saw: a thing"), encoding="utf-8")
+            messages = [item["message"] for item in check_proposal(path) if item["gate"] == "fields"]
+            self.assertEqual(["invalid frontmatter: observation must be a flat scalar, not a nested block"],
+                             messages)
+
     def test_verbatim_window_ignores_case_and_whitespace_and_stops_below_forty(self) -> None:
         excerpt = "Without an argument, the pull request that belongs to the current branch"
         copied = [(1, "WITHOUT an   argument, the pull request that belongs")]

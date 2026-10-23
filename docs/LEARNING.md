@@ -53,8 +53,8 @@ No file in a queue is ever named `SKILL.md`.
 
 ## The proposal format — `crew-proposal/1`
 
-Flat frontmatter (Crew's stdlib parser reads flat mappings only, so provenance is
-spelled as flat `provenance-*` keys), then a fixed body.
+Flat frontmatter (the proposal check rejects a field written as a nested block,
+so provenance is spelled as flat `provenance-*` keys), then a fixed body.
 
 | Field | Values |
 |---|---|

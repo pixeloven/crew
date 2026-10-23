@@ -229,6 +229,18 @@ def selftest() -> int:
             )
         )
 
+        nested = root / ".agents/skills/nested-metadata"
+        nested.mkdir()
+        (nested / "SKILL.md").write_text("---\nname: nested-metadata\ndescription: x\nmetadata:\n  internal: true\n---\n")
+        cases.append(("a nested metadata mapping passes", not any("nested-metadata" in e for e in check(root))))
+        (nested / "SKILL.md").write_text("---\nname: nested-metadata\ndescription: x\nmetadata:\n  a: 1\n   b: 2\n---\n")
+        cases.append(
+            (
+                "malformed nested frontmatter is rejected",
+                any("nested-metadata" in e and "invalid YAML frontmatter" in e for e in check(root)),
+            )
+        )
+
         invalid_agent = root / ".pi/agents/role-probe.md"
         invalid_agent.parent.mkdir(parents=True)
         invalid_agent.write_text("---\ndescription: probe\nmodel: fixed\n---\n")

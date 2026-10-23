@@ -172,7 +172,7 @@ def _split(text: str) -> tuple[list[str], list[str]] | None:
 
 def parse_fields(block: list[str]) -> dict[str, str]:
     """Flat frontmatter as strings: dates, versions and counts stay as written."""
-    parsed = parse_simple_mapping("\n".join(block))
+    parsed = parse_simple_mapping("\n".join(block), flat=True)
     fields: dict[str, str] = {}
     for line in block:
         match = FIELD.fullmatch(line)
