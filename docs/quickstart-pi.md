@@ -120,6 +120,12 @@ remains the default. Turn it on for a pi process with an environment variable:
 CREW_PI_AGENT=1 pi
 ```
 
+A supervising host whose workers must not delegate can switch the tool off
+regardless of the opt-in. With `CREW_PI_DISPATCH=off` in the environment the
+extension registers no `crew_agent` tool, in the session or in any role it would
+have started. The roles stay readable: the rendered `pi-agents/*.md` files and the
+pi-subagents path are untouched. Any other value leaves the opt-in in charge.
+
 The extension registers one tool, `crew_agent { agent, task, cwd? }`. It runs a
 Crew role in a separate `pi` process and returns the role's final answer as the
 tool result. Use bare role names (`reviewer`, not `crew.reviewer`): the tool is

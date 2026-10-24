@@ -6,6 +6,7 @@
  * so pi itself supplies posture (`--exclude-tools`) and MCP (the child is an ordinary
  * pi process and connects the same mcp.json servers). Without the opt-in it registers
  * nothing, and Crew roles stay reachable through pi-subagents as `crew.<role>`.
+ * A supervising host can veto it with CREW_PI_DISPATCH=off, which wins over the opt-in.
  *
  * Contract (crew#92):
  *  - define:   roles are the rendered pi-agents/*.md beside this file; a
@@ -35,6 +36,9 @@ let parseFrontmatter: Host["parseFrontmatter"];
 const TOOL = "crew_agent";
 const PACKAGE = "crew";
 const OPT_IN_ENV = "CREW_PI_AGENT";
+// Host switch: a host whose workers must not delegate sets this to `off`. It overrides
+// the opt-in and leaves the tool unregistered; the role files stay where they are.
+const DISPATCH_ENV = "CREW_PI_DISPATCH";
 const DEPTH_ENV = "CREW_AGENT_DEPTH";
 const TIMEOUT_ENV = "CREW_AGENT_TIMEOUT_SECONDS";
 // Operator session is depth 0; a lead child (1) may dispatch workers (2), which may not.
@@ -249,7 +253,7 @@ function bound(name: string, text: string): string {
 }
 
 export default async function (pi: ExtensionAPI) {
-	if (process.env[OPT_IN_ENV] !== "1") return;
+	if (process.env[OPT_IN_ENV] !== "1" || process.env[DISPATCH_ENV] === "off") return;
 	const host = await import("@earendil-works/pi-coding-agent");
 	const { Type } = await import("typebox");
 	parseFrontmatter = host.parseFrontmatter;

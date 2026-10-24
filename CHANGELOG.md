@@ -4,6 +4,16 @@ Release notes for each version, newest first. Every version bump adds its
 section here in the same PR. Earlier releases are described in their pull
 requests and tags.
 
+## 0.57.0
+
+### Added
+
+- **Host switch for the pi extension.** `CREW_PI_DISPATCH=off` leaves the
+  experimental `crew_agent` tool unregistered even when `CREW_PI_AGENT=1` is
+  set, so a supervising host whose workers must not delegate can enforce that
+  mechanically. The roles stay readable. Documented in `docs/quickstart-pi.md`
+  section 6 and covered by contract tests for both states.
+
 ## 0.56.0
 
 ### Added
