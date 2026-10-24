@@ -70,10 +70,14 @@ the resolved checkout separately. Read the resolved version from that checkout's
 `.claude-plugin/plugin.json`; never use `git describe`. A pin below `v0.35.0` is
 **DEGRADED**, not missing: pi-subagents silently drops roles without frontmatter
 `name:`, so the Crew fleet is invisible below the first role-discoverable
-release. A configured `pi-subagents` pin below `0.62.0` is **DEGRADED** for
-Crew `v0.39.0`+: it ignores the roles' `excludeTools`, so every role silently
-gets `write` and `edit`. Also report duplicate project/user scopes and which scope the current
-runtime actually resolved, if this Pi session exposes it.
+release. Report the `pi-subagents` configured pin and resolved version
+separately; an unpinned `npm:pi-subagents` floats to the latest release, so
+judge it by the resolved version. If either falls outside Crew's tested range
+`>=0.62.0 <0.82.0`, report **DEGRADED**: below `0.62.0` (Crew `v0.39.0`+) it
+ignores the roles' `excludeTools`, so every role silently gets `write` and
+`edit`; at or above `0.82.0` it is untested, not broken. Also report duplicate
+project/user scopes and which scope the current runtime actually resolved, if
+this Pi session exposes it.
 
 **Claude Code.** Reconcile four distinct facts:
 
