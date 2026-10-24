@@ -27,6 +27,15 @@ dependency; `0.81.0` is the newest release verified to discover every role as
 `crew.<role>` with its `excludeTools`. Treat a newer minor as untested until
 Crew widens the range.
 
+### Enable packs per project
+
+Add each pack to the `packages` of the project that uses it, in `.pi/settings.json`
+(`pi install git:github.com/pixeloven/<pack>@vX.Y.Z -l`), rather than to
+`~/.pi/agent/settings.json`. User settings are the alternative for a pack every
+project needs. Pi lists every visible skill's description in full in every
+session, with no budget, so each pack a project doesn't use is pure cost there.
+A package's `skills` filter (`"!skills/<name>"`) narrows one pack further.
+
 ## 2. Verify runtime discovery
 
 In the intended Pi runtime, run its native `/subagents-doctor`. It should list

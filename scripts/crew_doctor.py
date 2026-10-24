@@ -10,9 +10,12 @@ claims repeatable and fixture-testable.
 from __future__ import annotations
 
 import json
+import math
+import os
 import pathlib
 import re
 import sys
+import time
 import tomllib
 from copy import deepcopy
 from dataclasses import dataclass
@@ -2312,8 +2315,8 @@ def _package_label(root: pathlib.Path) -> str:
 
 
 # Always-on listing budgets are DATED evidence, never permanent limits
-# (docs/MAINTAINERS.md). Claude Code is absent on purpose: it was not observed
-# to cap the listing, though every description is still paid every session.
+# (docs/MAINTAINERS.md). Claude Code is not in this table because its budget
+# scales with the context window: CLAUDE_LISTING models it for its own row.
 HARNESS_DESCRIPTION_BUDGETS = (
     {
         "harness": "codex",
@@ -2324,6 +2327,23 @@ HARNESS_DESCRIPTION_BUDGETS = (
     },
 )
 CREW_REQUIREMENT = re.compile(r"^plugin:crew@>=(\S+)$")
+# Claude Code's skill-listing budget, read from the 2.1.310 binary (pixeloven/crew#103).
+# Budget = SLASH_COMMAND_TOOL_CHAR_BUDGET, else window x chars/token x
+# skillListingBudgetFraction. Over budget, bundled skills keep their entries and
+# the rest keep descriptions by usage score; the others collapse to names only.
+CLAUDE_LISTING = {
+    "harness": "claude-code",
+    "measured": "2026-10-23",
+    "version": "2.1.310",
+    "evidence": "pixeloven/crew#103",
+    "default_fraction": 0.01,
+    "default_window": 200_000,
+    "max_desc_chars": 1_536,
+    "bundled_chars": 6_287,
+}
+# Chars per token observed per window: 8,000 chars on a 200K model, 30,000 on a 1M one.
+CLAUDE_CHARS_PER_TOKEN = {200_000: 4, 1_000_000: 3}
+CLAUDE_BUDGET_ENV = "SLASH_COMMAND_TOOL_CHAR_BUDGET"
 
 
 def description_cost(package_root: pathlib.Path, label: str | None = None) -> dict[str, Any]:
@@ -2345,6 +2365,118 @@ def description_cost(package_root: pathlib.Path, label: str | None = None) -> di
         "total": sum(row["chars"] for row in rows),
         "reads": reads,
     }
+
+
+def claude_listing_inputs(
+    project_root: pathlib.Path,
+    home: pathlib.Path,
+    *,
+    context_window: int | None = None,
+    environ: dict[str, str] | None = None,
+    now_ms: int | None = None,
+) -> dict[str, Any]:
+    """Read what sizes Claude Code's skill listing: budget knobs, usage, plugin scopes.
+
+    Settings resolve local > project > user, as Claude Code does. `context_window`
+    is the session's window; omitted, the row predicts for every window in
+    CLAUDE_CHARS_PER_TOKEN. Read-only.
+    """
+    project, home = pathlib.Path(project_root), pathlib.Path(home)
+    environ = dict(os.environ if environ is None else environ)
+    now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+    result: dict[str, Any] = {
+        "context_window": context_window,
+        "fraction": CLAUDE_LISTING["default_fraction"],
+        "fraction_source": "",
+        "char_budget": None,
+        "char_budget_source": "",
+        "plugin_scopes": {},
+        "usage": {},
+        "usage_source": "",
+        "reads": [],
+    }
+    char_budget = _positive_int(environ.get(CLAUDE_BUDGET_ENV))
+    if char_budget:
+        result["char_budget"], result["char_budget_source"] = char_budget, f"env {CLAUDE_BUDGET_ENV}"
+    for scope, path in (
+        ("local", project / ".claude/settings.local.json"),
+        ("project", project / ".claude/settings.json"),
+        ("user", home / ".claude/settings.json"),
+    ):
+        read = _read_json(path, {})
+        result["reads"].append({"source": str(path), "state": read.state})
+        settings = read.value if isinstance(read.value, dict) else {}
+        fraction = settings.get("skillListingBudgetFraction")
+        if (
+            not result["fraction_source"]
+            and isinstance(fraction, (int, float))
+            and not isinstance(fraction, bool)
+            and 0 < fraction <= 1
+        ):
+            result["fraction"], result["fraction_source"] = fraction, str(path)
+        env = settings.get("env") if isinstance(settings.get("env"), dict) else {}
+        char_budget = _positive_int(env.get(CLAUDE_BUDGET_ENV))
+        if char_budget and result["char_budget"] is None:
+            result["char_budget"], result["char_budget_source"] = char_budget, f"{path} env.{CLAUDE_BUDGET_ENV}"
+        enabled = settings.get("enabledPlugins") if isinstance(settings.get("enabledPlugins"), dict) else {}
+        for plugin_id, value in enabled.items():
+            if isinstance(value, bool) and plugin_id not in result["plugin_scopes"]:
+                result["plugin_scopes"][plugin_id] = {"scope": scope, "enabled": value, "source": str(path)}
+    user_config = home / ".claude.json"
+    read = _read_json(user_config, {})
+    result["reads"].append({"source": str(user_config), "state": read.state})
+    usage = read.value.get("skillUsage") if isinstance(read.value, dict) else None
+    if isinstance(usage, dict):
+        result["usage_source"] = str(user_config)
+        for name, entry in usage.items():
+            count = entry.get("usageCount") if isinstance(entry, dict) else None
+            last = entry.get("lastUsedAt") if isinstance(entry, dict) else None
+            if isinstance(count, (int, float)) and isinstance(last, (int, float)):
+                days = (now_ms - last) / 86_400_000
+                result["usage"][name] = count * max(0.5 ** (days / 7), 0.1)
+    return result
+
+
+def _positive_int(value: Any) -> int | None:
+    try:
+        number = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def claude_listing_budget(window: int, listing: dict[str, Any]) -> int:
+    """Claude Code's listing budget in chars for one context window."""
+    if listing.get("char_budget"):
+        return int(listing["char_budget"])
+    chars_per_token = CLAUDE_CHARS_PER_TOKEN.get(window, 4)
+    return max(1, int(window * chars_per_token * listing["fraction"]))
+
+
+def predict_name_only(
+    entries: list[dict[str, Any]], budget: int, usage: dict[str, float], reserved: int = 0
+) -> list[str]:
+    """Names Claude Code would list without a description, in listing order.
+
+    Mirrors the 2.1.310 algorithm: when the full listing exceeds `budget`, every
+    entry first costs its name, then descriptions are added by descending usage
+    score (ties keep listing order) while room remains. `reserved` is the fixed
+    cost of entries that never collapse (bundled skills).
+    """
+    cap = CLAUDE_LISTING["max_desc_chars"]
+    full = sum(len(entry["name"]) + 4 + min(entry["chars"], cap) for entry in entries)
+    separators = max(0, len(entries) - 1)
+    if reserved + full + separators <= budget:
+        return []
+    room = budget - reserved - separators - sum(len(entry["name"]) + 2 for entry in entries)
+    collapsed: set[str] = set()
+    for entry in sorted(entries, key=lambda entry: -usage.get(entry["name"], 0.0)):
+        cost = min(entry["chars"], cap) + 2
+        if cost <= room:
+            room -= cost
+        else:
+            collapsed.add(entry["name"])
+    return [entry["name"] for entry in entries if entry["name"] in collapsed]
 
 
 def inspect_packs(candidate_roots: list[pathlib.Path], crew_root: pathlib.Path) -> list[dict[str, Any]]:
@@ -2627,6 +2759,103 @@ def _description_cost_check(costs: list[dict[str, Any]]) -> dict[str, Any]:
             {"claim": f"{cost['label']} descriptions total {cost['total']:,} chars", "source": cost["root"]}
             for cost in costs
         ],
+    }
+
+
+def _window_label(size: int) -> str:
+    return f"{size // 1_000_000}M" if size % 1_000_000 == 0 else f"{size // 1000}K"
+
+
+def _claude_listing_check(costs: list[dict[str, Any]], listing: dict[str, Any]) -> dict[str, Any]:
+    entries = [
+        {"name": f"{cost['label']}:{skill['name']}", "chars": skill["chars"]}
+        for cost in costs
+        for skill in cost["skills"]
+    ]
+    listing_chars = sum(len(entry["name"]) + 4 + entry["chars"] for entry in entries) + max(0, len(entries) - 1)
+    window = listing.get("context_window")
+    windows = [window] if window else sorted(CLAUDE_CHARS_PER_TOKEN)
+    knob = (
+        f"`{CLAUDE_BUDGET_ENV}` = {listing['char_budget']:,} ({listing['char_budget_source']})"
+        if listing.get("char_budget")
+        else f"`skillListingBudgetFraction` = {listing['fraction']}"
+        + (f" ({listing['fraction_source']})" if listing.get("fraction_source") else " (default)")
+    )
+    fact = (
+        f"Claude Code listing for Crew and its packs: ~{listing_chars:,} chars across {len(entries)} entries; "
+        f"budget from {knob}"
+    )
+    reserved = CLAUDE_LISTING["bundled_chars"]
+    predictions, collapsed_at = [], {}
+    for size in windows:
+        budget = claude_listing_budget(size, listing)
+        collapsed = predict_name_only(entries, budget, listing.get("usage", {}), reserved=reserved)
+        collapsed_at[size] = collapsed
+        outcome = (
+            f"{len(collapsed)} of {len(entries)} collapse to names only ({', '.join(collapsed[:5])}"
+            + (", …" if len(collapsed) > 5 else "")
+            + ")"
+            if collapsed
+            else "every description fits"
+        )
+        predictions.append(f"{_window_label(size)} window → {budget:,}-char budget: {outcome}")
+    inference = (
+        "; ".join(predictions)
+        + f". Assumes ~{reserved:,} chars of bundled skills and no other plugin or synced skills, so a "
+        f"crowded session collapses sooner (Claude Code {CLAUDE_LISTING['version']}, measured "
+        f"{CLAUDE_LISTING['measured']}, {CLAUDE_LISTING['evidence']}; a dated measurement, not a permanent limit)"
+    )
+    actions = []
+    if any(collapsed_at.values()):
+        needed_chars = reserved + listing_chars + 1
+        if listing.get("char_budget"):
+            actions.append(
+                f"To keep descriptions, raise `{CLAUDE_BUDGET_ENV}` ({listing['char_budget_source']}) to at least "
+                f"{needed_chars:,} chars, or unset it to use `skillListingBudgetFraction` (the budget is paid "
+                "every turn)"
+            )
+        else:
+            needed = max(
+                needed_chars / (size * CLAUDE_CHARS_PER_TOKEN.get(size, 4))
+                for size, names in collapsed_at.items()
+                if names
+            )
+            actions.append(
+                f"To keep descriptions, raise `skillListingBudgetFraction` in Claude settings to at least "
+                f"{math.ceil(needed * 1000) / 1000:g} (the budget is paid every turn)"
+            )
+    user_packs = [
+        cost["label"]
+        for cost in costs
+        if cost["label"] != PLUGIN_NAME
+        and any(
+            plugin_id.split("@", 1)[0] == cost["label"] and record["enabled"] and record["scope"] == "user"
+            for plugin_id, record in listing.get("plugin_scopes", {}).items()
+        )
+    ]
+    if user_packs:
+        actions.append(
+            f"Enable {', '.join(f'`{name}`' for name in user_packs)} per project in `.claude/settings.json` "
+            "`enabledPlugins` instead of user scope, so projects that don't need a pack don't pay for it"
+        )
+    status = "N/A" if not window else ("DEGRADED" if collapsed_at[window] else "OK")
+    sources = [cost["root"] for cost in costs] + [
+        source
+        for source in (listing.get("fraction_source"), listing.get("usage_source"))
+        if source
+    ] + [
+        record["source"]
+        for plugin_id, record in listing.get("plugin_scopes", {}).items()
+        if plugin_id.split("@", 1)[0] in user_packs
+    ]
+    return {
+        "check": "description-cost.claude-code",
+        "status": status,
+        "fact": fact,
+        "inference": inference,
+        "recommendation": ". ".join(actions),
+        "untested": "session context window not supplied; predictions cover each listed window" if not window else "",
+        "evidence": [{"claim": fact, "source": source} for source in dict.fromkeys(sources)],
     }
 
 
@@ -3333,6 +3562,7 @@ def compose_doctor_report(
     slot_fills: dict[str, Any] | None = None,
     packs: list[dict[str, Any]] | None = None,
     description_costs: list[dict[str, Any]] | None = None,
+    claude_listing: dict[str, Any] | None = None,
     moved_skill_refs: dict[str, Any] | None = None,
     inventory: dict[str, Any] | None = None,
     proposals: dict[str, Any] | None = None,
@@ -3341,6 +3571,8 @@ def compose_doctor_report(
 
     `slot_fills`, `packs`, `description_costs`, and `moved_skill_refs` are
     optional: omitted, the report carries no fill, pack, cost, or moved-skill rows.
+    `claude_listing` (from `claude_listing_inputs`) adds `description-cost.claude-code`
+    when `description_costs` is also given.
     `inventory` (a `crew-inventory/1` document) adds `inventory.capability-map`.
     `proposals` (from `learn_contract.inspect_proposals`) adds the proposals.* and
     learned.skills rows; omitted, it adds none.
@@ -3479,6 +3711,8 @@ def compose_doctor_report(
         checks.append(_pack_check(pack))
     if description_costs:
         checks.append(_description_cost_check(description_costs))
+        if claude_listing is not None:
+            checks.append(_claude_listing_check(description_costs, claude_listing))
     if moved_skill_refs is not None:
         checks.extend(_moved_skill_checks(moved_skill_refs, packs or []))
     if inventory is not None:
