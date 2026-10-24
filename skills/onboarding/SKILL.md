@@ -17,6 +17,26 @@ supervised or autonomous host, bind any decision to that host's generic
 escalation/decision interface. Do not assume synchronous chat and do not embed a
 private supervisor protocol in a consumer project.
 
+## Audit profile under a host
+
+Under a supervising host, its task contract wins over this skill on reporting,
+external writes and delivery (the reporting contract's host rule). Two things in
+that contract shape onboarding, and both come from the session, never from a
+repository setting:
+
+- **Whether entry files are the host's to write.** A host that reserves
+  `AGENTS.md` and `CLAUDE.md` for humans selects the **hosted** audit profile:
+  audit still reports what those files carry, but proposes no merge into them.
+  Run the reporting check with `--audit-profile hosted`; a missing or partial
+  section is `N/A` (the host supplies reporting), not drift. Moved-skill and
+  Learning findings on an entry file are reported as facts, not proposed edits.
+  Local-skill proposals (slot fills, the capability map) are unaffected.
+- **Whether apply is available.** The host's task contract says so. When it does
+  not say, apply is available in the standard profile, behind the host signal
+  below, and unavailable in the hosted profile; an audit under a host that makes
+  apply unavailable lists its proposals as the host's decisions, not as
+  "run apply". `resolve_mode(profile=..., apply_available=...)` encodes both.
+
 ## The foundation stance
 
 1. **Entry files drive behavior; skills carry reusable detail.** `AGENTS.md` and
@@ -89,7 +109,9 @@ The reporting contract is required spine, not optional template text: every
 onboarded `AGENTS.md` carries the `## Reporting contract` section, so reports
 lead with decisions from adoption rather than by per-session correction. Audit
 it with `scripts/onboarding_contract.py --check-reporting <AGENTS.md>`; a
-`MISSING` or `DEGRADED` result is a proposed addition.
+`MISSING` or `DEGRADED` result is a proposed addition. Under the hosted audit
+profile, add `--audit-profile hosted`: the result is `N/A` and nothing is
+proposed.
 
 Skills that moved from Crew to a pack change their namespaced name. Audit each
 entry file, local skill, and overlay with
@@ -166,8 +188,9 @@ result; do not create a plan file or modify the repository just to persist it.
 
 ## Apply mode — explicit authorization required
 
-Apply only when the request distinctly says to apply the onboarding findings and
-the supervising host supplies a fresh, non-persisted authorization signal for
+Apply only when apply is available (see *Audit profile under a host*), the
+request distinctly says to apply the onboarding findings, and the supervising
+host supplies a fresh, non-persisted authorization signal for
 this exact invocation. The host verifies the decision and invocation identity;
 Onboarding does not mint, authenticate, persist, or reuse authorization tokens.
 A saved or standing decision, prior-run signal, prior audit, plain onboarding
@@ -182,6 +205,8 @@ Before the first edit:
 4. exclude user settings, plugin registries, deployed services, and other
    external state unless separately authorized.
 
+Under the hosted profile, skip every entry-file merge below (the contract's
+`proposes_entry_file_merges` is false) and write only local skills.
 For a new project, merge the filled `templates/AGENTS.md` scaffold and optional
 one-line `CLAUDE.md` shim. For a mature project missing the reporting contract, merge
 the template's section with `ensure_reporting_contract` — it lands before the

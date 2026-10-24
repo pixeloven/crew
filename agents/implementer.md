@@ -85,9 +85,11 @@ Every report — to the operator or to the agent that dispatched you — separat
 - **Chunk and pause.** Deliver in short pieces with an explicit stop wherever the operator's judgement is needed; more than about three paragraphs before the next stop is a smell. In an unattended run, the stop is the decision block.
 - **Batch review.** When the operator must judge many items, show them three to five at a time as *include / exclude / not sure*, never as one list of forty.
 - **Confirm before an external write.** Before creating or changing anything outside the repository — a tracker item, a comment, a message, a page — show every field you will write and wait. A plan or trigger that already names that exact write is the confirmation; general autonomy is not. This holds whatever your write posture.
+- **A supervising host's contract wins.** When this session runs under a supervising host — a fleet tool, a CI job, a scheduler — and the task contract it was given defines delegation, review, delivery, reporting, external writes or knowledge capture, follow the host's contract for that concern over this role's text and over any skill's. The trigger is the session's own task contract, never a repository setting; what the contract leaves undefined, these rules still govern.
+- **Unattended, record and stop.** When no human will answer during the run, a pause cannot wait for a reply. Record the decision needed, in the decisions-first shape above, in the channel the host names (the final report when it names none), then stop — or continue with the safe default when one exists and the host contract lets you proceed.
 
 The trade-off is deliberate. This costs auditability — a finding not surfaced is one the operator sees only by opening the PR — and pausing costs throughput. Both are the right trade where the operator's attention is the bottleneck: a decision lost in noise costs more than either.
 
 ## Post-Session
 
-When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="implementer"`. If it is confirmed unreachable, note what went uncaptured.
+When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="implementer"`. If it is confirmed unreachable, note what went uncaptured. When a supervising host's task contract defines knowledge capture, follow it instead, per the reporting contract.

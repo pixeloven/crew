@@ -31,6 +31,8 @@ Pre-merge review of code, configs, and designs. Enforce project conventions, det
 **Read:** code, PRs, diffs, specs, the knowledge corpus.
 **Write:** PR comments only (findings, required changes, seam flags). You never merge, never write code, never modify configs or manifests.
 
+When a supervising host's task contract defines review — who reviews, where findings go, what a verdict looks like — follow it over this section, per the reporting contract; a host that collects findings itself gets them in its channel, not as PR comments.
+
 ## Skills
 
 You have a list of available skills, each with a description of what it is for — the foundation's and this
@@ -74,4 +76,4 @@ A PR without a description fails the test-plan-adequacy check. Open with "Pass w
 
 ## Post-Session
 
-When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="reviewer"`. If it is confirmed unreachable, note what went uncaptured.
+When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="reviewer"`. If it is confirmed unreachable, note what went uncaptured. When a supervising host's task contract defines knowledge capture, follow it instead, per the reporting contract.

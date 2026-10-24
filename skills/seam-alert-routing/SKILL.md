@@ -45,6 +45,10 @@ This keeps the platform moving while ensuring crossings don't go unnoticed.
 3. Body: what was detected, where, what the risk is
 4. Do not auto-remediate — seam crossings are human decisions
 
+### Under a supervising host
+
+When the session's task contract names its own decision or escalation channel, surface the crossing there instead of tagging an approver or opening an issue, per the reporting contract's *A supervising host's contract wins* rule. Unattended, record the crossing and the decision it needs in that channel and pause the affected work; never wait in the run for a reply.
+
 ## Escalation format
 
 ```

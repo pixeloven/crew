@@ -78,6 +78,9 @@ class OnboardingMode:
     implementation_validation_owner: str
     may_declare_delivery_complete: bool
     required_spine_sections: tuple[str, ...]
+    profile: str = "standard"
+    apply_available: bool = True
+    proposes_entry_file_merges: bool = True
 
 
 PRESERVE = (
@@ -91,6 +94,12 @@ PRESERVE = (
 # project-written. Doctor reports their absence as drift; apply inserts them.
 REQUIRED_SPINE_SECTIONS = ("reporting-contract",)
 
+# Audit profiles. `hosted` is for a session whose supervising host reserves the
+# entry files for humans: its task contract supplies reporting, so audit reports
+# what the files carry and proposes no merge into them. The session's task
+# contract selects it; there is no repository setting.
+AUDIT_PROFILES = ("standard", "hosted")
+
 
 def resolve_mode(
     *,
@@ -98,10 +107,23 @@ def resolve_mode(
     explicit_apply: bool = False,
     invocation_id: str | None = None,
     authorization: HostApplyAuthorizationSignal | None = None,
+    profile: str = "standard",
+    apply_available: bool | None = None,
 ) -> OnboardingMode:
-    """Resolve plain onboarding to audit; trust only a current host decision."""
+    """Resolve plain onboarding to audit; trust only a current host decision.
+
+    `apply_available` is what the host's task contract says about apply. Left
+    unset, the `standard` profile keeps apply available behind the host signal
+    and the `hosted` profile treats it as unavailable.
+    """
+    if profile not in AUDIT_PROFILES:
+        raise ValueError(f"unknown audit profile {profile!r}; expected one of {AUDIT_PROFILES}")
+    if apply_available is None:
+        apply_available = profile == "standard"
     if explicit_audit and explicit_apply:
         raise ValueError("audit and apply are mutually exclusive")
+    if explicit_apply and not apply_available:
+        raise ApplyAuthorizationRequired("the host's task contract makes apply unavailable for this session")
     if explicit_apply:
         if not isinstance(authorization, HostApplyAuthorizationSignal) or not invocation_id:
             raise ApplyAuthorizationRequired(
@@ -120,6 +142,9 @@ def resolve_mode(
         implementation_validation_owner="host project workflow",
         may_declare_delivery_complete=False,
         required_spine_sections=REQUIRED_SPINE_SECTIONS,
+        profile=profile,
+        apply_available=apply_available,
+        proposes_entry_file_merges=profile == "standard",
     )
 
 
@@ -151,8 +176,26 @@ def reporting_contract_section(text: str) -> str:
     return text[bounds[0]:bounds[1]].rstrip() + "\n" if bounds else ""
 
 
-def audit_reporting_contract(text: str | None) -> dict[str, Any]:
-    """Read-only presence check Doctor and audit share; never edits anything."""
+def audit_reporting_contract(text: str | None, profile: str = "standard") -> dict[str, Any]:
+    """Read-only presence check Doctor and audit share; never edits anything.
+
+    Under the `hosted` profile a missing or partial section is reported as
+    `N/A` with no recommendation: the host reserves the file for humans.
+    """
+    if profile not in AUDIT_PROFILES:
+        raise ValueError(f"unknown audit profile {profile!r}; expected one of {AUDIT_PROFILES}")
+    finding = _audit_reporting_contract(text)
+    if profile == "hosted" and finding["status"] != "OK":
+        return {
+            **finding,
+            "status": "N/A",
+            "fact": f"{finding['fact']}; the host reserves AGENTS.md for humans and its task contract supplies reporting",
+            "recommendation": "",
+        }
+    return finding
+
+
+def _audit_reporting_contract(text: str | None) -> dict[str, Any]:
     recommendation = "run onboarding apply to merge the reporting contract from templates/AGENTS.md"
     if text is None:
         return {
@@ -526,6 +569,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="read-only: report the declared proposal queue (optional section)")
     checks.add_argument("--check-moved-skills", metavar="FILE", type=pathlib.Path,
                         help="read-only: propose updates for references to skills that moved to a pack")
+    parser.add_argument("--audit-profile", choices=AUDIT_PROFILES, default="standard",
+                        help="hosted: the session's host reserves AGENTS.md for humans, so "
+                             "--check-reporting reports without proposing a merge")
     args = parser.parse_args(argv)
     if args.check_moved_skills:
         path = args.check_moved_skills
@@ -543,9 +589,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if finding["status"] == "DEGRADED" else 0
     path: pathlib.Path = args.check_reporting
     text = path.read_text(encoding="utf-8") if path.is_file() else None
-    finding = audit_reporting_contract(text)
+    finding = audit_reporting_contract(text, args.audit_profile)
     print(f"{finding['check']} | {finding['status']} | {finding['fact']} | {finding['recommendation']} | {path}")
-    return 0 if finding["status"] == "OK" else 1
+    return 0 if finding["status"] in ("OK", "N/A") else 1
 
 
 if __name__ == "__main__":

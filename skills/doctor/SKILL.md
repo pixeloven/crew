@@ -112,7 +112,9 @@ Check it with the read-only helper from the resolved package root:
 `python3 /absolute/resolved/crew/root/scripts/onboarding_contract.py
 --check-reporting /absolute/consumer/repo/AGENTS.md`. A missing section is
 **MISSING** and a section without its decisions-first rule is **DEGRADED**; both
-are drift for Onboarding to merge, never for Doctor to repair.
+are drift for Onboarding to merge, never for Doctor to repair. When the session's
+host reserves `AGENTS.md` for humans, add `--audit-profile hosted`: the result
+is **N/A**, because the host's task contract supplies reporting.
 
 ### 3. Separate capability declarations from working probes
 

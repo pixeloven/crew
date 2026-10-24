@@ -786,6 +786,8 @@ class RoleReportingContractTests(unittest.TestCase):
         "Chunk and pause.",
         "Batch review.",
         "Confirm before an external write.",
+        "A supervising host's contract wins.",
+        "Unattended, record and stop.",
     )
 
     def test_shared_source_carries_the_whole_contract(self) -> None:
