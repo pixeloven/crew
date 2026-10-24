@@ -21,9 +21,8 @@ Crew contains portable agent methodology. Stack conventions live in packs (see
 credentials, access maps, protected seams, runtime contracts, and decision-record
 formats belong in the
 consumer's local `.agents/skills/` overlay. The installed catalogue's
-`expects-local:` declarations identify the six currently required concern slots;
-`templates/local-skills/` also offers recommended vocabulary for common optional
-concerns.
+`expects-local:` declarations identify the six currently required concern slots,
+each with a starter stub in `templates/local-skills/`.
 
 Each skill description is the model-visible discovery interface. CI requires
 discriminating trigger language first and enforces a documented 110–300 character
@@ -95,6 +94,36 @@ name capabilities (`mcp:tracker`, `cli:gh`), never products, and degrade when on
 is missing; [Capabilities](docs/CAPABILITIES.md) lists the shared names and how
 an agent adapts.
 
+### Migrating to 0.52.0: estate- and stack-specific material moved out
+
+Crew core now keeps only portable practice. What moved:
+
+| Was in Crew | Now in |
+|---|---|
+| `crew:python-conventions` | `language-skills:python-conventions` ([`language-skills`](https://github.com/pixeloven/language-skills)) |
+| `crew:pr-review-checklist` Kubernetes, secret-sync, Terraform and Ansible checks | the "Review checks" in `infra-skills:k8s-kustomize-conventions`, `infra-skills:k8s-workload-patterns`, `infra-skills:terraform-conventions` and `infra-skills:ansible-conventions` |
+| `crew:seam-detection` secret, scheduling, LLM-gateway access and RBAC seams | `infra-skills:infra-seams`, which seeds them into your `protected-seams` registry |
+| `crew:incident-runbook-template` Kubernetes sweep sections and diagnostic commands | `infra-skills:k8s-diagnostics` |
+| Implementer's uv, kubectl and Terraform validation commands | the Validation section of each stack's conventions skill |
+
+`seam-detection` keeps the method, a product-free list of common shapes, the
+agent-runtime seam and the finding format. `incident-runbook-template` keeps the
+incident report, issue conventions and a sweep skeleton with one section per
+component your `topology` names. `pr-review-checklist` keeps the universal checks
+and points at each touched stack's conventions skill. Install `infra-skills` and
+`language-skills` beside Crew to keep the stack material, and rename
+`crew:python-conventions` to `language-skills:python-conventions` (Pi keeps the
+bare name). Doctor and Onboarding report and propose that rename.
+
+**Removed slot names: `litellm-access-map` and `vault-ops`.** Both were specific
+to one platform, so Crew no longer names them: their stubs under
+`templates/local-skills/` are gone and they are no longer accepted in
+`expects-local:`. Keep your own local skills for those concerns and the
+`AGENTS.md` rows that point at them; just drop the two names from any
+`expects-local:` list.
+
+The `LICENSE` copyright holder is now PixelOven.
+
 ### Removed after 0.49.1: `character-and-worldbuilding`
 
 No Crew role used `character-and-worldbuilding`, so it no longer ships with
@@ -115,8 +144,8 @@ pack (`infra-skills@pixeloven`). To keep them:
    keeps the bare name.
 
 Crew Doctor reports any remaining reference to a moved skill as `DEGRADED`, and
-an Onboarding audit proposes each rename. `mcp-server-design` and
-`python-conventions` stay in Crew.
+an Onboarding audit proposes each rename. `mcp-server-design` stays in Crew;
+`python-conventions` moved later, in 0.52.0.
 
 ## Doctor and Onboarding
 

@@ -63,9 +63,7 @@ LOCAL_SLOT_VOCABULARY = {
     "platform-conventions",
     "topology",
     "protected-seams",
-    "litellm-access-map",
     "secret-paths",
-    "vault-ops",
     "agent-runtime",
     "decision-record-format",
 }

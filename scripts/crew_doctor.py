@@ -52,7 +52,7 @@ MARKETPLACE_NAME = "pixeloven"
 PLUGIN_NAME = "crew"
 PLUGIN_ID = f"{PLUGIN_NAME}@{MARKETPLACE_NAME}"
 FIRST_PI_ROLE_DISCOVERY_VERSION = (0, 35, 0, 1, ())
-RECOMMENDED_LOCAL_VOCABULARY = ("litellm-access-map", "vault-ops")
+RECOMMENDED_LOCAL_VOCABULARY: tuple[str, ...] = ()
 PROFILE_TAXONOMY = ("portable", "platform", "personas")
 EXPECTED_ROLE_NAMES = (
     "implementer",
@@ -83,6 +83,7 @@ MOVED_SKILLS = {
     "k8s-kustomize-conventions": "infra-skills",
     "k8s-workload-patterns": "infra-skills",
     "github-actions-conventions": "infra-skills",
+    "python-conventions": "language-skills",
 }
 # A moved skill named bare (pi's flat namespace) or as `<namespace>:<skill>`.
 MOVED_SKILL_REFERENCE = re.compile(

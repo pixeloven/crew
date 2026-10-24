@@ -71,13 +71,15 @@ def report_for(base: pathlib.Path, crew: pathlib.Path, packs: list[pathlib.Path]
 
 
 class MovedSkillsTableTests(unittest.TestCase):
-    def test_the_five_stack_skills_moved_to_infra_skills(self) -> None:
-        self.assertEqual({name: "infra-skills" for name in INFRA_MOVES}, MOVED_SKILLS)
+    def test_stack_skills_moved_to_infra_skills_and_python_to_language_skills(self) -> None:
+        expected = {name: "infra-skills" for name in INFRA_MOVES}
+        expected["python-conventions"] = "language-skills"
+        self.assertEqual(expected, MOVED_SKILLS)
 
     def test_moved_skills_are_gone_from_crew_and_kept_skills_remain(self) -> None:
         for name in MOVED_SKILLS:
             self.assertFalse((ROOT / "skills" / name).exists(), name)
-        for kept in ("mcp-server-design", "python-conventions"):
+        for kept in ("mcp-server-design",):
             self.assertTrue((ROOT / "skills" / kept / "SKILL.md").is_file(), kept)
 
     def test_shipped_content_names_neither_a_moved_skill_nor_its_pack(self) -> None:
@@ -165,7 +167,7 @@ class OnboardingMovedSkillTests(unittest.TestCase):
         "| Terraform | `crew:terraform-conventions` |\n"
         "| Workloads | `k8s-workload-patterns` |\n"
         "| Already | `infra-skills:ansible-conventions` |\n"
-        "| Kept | `crew:python-conventions` |\n"
+        "| Kept | `crew:mcp-server-design` |\n"
     )
 
     def test_audit_proposes_namespace_updates_and_never_edits(self) -> None:
@@ -194,7 +196,7 @@ class OnboardingMovedSkillTests(unittest.TestCase):
         rewritten = rewrite_moved_skill_references(self.TEXT)
         self.assertIn("`infra-skills:terraform-conventions`", rewritten)
         self.assertIn("`k8s-workload-patterns`", rewritten)
-        self.assertIn("`crew:python-conventions`", rewritten)
+        self.assertIn("`crew:mcp-server-design`", rewritten)
         self.assertEqual(rewritten, rewrite_moved_skill_references(rewritten))
 
     def test_cli_reports_moved_references_read_only(self) -> None:

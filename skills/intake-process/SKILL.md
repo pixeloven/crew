@@ -13,9 +13,9 @@ Apply exactly one `domain:*` label per item:
 
 | Label | Applies to |
 |---|---|
-| `domain:infra` | Kubernetes manifests, Terraform, Ansible, cluster operations |
+| `domain:infra` | Infrastructure as code, deployment manifests, and cluster or host operations (the project's stacks, for example Kubernetes, Terraform or Ansible) |
 | `domain:platform` | The project's CLI, MCP servers, core libraries, agent tooling |
-| `domain:ops` | Cluster health degradations, incidents, monitoring findings |
+| `domain:ops` | Runtime health degradations, incidents, monitoring findings |
 | `domain:agents` | Agent topology, skills, orchestration |
 | `domain:research` | Pre-implementation option analysis, technology evaluation |
 | `domain:docs` | Documentation, runbooks, specs |
@@ -27,7 +27,7 @@ After applying a domain label, classify the work type to determine routing:
 
 | Work type | Signal | Route to |
 |---|---|---|
-| Active incident / degradation | Pod failing, ArgoCD Degraded, node NotReady | Investigator |
+| Active incident / degradation | A workload failing, a deploy reported degraded, a host down | Investigator |
 | Pre-implementation research | "evaluate options for...", "research...", or `domain:research` label | Researcher |
 | Bounded write work | `domain:platform` or `domain:infra`, clear scope, no design needed | Implementer |
 | PR opened, no orchestrated plan | Code review needed | Reviewer |

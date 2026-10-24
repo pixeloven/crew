@@ -2,7 +2,7 @@
 
 # Skill catalog
 
-22 skills — agent methodology, portable by construction. `requires` legend:
+21 skills — agent methodology, portable by construction. `requires` legend:
 empty = needs nothing but a repo; `external:github` = uses GitHub. Skills that depend on a
 platform's capabilities live in that consumer's own overlay, not here. `expects-local` names
 the consumer-local slot a skill defers concrete values to (see templates/local-skills/).
@@ -19,15 +19,14 @@ the consumer-local slot a skill defers concrete values to (see templates/local-s
 | `incident-runbook-template` | concept | — | topology | Use when writing an incident report, diagnosis brief, degradation issue, health sweep, or repeatable runbook. Structures what broke, where, why, blast radius, recommended action, and confidence. |
 | `intake-process` | concept | external:github | — | Use when triaging issues or PRs, labeling an unsorted backlog, choosing a handler, or defining intake conventions. Classifies domain, work type, complexity, and routing decision. |
 | `learn` | concept | — | agent-runtime | Use when asked to learn a CLI, MCP server or vendor tool this project uses, or to turn a Crew inventory gap into a lesson. Drafts one proposal per lesson into the project's declared queue and never applies it; the operator promotes. Not for explaining or teaching a topic. |
-| `mcp-server-design` | subject | — | — | Use when building MCP tools or servers with FastMCP. Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision. |
+| `mcp-server-design` | subject | — | — | Use when building MCP tools or servers in any framework (FastMCP is the worked example). Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision. |
 | `onboarding` | concept | — | — | Use when onboarding or re-auditing a project against Crew. Defaults to a read-only report; edits require explicit apply authorization. Preserves mature entry files, safety tripwires, delivery contracts, and runbook pointers. |
 | `orchestration-patterns` | concept | — | — | Use when planning multi-agent work, dispatching workers, or splitting and reconverging a task. Covers sequential, parallel, and mixed execution, dispatch packets, convergence, writer isolation, and harness bindings. |
 | `plan-execution` | concept | — | protected-seams | Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, test-first phases, acceptance criteria, validation gates, delta routing, and completion evidence. |
 | `plan-generation` | concept | — | — | Use when developing a plan with the operator before execution. Covers when planning is warranted, checklist → detailed-spec progression, phases, dependencies, success criteria, and execution handoff. |
 | `plan-validation` | concept | — | — | Use when deciding whether a phase can advance, whether work is complete, or what evidence “done” requires. Defines acceptance evaluation, validation-gate promotion, and invalid completion signals. |
 | `platform-glossary` | concept | — | — | Use when naming a platform concept, locating a workload, or writing docs/manifests with shared terms. Resolves app, surface, consumer, tenant, gateway, workload, deployment, project, skill, operator, and Crew vocabulary. |
-| `pr-review-checklist` | concept | — | platform-conventions, protected-seams | Use when reviewing code/manifests for merge, approving a PR, or requesting changes. Applies Python, Kubernetes, Terraform, and Ansible checks plus scope, secrets, and load-bearing-assumption review. |
-| `python-conventions` | subject | — | — | Use when doing any Python work. Defines Python version, uv workspace and packaging conventions, Ruff and pytest gates, plus Typer CLI, FastMCP server, and Pydantic AI patterns. |
+| `pr-review-checklist` | concept | — | platform-conventions, protected-seams | Use when reviewing code/manifests for merge, approving a PR, or requesting changes. Applies scope, secrets, seam and load-bearing-assumption checks, then each touched stack's own review checks. |
 | `release-and-versioning` | concept | external:github, cli:gh | platform-conventions | Use when adding a release workflow, cutting a release, changing tag rules, or reviewing artifact publication. Requires one semver line, file-owned versions, changelog notes, checksums, and verified provenance. |
 | `seam-alert-routing` | concept | external:github | protected-seams | Use when a protected change needs sign-off or a risky finding must be surfaced. Defines who decides, the host escalation channel, waiting behavior, and formats for PR comments, pauses, or filed issues. |
-| `seam-detection` | concept | — | protected-seams, secret-paths | Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects ExternalSecret, scheduling, MCP access, exit-code, and RBAC seam patterns. |
+| `seam-detection` | concept | — | protected-seams, secret-paths | Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects registered seam crossings and agent-runtime exit-code changes, and defines the finding format. |
