@@ -27,10 +27,10 @@ PI_PACKAGE_NAME = "crew"
 
 # Both harnesses express the contract as a SUBTRACTION from the default tool set,
 # so `writes:` means one thing everywhere: which dedicated file-write tools are
-# removed. pi uses `excludeTools` (pi-subagents >=0.62.0, tested range <0.82.0), not a `tools:`
-# allowlist: pi's `tools:` is strict and also shuts out ambient extensions (the
-# MCP adapter) in background runs. MCP side effects are governed by behaviour,
-# not by this posture, on every harness.
+# removed. pi uses `excludeTools` (pi-subagents >=0.62.0, tested range <0.82.0),
+# not a `tools:` allowlist: pi's `tools:` is strict and also shuts out ambient
+# extensions (the MCP adapter) in background runs. MCP side effects are governed
+# by behaviour, not by this posture, on every harness.
 # `drafts` deliberately retains Write/write: it can create AND overwrite a file,
 # while surgical Edit (and Claude's NotebookEdit) remain denied.
 WRITE_POSTURES = {
