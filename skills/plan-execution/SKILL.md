@@ -1,6 +1,6 @@
 ---
 name: plan-execution
-description: Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, acceptance criteria, validation gates, delta routing, and completion evidence.
+description: Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, test-first phases, acceptance criteria, validation gates, delta routing, and completion evidence.
 tier: concept
 requires: []
 expects-local: [protected-seams]
@@ -26,6 +26,25 @@ Dispatch agents per the plan's phase structure:
 
 For feature implementation tasks, Implementer works from the spec's plan.md:
 phases execute in order, each gated by its verification criteria.
+
+## How a phase proceeds: test first
+
+A phase that changes behaviour starts from a check, not from the code:
+
+1. **Write the failing test first** — one that expresses the phase's acceptance
+   criterion, or the bug's reproduction.
+2. **Watch it fail, for the expected reason.** A test that passes before the change,
+   or fails on a typo, proves nothing.
+3. **Make the smallest change that passes it**, then run the wider suite so the
+   phase hasn't broken a neighbour.
+4. **Return the evidence** — the test and its before/after result — so the phase can
+   be checked from the artifact alone (below).
+
+Where a test cannot come first — configuration, docs, a spike — name the check that
+stands in for it (a build, a dry run, a rendered page) before starting, and run it
+at the end. Put this expectation in the implementer's dispatch rather than assuming
+it. The test framework, commands and layout come from the language's own skill and
+the project's quality gate, not from here.
 
 ## Checking a phase (not monitoring it)
 
