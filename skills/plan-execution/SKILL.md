@@ -8,6 +8,8 @@ expects-local: [protected-seams]
 
 Plan execution is Lead's primary autonomous-mode responsibility. When a plan arrives via ticket or is approved in chat, Lead owns it end-to-end.
 
+Under a supervising host, its task contract decides what this skill would: when it defines delegation, review or delivery, dispatch, review and ship the way it says, and use the steps below only for what it leaves undefined, per the reporting contract's *A supervising host's contract wins* rule. An unattended escalation records the decision and stops rather than waiting.
+
 ## Reading a Plan
 
 Before dispatching any agent:

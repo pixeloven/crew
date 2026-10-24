@@ -88,6 +88,31 @@ class OnboardingLifecycleTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             consume_doctor_profile("platform-personas")
 
+    def test_hosted_profile_proposes_no_entry_file_merges_and_has_no_apply_by_default(self) -> None:
+        standard = resolve_mode()
+        self.assertEqual("standard", standard.profile)
+        self.assertTrue(standard.apply_available)
+        self.assertTrue(standard.proposes_entry_file_merges)
+        hosted = resolve_mode(profile="hosted")
+        self.assertEqual("audit", hosted.mode)
+        self.assertFalse(hosted.apply_available)
+        self.assertFalse(hosted.proposes_entry_file_merges)
+        signal = HostApplyAuthorizationSignal(invocation_id="run-42", host_verified=True)
+        with self.assertRaises(ApplyAuthorizationRequired):
+            resolve_mode(profile="hosted", explicit_apply=True, invocation_id="run-42", authorization=signal)
+        with self.assertRaises(ValueError):
+            resolve_mode(profile="unattended")
+
+    def test_host_contract_states_whether_apply_is_available(self) -> None:
+        signal = HostApplyAuthorizationSignal(invocation_id="run-42", host_verified=True)
+        with self.assertRaises(ApplyAuthorizationRequired):
+            resolve_mode(apply_available=False, explicit_apply=True, invocation_id="run-42", authorization=signal)
+        self.assertFalse(signal._consumed)
+        contract = resolve_mode(profile="hosted", apply_available=True, explicit_apply=True,
+                                invocation_id="run-42", authorization=signal)
+        self.assertEqual("apply", contract.mode)
+        self.assertFalse(contract.proposes_entry_file_merges)
+
 
 class ReportingContractTests(unittest.TestCase):
     MATURE = (
@@ -138,6 +163,34 @@ class ReportingContractTests(unittest.TestCase):
     def test_existing_project_section_is_never_replaced(self) -> None:
         text = self.MATURE + "\n## Reporting contract\n\nOur own words.\n"
         self.assertEqual(text, ensure_reporting_contract(text, TEMPLATE))
+
+    def test_hosted_profile_reports_a_missing_section_without_a_proposal(self) -> None:
+        for text in (None, self.MATURE, self.MATURE + "\n## Reporting contract\n\nBe concise.\n"):
+            with self.subTest(text=text):
+                finding = audit_reporting_contract(text, "hosted")
+                self.assertEqual("N/A", finding["status"])
+                self.assertIn("reserves AGENTS.md for humans", finding["fact"])
+                self.assertEqual("", finding["recommendation"])
+        self.assertEqual("OK", audit_reporting_contract(TEMPLATE, "hosted")["status"])
+        with self.assertRaises(ValueError):
+            audit_reporting_contract(TEMPLATE, "unattended")
+
+    def test_cli_hosted_profile_reports_instead_of_failing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "AGENTS.md"
+            target.write_text(self.MATURE, encoding="utf-8")
+            for path in (target, pathlib.Path(tmp) / "absent.md"):
+                with self.subTest(path=path):
+                    completed = subprocess.run(
+                        [sys.executable, str(ROOT / "scripts/onboarding_contract.py"),
+                         "--check-reporting", str(path), "--audit-profile", "hosted"],
+                        cwd=ROOT, text=True, capture_output=True, check=False,
+                    )
+                    self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+                    self.assertIn("| N/A |", completed.stdout)
+                    self.assertNotIn("MISSING", completed.stdout)
+                    self.assertNotIn("run onboarding apply", completed.stdout)
+            self.assertEqual(self.MATURE, target.read_text(encoding="utf-8"))
 
     def test_cli_check_is_read_only_and_exit_coded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

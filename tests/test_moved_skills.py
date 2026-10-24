@@ -219,6 +219,23 @@ class OnboardingMovedSkillTests(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
+    def test_cli_hosted_profile_reports_entry_file_references_as_facts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            entry = write(pathlib.Path(tmp) / "AGENTS.md", self.TEXT)
+            skill = write(pathlib.Path(tmp) / ".agents/skills/local/SKILL.md", self.TEXT)
+            for path, code in ((entry, 0), (skill, 1)):
+                with self.subTest(path=path):
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "scripts/onboarding_contract.py"),
+                         "--check-moved-skills", str(path), "--audit-profile", "hosted"],
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(code, result.returncode, result.stdout + result.stderr)
+                    self.assertIn("crew:terraform-conventions -> infra-skills:terraform-conventions", result.stdout)
+                    self.assertEqual(code == 1, "install pack" in result.stdout)
+            self.assertEqual(self.TEXT, entry.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

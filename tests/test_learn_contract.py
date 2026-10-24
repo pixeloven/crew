@@ -374,6 +374,34 @@ class OnboardingLearningTests(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
         self.assertIn("learning | OK | proposals queue at .agents/proposals/", completed.stdout)
 
+    def test_cli_hosted_profile_keeps_a_degraded_queue_degraded_without_proposing_an_edit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = str(ROOT / "scripts/onboarding_contract.py")
+            for name, learning in (("skill-root", "`proposal-queue: .agents/skills/q/`\n"),
+                                   ("duplicate", "`proposal-queue: .agents/a/`\n`proposal-queue: .agents/b/`\n")):
+                with self.subTest(case=name):
+                    degraded = pathlib.Path(tmp) / f"{name}.md"
+                    degraded.write_text(self.MATURE + "\n## Learning\n\n" + learning, encoding="utf-8")
+                    standard = run(script, "--check-learning", str(degraded))
+                    self.assertEqual(1, standard.returncode, standard.stdout + standard.stderr)
+                    self.assertIn("| DEGRADED |", standard.stdout)
+                    hosted = run(script, "--check-learning", str(degraded), "--audit-profile", "hosted")
+                    self.assertEqual(1, hosted.returncode, hosted.stdout + hosted.stderr)
+                    self.assertIn("learning | DEGRADED |", hosted.stdout)
+                    self.assertIn("| the host decides whether the declared queue is fixed |", hosted.stdout)
+                    self.assertNotIn(standard.stdout.split(" | ")[3], hosted.stdout)
+
+    def test_cli_hosted_profile_reports_an_absent_learning_section_as_n_a_without_a_recommendation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            script = str(ROOT / "scripts/onboarding_contract.py")
+            bare = pathlib.Path(tmp) / "AGENTS.md"
+            bare.write_text(self.MATURE, encoding="utf-8")
+            for path in (bare, pathlib.Path(tmp) / "absent.md"):
+                with self.subTest(path=path):
+                    hosted = run(script, "--check-learning", str(path), "--audit-profile", "hosted")
+                    self.assertEqual(0, hosted.returncode, hosted.stdout + hosted.stderr)
+                    self.assertIn("learning | N/A |", hosted.stdout)
+                    self.assertIn("reserves AGENTS.md for humans |  |", hosted.stdout)
 
 if __name__ == "__main__":
     unittest.main()

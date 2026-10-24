@@ -41,6 +41,8 @@ Lead may auto-approve without pausing execution. Record the decision.
 
 For escalations: pause execution, surface the delta clearly (what changed, why, what the risk is), wait for human decision before resuming.
 
+Under a supervising host, route an escalation through the decision channel its task contract names, per the reporting contract's *A supervising host's contract wins* rule. When the run is unattended, record the delta and the decision it needs there and stop instead of waiting; continue only on a safe default the host contract allows.
+
 ## Delta record format
 
 Append to the plan's history section after every delta:

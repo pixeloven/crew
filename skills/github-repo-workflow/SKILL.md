@@ -27,6 +27,8 @@ The GH_TOKEN's scope determines which repos you can reach (read/write). In a dep
 
 If a harness, CI job or supervising tool has already prepared a checkout (a worktree, a container checkout, the current directory), work there. A second copy elsewhere is one the host doesn't know about: its work is never reviewed, shipped or cleaned up.
 
+When the host's task contract defines delivery — who commits, pushes or opens the PR, and how — follow it over the steps below, per the reporting contract's *A supervising host's contract wins* rule.
+
 Clone only when no workspace exists. Where the clone goes is the project's choice: check `AGENTS.md` for the canonical clone location and any pre-cloned paths.
 
 ```bash

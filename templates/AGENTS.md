@@ -152,6 +152,20 @@ Pacing, also always on:
   exact write is the confirmation; general autonomy is not. This is the one
   exception to *act, then report*, whatever the role's write posture.
 
+Under a supervising host:
+
+- **A supervising host's contract wins.** When a session runs under a supervising
+  host — a fleet tool, a CI job, a scheduler — and the task contract it was given
+  defines delegation, review, delivery, reporting, external writes or knowledge
+  capture, the host's contract governs that concern over this file and over any
+  skill. The trigger is the session's own task contract, not a setting in this
+  repository; what the contract leaves undefined, this file still governs.
+- **Unattended, record and stop.** When no human will answer during the run, a
+  pause cannot wait for a reply. Record the decision needed, in the
+  decisions-first shape above, in the channel the host names (the final report
+  when it names none), then stop — or continue with the safe default when one
+  exists and the host contract lets you proceed.
+
 The trade-off is deliberate. This costs auditability — a finding not surfaced is
 one the operator sees only by opening the PR — and pausing costs throughput. Both
 are the right trade where the operator's attention is the bottleneck: a decision

@@ -53,4 +53,4 @@ Evaluate from the web, the repo, and git history — that is the durable half of
 
 ## Post-Session
 
-When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="researcher"`. If it is confirmed unreachable, note what went uncaptured.
+When the knowledge base is reachable, persist durable learnings from this session per the project's own knowledge-capture skill, attributing them to `source_agent="researcher"`. If it is confirmed unreachable, note what went uncaptured. When a supervising host's task contract defines knowledge capture, follow it instead, per the reporting contract.

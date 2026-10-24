@@ -787,6 +787,10 @@ class RoleReportingContractTests(unittest.TestCase):
         "Batch review.",
         "Confirm before an external write.",
     )
+    HOST_RULES = (
+        "A supervising host's contract wins.",
+        "Unattended, record and stop.",
+    )
 
     def test_shared_source_carries_the_whole_contract(self) -> None:
         text = self.SHARED.read_text(encoding="utf-8")
@@ -813,6 +817,8 @@ class RoleReportingContractTests(unittest.TestCase):
                 with self.subTest(file=f"{tree}/{path.name}"):
                     self.assertEqual(1, text.count(shared))
                     self.assertNotIn("<!-- include:", text)
+                    for rule in self.HOST_RULES:
+                        self.assertEqual(1, text.count(f"**{rule}**"))
 
     def test_include_expands_in_place_and_rejects_unknown_targets(self) -> None:
         from scripts.render_roles import expand_includes
@@ -850,7 +856,7 @@ class RoleReportingContractTests(unittest.TestCase):
         section = reporting_contract_section(
             (ROOT / "templates" / "AGENTS.md").read_text(encoding="utf-8")
         )
-        for rule in self.KEY_RULES:
+        for rule in (*self.KEY_RULES, *self.HOST_RULES):
             with self.subTest(rule=rule):
                 self.assertIn(f"**{rule}**", section)
 
