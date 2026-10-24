@@ -98,6 +98,16 @@ name capabilities (`mcp:tracker`, `cli:gh`), never products, and degrade when on
 is missing; [Capabilities](docs/CAPABILITIES.md) lists the shared names and how
 an agent adapts.
 
+**Enable packs per project by default.** Every listed skill's description is paid
+in every session. Enable a pack only in the projects that use it, and keep user
+scope for a pack every project needs. Enabling only the packs a project uses saves
+29–53% of the always-on listing cost of Crew and its packs, with no trigger cost
+for the packs that stay. Each quickstart ([Claude Code](docs/quickstart-claude-code.md#enable-packs-per-project),
+[Codex](docs/quickstart-codex.md#enable-packs-per-project),
+[pi.dev](docs/quickstart-pi.md#enable-packs-per-project)) shows the project-scope
+form. Since 0.55.0, Doctor predicts when Claude Code would list skills by name
+only and recommends project scope for packs enabled user-wide.
+
 ### Migrating to 0.52.0: estate- and stack-specific material moved out
 
 Crew core now keeps only portable practice. What moved:

@@ -1,5 +1,6 @@
 import json
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,12 +12,16 @@ from scripts.check_skills import (
     validate_root,
 )
 from scripts.crew_doctor import (
+    CLAUDE_LISTING,
     HARNESS_DESCRIPTION_BUDGETS,
+    claude_listing_budget,
+    claude_listing_inputs,
     compose_doctor_report,
     declared_local_slots,
     description_cost,
     inspect_installations,
     inspect_packs,
+    predict_name_only,
     render_doctor_report,
     slot_fills,
 )
@@ -448,6 +453,179 @@ class DoctorPackTests(unittest.TestCase):
             )
             checks = {row["check"] for row in report["checks"]}
             self.assertFalse(any(check.startswith(("pack.", "description-cost", "local-slots.fill")) for check in checks))
+
+
+class ClaudeListingBudgetTests(unittest.TestCase):
+    NOW_MS = 1_800_000_000_000
+
+    def world(self, base: pathlib.Path, skills: int = 3) -> tuple[pathlib.Path, pathlib.Path]:
+        crew = base / "crew"
+        write_crew(crew, "0.55.0")
+        write_skill(crew, "crew-skill")
+        pack = base / "pack"
+        write_pack(pack, "example-skills")
+        for index in range(skills):
+            write_skill(pack, f"pack-{index:03}", requires="[plugin:crew@>=0.55.0]")
+        return crew, pack
+
+    def row(self, base: pathlib.Path, crew: pathlib.Path, pack: pathlib.Path, listing: dict) -> dict:
+        report = compose_doctor_report(
+            inspect_installations(base / "project", base / "home"),
+            runtime_comparisons=[],
+            local_slots=declared_local_slots(crew),
+            role_postures=[],
+            persona_evidence=[],
+            description_costs=[description_cost(crew), description_cost(pack, label="example-skills")],
+            claude_listing=listing,
+        )
+        render_doctor_report(report)
+        return next(row for row in report["checks"] if row["check"] == "description-cost.claude-code")
+
+    def test_budget_scales_with_window_unless_the_env_sets_it(self) -> None:
+        self.assertEqual("2.1.310", CLAUDE_LISTING["version"])
+        listing = {"fraction": 0.01, "char_budget": None}
+        self.assertEqual(8_000, claude_listing_budget(200_000, listing))
+        self.assertEqual(30_000, claude_listing_budget(1_000_000, listing))
+        self.assertEqual(16_000, claude_listing_budget(200_000, {**listing, "fraction": 0.02}))
+        self.assertEqual(500, claude_listing_budget(1_000_000, {**listing, "char_budget": 500}))
+
+    def test_name_only_prediction_keeps_most_used_descriptions(self) -> None:
+        entries = [{"name": f"p:s{index}", "chars": 100} for index in range(3)]
+        full = sum(len(entry["name"]) + 4 + 100 for entry in entries) + 2
+        self.assertEqual([], predict_name_only(entries, full, {}))
+        # Room for one description: the most used keeps it, ties keep listing order.
+        names_only = sum(len(entry["name"]) + 2 for entry in entries) + 2
+        self.assertEqual(["p:s0", "p:s1"], predict_name_only(entries, names_only + 102, {"p:s2": 5.0}))
+        self.assertEqual(["p:s1", "p:s2"], predict_name_only(entries, names_only + 102, {}))
+        self.assertEqual(["p:s0", "p:s1", "p:s2"], predict_name_only(entries, names_only + 102, {}, reserved=200))
+
+    def test_inputs_follow_settings_precedence_usage_and_plugin_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project, home = base / "project", base / "home"
+            (project / ".claude").mkdir(parents=True)
+            (home / ".claude").mkdir(parents=True)
+            (home / ".claude/settings.json").write_text(
+                json.dumps(
+                    {
+                        "skillListingBudgetFraction": 0.05,
+                        "enabledPlugins": {"example-skills@pixeloven": True, "other-skills@pixeloven": True},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (project / ".claude/settings.local.json").write_text(
+                json.dumps({"skillListingBudgetFraction": 0.02, "env": {"SLASH_COMMAND_TOOL_CHAR_BUDGET": "9000"}}),
+                encoding="utf-8",
+            )
+            (project / ".claude/settings.json").write_text(
+                json.dumps({"enabledPlugins": {"other-skills@pixeloven": True}}), encoding="utf-8"
+            )
+            week_ago = self.NOW_MS - 7 * 86_400_000
+            (home / ".claude.json").write_text(
+                json.dumps({"skillUsage": {"example-skills:pack-000": {"usageCount": 4, "lastUsedAt": week_ago}}}),
+                encoding="utf-8",
+            )
+            listing = claude_listing_inputs(project, home, environ={}, now_ms=self.NOW_MS)
+            self.assertEqual(0.02, listing["fraction"])
+            self.assertEqual(9_000, listing["char_budget"])
+            self.assertAlmostEqual(2.0, listing["usage"]["example-skills:pack-000"])
+            self.assertEqual("user", listing["plugin_scopes"]["example-skills@pixeloven"]["scope"])
+            self.assertEqual("project", listing["plugin_scopes"]["other-skills@pixeloven"]["scope"])
+            from_env = claude_listing_inputs(
+                project, home, environ={"SLASH_COMMAND_TOOL_CHAR_BUDGET": "1234"}, now_ms=self.NOW_MS
+            )
+            self.assertEqual(1_234, from_env["char_budget"])
+            self.assertIn("env", from_env["char_budget_source"])
+
+    def test_row_predicts_collapse_and_names_the_knob(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base, skills=60)
+            listing = claude_listing_inputs(base / "project", base / "home", context_window=200_000, environ={})
+            row = self.row(base, crew, pack, listing)
+            self.assertEqual("DEGRADED", row["status"])
+            self.assertIn("61 entries", row["fact"])
+            self.assertIn("collapse to names only", row["inference"])
+            self.assertIn("2026-10-23", row["inference"])
+            self.assertIn("skillListingBudgetFraction", row["recommendation"])
+
+    def test_recommended_fraction_keeps_descriptions_in_every_predicted_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base, skills=300)
+            listing = claude_listing_inputs(base / "project", base / "home", environ={})
+            row = self.row(base, crew, pack, listing)
+            self.assertEqual(2, row["inference"].count("collapse to names only"))
+            fraction = float(re.search(r"`skillListingBudgetFraction` in Claude settings to at least ([\d.]+)",
+                                       row["recommendation"]).group(1))
+            raised = self.row(base, crew, pack, {**listing, "fraction": fraction})
+            self.assertNotIn("collapse to names only", raised["inference"])
+            self.assertEqual("", raised["recommendation"])
+
+    def test_env_char_budget_gets_an_env_recommendation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base, skills=60)
+            listing = claude_listing_inputs(
+                base / "project",
+                base / "home",
+                context_window=200_000,
+                environ={"SLASH_COMMAND_TOOL_CHAR_BUDGET": "9000"},
+            )
+            row = self.row(base, crew, pack, listing)
+            self.assertEqual("DEGRADED", row["status"])
+            self.assertNotIn("skillListingBudgetFraction` in Claude settings", row["recommendation"])
+            needed = int(re.search(r"`SLASH_COMMAND_TOOL_CHAR_BUDGET` \(.*?\) to at least ([\d,]+) chars",
+                                   row["recommendation"]).group(1).replace(",", ""))
+            self.assertEqual("DEGRADED", self.row(base, crew, pack, {**listing, "fraction": 1.0})["status"])
+            self.assertEqual("OK", self.row(base, crew, pack, {**listing, "char_budget": needed})["status"])
+
+    def test_row_is_ok_when_descriptions_fit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base)
+            listing = claude_listing_inputs(base / "project", base / "home", context_window=1_000_000, environ={})
+            row = self.row(base, crew, pack, listing)
+            self.assertEqual("OK", row["status"])
+            self.assertIn("every description fits", row["inference"])
+            self.assertEqual("", row["recommendation"])
+
+    def test_row_without_a_window_predicts_each_window_untested(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base)
+            row = self.row(base, crew, pack, claude_listing_inputs(base / "project", base / "home", environ={}))
+            self.assertEqual("N/A", row["status"])
+            self.assertIn("200K window", row["inference"])
+            self.assertIn("1M window", row["inference"])
+            self.assertTrue(row["untested"])
+
+    def test_user_scope_pack_gets_a_project_scope_recommendation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base)
+            settings = base / "home/.claude/settings.json"
+            settings.parent.mkdir(parents=True)
+            settings.write_text(
+                json.dumps({"enabledPlugins": {"example-skills@pixeloven": True, "crew@pixeloven": True}}),
+                encoding="utf-8",
+            )
+            listing = claude_listing_inputs(base / "project", base / "home", context_window=1_000_000, environ={})
+            row = self.row(base, crew, pack, listing)
+            self.assertEqual("OK", row["status"])
+            self.assertIn("`example-skills`", row["recommendation"])
+            self.assertIn(".claude/settings.json", row["recommendation"])
+            self.assertNotIn("`crew`", row["recommendation"])
+            self.assertIn(str(settings), [evidence["source"] for evidence in row["evidence"]])
+
+            project_settings = base / "project/.claude/settings.json"
+            project_settings.parent.mkdir(parents=True)
+            project_settings.write_text(
+                json.dumps({"enabledPlugins": {"example-skills@pixeloven": True}}), encoding="utf-8"
+            )
+            listing = claude_listing_inputs(base / "project", base / "home", context_window=1_000_000, environ={})
+            self.assertEqual("", self.row(base, crew, pack, listing)["recommendation"])
 
 
 class DoctorPackSlotTests(unittest.TestCase):

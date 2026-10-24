@@ -235,7 +235,11 @@ lazy. The budget is the operator's to spend, but it should never be spent blind:
   known harness budgets, and names packs to disable when an operator wants
   headroom. Those budgets are dated measurements, not limits: Codex was measured
   on 2026-09-05 dividing one ~22 KB skills-listing budget across every entry
-  (pixeloven/crew#72). Re-measure on a harness upgrade.
+  (pixeloven/crew#72). Claude Code 2.1.310, read on 2026-10-23, budgets the
+  listing at `skillListingBudgetFraction` of the context window and lists the
+  least-used skills by name only when over (pixeloven/crew#103). Doctor predicts
+  which skills that would hit and recommends project-scope enablement for packs
+  enabled user-wide. Re-measure on a harness upgrade.
 
 ## Required README sections
 
