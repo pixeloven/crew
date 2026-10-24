@@ -34,7 +34,7 @@ Give each agent the minimum tools needed for its role:
 | Researcher | Vault write only | No |
 | Investigator | Issues and comments | Read-only |
 | Reviewer | PR comments only | No |
-| Implementer | Code, manifests, PRs | No (via ArgoCD) |
+| Implementer | Code, manifests, PRs | No (via the GitOps controller) |
 | Lead | Issues, plans, dispatch | No |
 
 Don't give an agent write access it doesn't need. A Researcher that can push code is a liability.

@@ -152,8 +152,8 @@ A skill documenting how code behaves — a label format, an exit-code contract, 
 ## Platform tenets (durable bets)
 
 Design new capabilities against the project's durable bets. Each consumer declares its own tenet list in its local architecture skill or entry file. A representative set is:
-- Kubernetes as the delivery strategy
-- Talos Linux / Sidero Omni on Proxmox as the substrate
+- A named delivery strategy (for example Kubernetes)
+- A named substrate (for example an immutable node OS on a hypervisor)
 - Agent-oriented platform direction (implementations reshape; direction holds)
 - Python as the primary implementation language
 - Open source first, permissive license preferred
