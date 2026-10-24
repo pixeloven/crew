@@ -99,6 +99,7 @@ REQUIRED_SPINE_SECTIONS = ("reporting-contract",)
 # what the files carry and proposes no merge into them. The session's task
 # contract selects it; there is no repository setting.
 AUDIT_PROFILES = ("standard", "hosted")
+ENTRY_FILES = ("AGENTS.md", "CLAUDE.md")
 
 
 def resolve_mode(
@@ -516,8 +517,25 @@ def learning_section(text: str) -> str:
     return text[bounds[0]:bounds[1]].rstrip() + "\n" if bounds else ""
 
 
-def audit_learning_section(text: str | None) -> dict[str, Any]:
-    """Read-only. Learning is optional spine: absence means learn is report-only."""
+def audit_learning_section(text: str | None, profile: str = "standard") -> dict[str, Any]:
+    """Read-only. Learning is optional spine: absence means learn is report-only.
+
+    Under the `hosted` profile any finding but `OK` is `N/A` with no recommendation.
+    """
+    if profile not in AUDIT_PROFILES:
+        raise ValueError(f"unknown audit profile {profile!r}; expected one of {AUDIT_PROFILES}")
+    finding = _audit_learning_section(text)
+    if profile == "hosted" and finding["status"] != "OK":
+        return {
+            **finding,
+            "status": "N/A",
+            "fact": f"{finding['fact']}; the host reserves AGENTS.md for humans",
+            "recommendation": "",
+        }
+    return finding
+
+
+def _audit_learning_section(text: str | None) -> dict[str, Any]:
     if text is None or not learning_section(text):
         return {
             "check": "learning",
@@ -570,21 +588,21 @@ def main(argv: list[str] | None = None) -> int:
     checks.add_argument("--check-moved-skills", metavar="FILE", type=pathlib.Path,
                         help="read-only: propose updates for references to skills that moved to a pack")
     parser.add_argument("--audit-profile", choices=AUDIT_PROFILES, default="standard",
-                        help="hosted: the session's host reserves AGENTS.md for humans, so "
-                             "--check-reporting reports without proposing a merge")
+                        help="hosted: the session's host reserves AGENTS.md and CLAUDE.md for humans, so "
+                             "checks on them report facts without proposing edits")
     args = parser.parse_args(argv)
     if args.check_moved_skills:
         path = args.check_moved_skills
         proposals = audit_moved_skill_references(path.read_text(encoding="utf-8")) if path.is_file() else []
+        reserved = args.audit_profile == "hosted" and path.name in ENTRY_FILES
         for proposal in proposals:
-            print(
-                f"moved-skill | {path}:{proposal['line']} | {proposal['from']} -> {proposal['to']} | "
-                f"install pack {proposal['pack']}"
-            )
-        return 1 if proposals else 0
+            action = "" if reserved else f"install pack {proposal['pack']}"
+            print(f"moved-skill | {path}:{proposal['line']} | {proposal['from']} -> {proposal['to']} | {action}")
+        return 1 if proposals and not reserved else 0
     if args.check_learning:
         path = args.check_learning
-        finding = audit_learning_section(path.read_text(encoding="utf-8") if path.is_file() else None)
+        finding = audit_learning_section(path.read_text(encoding="utf-8") if path.is_file() else None,
+                                         args.audit_profile)
         print(f"{finding['check']} | {finding['status']} | {finding['fact']} | {finding['recommendation']} | {path}")
         return 1 if finding["status"] == "DEGRADED" else 0
     path: pathlib.Path = args.check_reporting

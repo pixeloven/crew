@@ -27,7 +27,7 @@ repository setting:
 - **Whether entry files are the host's to write.** A host that reserves
   `AGENTS.md` and `CLAUDE.md` for humans selects the **hosted** audit profile:
   audit still reports what those files carry, but proposes no merge into them.
-  Run the reporting check with `--audit-profile hosted`; a missing or partial
+  Pass `--audit-profile hosted` to every check; a missing or partial reporting
   section is `N/A` (the host supplies reporting), not drift. Moved-skill and
   Learning findings on an entry file are reported as facts, not proposed edits.
   Local-skill proposals (slot fills, the capability map) are unaffected.

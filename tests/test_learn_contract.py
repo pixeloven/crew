@@ -374,6 +374,22 @@ class OnboardingLearningTests(unittest.TestCase):
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
         self.assertIn("learning | OK | proposals queue at .agents/proposals/", completed.stdout)
 
+    def test_cli_hosted_profile_reports_learning_findings_without_a_recommendation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            degraded = pathlib.Path(tmp) / "AGENTS.md"
+            degraded.write_text(self.MATURE + "\n## Learning\n\n`proposal-queue: .agents/skills/q/`\n",
+                                encoding="utf-8")
+            script = str(ROOT / "scripts/onboarding_contract.py")
+            standard = run(script, "--check-learning", str(degraded))
+            self.assertEqual(1, standard.returncode, standard.stdout + standard.stderr)
+            self.assertIn("| DEGRADED |", standard.stdout)
+            for path in (degraded, pathlib.Path(tmp) / "absent.md"):
+                with self.subTest(path=path):
+                    hosted = run(script, "--check-learning", str(path), "--audit-profile", "hosted")
+                    self.assertEqual(0, hosted.returncode, hosted.stdout + hosted.stderr)
+                    self.assertIn("| N/A |", hosted.stdout)
+                    self.assertIn("reserves AGENTS.md for humans |  |", hosted.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
