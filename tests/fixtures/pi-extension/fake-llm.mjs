@@ -1,7 +1,7 @@
 // Fake OpenAI-compatible model for the crew_agent contract tests. No billed calls.
 // Instead of a reply it reports what the request carried: which Crew role prompt
-// arrived, which tools were declared, and which model was asked for.
-//   "DISPATCH <role> :: <task>"  calls crew_agent (or subagent) once
+// arrived, which tools were declared, and which model and thinking level were asked for.
+//   "DISPATCH <role> [IN <cwd>] :: <task>"  calls crew_agent (or subagent) once
 //   "BIG <bytes>"               replies with that many bytes
 //   "FAIL"                      answers HTTP 500
 //   "SLOW"                      never answers (timeout and abort tests)
@@ -23,7 +23,7 @@ const server = http.createServer((req, res) => {
 		const userText = text(lastUser?.content);
 		const toolResults = msgs.filter((m) => m.role === "tool");
 		const role = (sys.match(/You are (\w+) —/) || [])[1] || "none";
-		const dispatch = userText.match(/DISPATCH (\S+) :: ([^"\\]+)/);
+		const dispatch = userText.match(/DISPATCH (\S+)(?: IN (\S+))? :: ([^"\\]+)/);
 		const tool = DISPATCH_TOOLS.find((t) => tools.includes(t));
 		const first = toolResults.length === 0;
 		// Directives act only on a role's own first request, never on one that dispatches.
@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
 		const base = { id: "c1", object: "chat.completion.chunk", created: 0, model: j.model };
 		const usage = { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 };
 		if (dispatch && tool && first) {
-			const args = JSON.stringify({ agent: dispatch[1], task: dispatch[2].trim() });
+			const args = JSON.stringify({ agent: dispatch[1], task: dispatch[3].trim(), ...(dispatch[2] && { cwd: dispatch[2] }) });
 			send({ ...base, choices: [{ index: 0, delta: { role: "assistant", tool_calls: [{ index: 0, id: "call_1", type: "function", function: { name: tool, arguments: args } }] }, finish_reason: null }] });
 			send({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }], usage });
 		} else {
@@ -46,7 +46,7 @@ const server = http.createServer((req, res) => {
 			const child = toolResults.map((t) => text(t.content)).join(" | ").slice(0, 2000);
 			const content = big && directive
 				? "x".repeat(Number(big[1]))
-				: `ROLE=${role} MODEL=${j.model} TOOLS=${tools.join(",")}` + (child ? ` CHILD=[${child}]` : "");
+				: `ROLE=${role} MODEL=${j.model} TOOLS=${tools.join(",")} THINKING=${j.reasoning_effort ?? "none"}` + (child ? ` CHILD=[${child}]` : "");
 			send({ ...base, choices: [{ index: 0, delta: { role: "assistant", content }, finish_reason: null }] });
 			send({ ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }], usage });
 		}

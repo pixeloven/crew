@@ -138,7 +138,9 @@ extension API and CLI:
   replaces the packaged role, the same rule as section 3. It is used only when
   pi trusts the project. In an untrusted project, the interactive UI asks first.
   Without a UI, the packaged role runs and the result says the overlay was not
-  used.
+  used. Only overlays inside the session's project count: the search does not
+  go above the project directory, and an overlay under a `cwd` outside the
+  project is never used (the result says the packaged role ran).
 
 It needs pi 1.4.0 or newer (the oldest version tested). On an older pi it does
 not load and shows a warning. It works alongside pi-subagents: both tools are

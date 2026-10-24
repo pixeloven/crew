@@ -66,7 +66,7 @@ class PiExtensionContract(unittest.TestCase):
                     "baseUrl": f"http://127.0.0.1:{port}/v1",
                     "api": "openai-completions",
                     "apiKey": "fake",
-                    "models": [{"id": "fake-model"}],
+                    "models": [{"id": "fake-model", "reasoning": True}],
                 }
             }
         }))
@@ -87,6 +87,8 @@ class PiExtensionContract(unittest.TestCase):
         }))
         cls.project = base / "project"
         cls.project.mkdir()
+        cls.elsewhere = base / "elsewhere"
+        cls.elsewhere.mkdir()
         cls.env = {
             **os.environ,
             "PI_CODING_AGENT_DIR": str(agent_dir),
@@ -165,6 +167,13 @@ class PiExtensionContract(unittest.TestCase):
                     expected |= {"crew_agent"}
                 self.assertEqual(expected | {MCP_TOOL}, set(tools.split(",")))
 
+    def test_role_inherits_the_session_thinking_level(self) -> None:
+        for level in ("low", "high"):
+            with self.subTest(thinking=level):
+                reply = self.text(self.dispatch("reviewer", "report", None, "--thinking", level))
+                self.assertIn(f"ROLE={marker('reviewer')} ", reply)
+                self.assertIn(f"THINKING={level}", reply)
+
     def test_lead_dispatches_a_worker_and_the_result_returns_up_two_levels(self) -> None:
         reply = self.text(self.dispatch("lead", "DISPATCH reviewer :: review it"))
         self.assertIn(f"ROLE={marker('lead')} ", reply)
@@ -214,6 +223,26 @@ class PiExtensionContract(unittest.TestCase):
         self.assertIn("ROLE=Overlay ", trusted)
         self.assertIn(f"ROLE={marker('reviewer')} ", untrusted)
         self.assertIn("was not used: the project is not trusted", untrusted)
+
+    def test_overlay_outside_the_session_project_is_never_used(self) -> None:
+        outside = self.elsewhere / ".pi" / "agents" / "reviewer.md"
+        above = self.project.parent / ".pi" / "agents" / "reviewer.md"
+        for overlay in (outside, above):
+            overlay.parent.mkdir(parents=True)
+            overlay.write_text(
+                "---\nname: reviewer\npackage: crew\ndescription: overlay\n---\n\nYou are Overlay — a project role.\n",
+                encoding="utf-8",
+            )
+        try:
+            elsewhere = self.text(self.dispatch(f"reviewer IN {self.elsewhere}", "report", None, "--approve"))
+            here = self.text(self.dispatch("reviewer", "report", None, "--approve"))
+        finally:
+            shutil.rmtree(self.elsewhere / ".pi")
+            shutil.rmtree(self.project.parent / ".pi")
+        self.assertIn(f"ROLE={marker('reviewer')} ", elsewhere)
+        self.assertIn(f"{outside} was not used: it is outside the session's project", elsewhere)
+        self.assertIn(f"ROLE={marker('reviewer')} ", here)
+        self.assertNotIn("was not used", here)
 
 
 if __name__ == "__main__":

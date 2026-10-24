@@ -16,7 +16,8 @@ requests and tags.
   servers, including pi's built-in MCP. Only `lead` can dispatch further, and
   depth is capped. Roles inherit the session's model and thinking level.
   Failures become tool errors, and output over 50 KB spills to a file. A project
-  `.pi/agents/<role>.md` overlay applies only in a trusted project. See
+  `.pi/agents/<role>.md` overlay applies only inside the session's own trusted
+  project. See
   `docs/quickstart-pi.md` section 6.
 - Contract tests for the extension (`tests/test_pi_extension.py`). They run the
   real pi CLI against a fake model and a fake MCP server, so they make no billed

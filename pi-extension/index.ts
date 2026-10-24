@@ -8,9 +8,9 @@
  * nothing, and Crew roles stay reachable through pi-subagents as `crew.<role>`.
  *
  * Contract (crew#92):
- *  - define:   roles are the rendered pi-agents/*.md beside this file; a project
- *              `.pi/agents/<role>.md` that declares `package: crew` overrides one,
- *              behind pi's project trust.
+ *  - define:   roles are the rendered pi-agents/*.md beside this file; a
+ *              `.pi/agents/<role>.md` inside the session's project that declares
+ *              `package: crew` overrides one, behind pi's project trust.
  *  - dispatch: bare Crew role names; parallel dispatch is several calls in one turn.
  *  - posture:  the role's `excludeTools` is subtracted from the child's default tools.
  *  - nesting:  only `allowNestedSubagents` roles keep `crew_agent`; depth is capped.
@@ -87,15 +87,21 @@ function loadRoles(dir: string): Map<string, Role> {
 
 // A project shadows a Crew role the same way it does under pi-subagents: the file
 // must declare `package: crew`, or it is some other agent and the packaged role stays.
-function findOverlay(cwd: string, name: string): string | undefined {
-	for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+// The search walks up from cwd but never above root.
+function findOverlay(cwd: string, root: string, name: string): string | undefined {
+	for (let dir = cwd; ; dir = path.dirname(dir)) {
 		const file = path.join(dir, ".pi", "agents", `${name}.md`);
 		if (fs.existsSync(file)) {
 			const { frontmatter } = parseFrontmatter<Record<string, unknown>>(fs.readFileSync(file, "utf-8"));
 			return frontmatter.package === PACKAGE && frontmatter.name === name ? file : undefined;
 		}
-		if (path.dirname(dir) === dir) return undefined;
+		if (dir === root || path.dirname(dir) === dir) return undefined;
 	}
+}
+
+function within(root: string, dir: string): boolean {
+	const rel = path.relative(root, dir);
+	return rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
 }
 
 export function versionAtLeast(version: string, floor: string): boolean {
@@ -276,10 +282,16 @@ export default async function (pi: ExtensionAPI) {
 		async execute(_id, params, signal, onUpdate, ctx) {
 			let role = roles.get(params.agent);
 			if (!role) throw new Error(`Unknown Crew role "${params.agent}". Roles: ${[...roles.keys()].join(", ")}`);
-			const cwd = params.cwd ? path.resolve(ctx.cwd, params.cwd) : ctx.cwd;
+			const project = path.resolve(ctx.cwd);
+			const cwd = path.resolve(project, params.cwd ?? "");
+			// The session's trust covers only its own project, so an overlay from a cwd
+			// outside it is never used.
+			const inProject = within(project, cwd);
 			let note = "";
-			const overlay = findOverlay(cwd, role.name);
-			if (overlay) {
+			const overlay = findOverlay(cwd, inProject ? project : cwd, role.name);
+			if (overlay && !inProject) {
+				note = `\n\n[${overlay} was not used: it is outside the session's project, so Crew's packaged ${role.name} ran]`;
+			} else if (overlay) {
 				const trusted =
 					ctx.isProjectTrusted() ||
 					(ctx.hasUI &&
