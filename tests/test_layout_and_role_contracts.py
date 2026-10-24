@@ -752,6 +752,20 @@ class RolePostureTests(unittest.TestCase):
         package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(">=0.62.0 <0.82.0", package["peerDependencies"]["pi-subagents"])
 
+    def test_pi_extension_is_declared_shipped_and_host_peered(self) -> None:
+        import json
+
+        package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+        self.assertEqual(["./pi-extension/index.ts"], package["pi"]["extensions"])
+        self.assertTrue((ROOT / "pi-extension" / "index.ts").is_file())
+        self.assertIn("pi-extension", package["files"])
+        # Host-provided packages are `*` peers, never bundled (pi docs/packages.md).
+        for host in ("@earendil-works/pi-coding-agent", "typebox"):
+            self.assertEqual("*", package["peerDependencies"][host])
+        self.assertNotIn("dependencies", package)
+        # The pi-subagents path stays in this release beside the extension.
+        self.assertEqual(["./pi-agents"], package["pi"]["subagents"]["agents"])
+
     def test_every_runtime_knob_is_observably_rejected(self) -> None:
         for key in ("model", "thinking", "effort", "model_reasoning_effort", "turnBudget", "maxTurns"):
             with self.subTest(key=key), tempfile.TemporaryDirectory() as tmp:

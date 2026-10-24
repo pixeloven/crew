@@ -84,13 +84,70 @@ ambient extensions. `lead` gets nested dispatch through
 advisory unless the host permission system or sandbox enforces it. Dispatch
 configuration owns model, reasoning depth, and turn budget.
 
-MCP reaches a Pi subagent only through `mcp:` entries in its frontmatter, or
-through ambient extensions such as the MCP adapter's proxy tool in a background
-(`async`) run; a foreground child never loads ambient extensions. On every
-harness the write posture limits dedicated file-write tools only: MCP side
-effects are governed by the role's behaviour, not by `writes:`.
+Through pi-subagents, Crew roles reach MCP less than the operator session
+does. A foreground child never loads ambient extensions. A background (`async`)
+child loads them, so it reaches MCP only when the MCP comes from an extension,
+such as pi-mcp-adapter's proxy tool. Pi's built-in MCP (pi 0.99 and newer) is
+not an ambient extension: pi-subagents connects it only for a role whose
+frontmatter lists `mcp:` entries, and no Crew role does. So without
+pi-mcp-adapter installed, Crew roles reach no MCP server in either mode. The
+experimental `crew_agent` tool (section 6) closes this gap. On every harness the
+write posture limits dedicated file-write tools only: MCP side effects are
+governed by the role's behaviour, not by `writes:`.
 
 Ask **“onboard this project”** for a read-only audit. Applying findings requires a
 separate explicit current-run authorization.
 The supervising host verifies a fresh, non-persisted signal for that exact
 invocation; saved, standing, reusable, and prior-run authority is rejected.
+
+## 6. Experimental: Crew's own `crew_agent` tool
+
+Since 0.55.0, Crew ships its own minimal agent extension for pi,
+`pi-extension/index.ts`. It is **experimental and off by default**: without the
+opt-in it registers nothing, and the pi-subagents path above is unchanged and
+remains the default. Turn it on for a pi process with an environment variable:
+
+```sh
+CREW_PI_AGENT=1 pi
+```
+
+The extension registers one tool, `crew_agent { agent, task, cwd? }`. It runs a
+Crew role in a separate `pi` process and returns the role's final answer as the
+tool result. Use bare role names (`reviewer`, not `crew.reviewer`): the tool is
+Crew's own, so a name can only mean a Crew role. To run several roles in
+parallel, make several calls in one turn. The tool is built only on pi's own
+extension API and CLI:
+
+- **Posture.** The role's `excludeTools` is passed to `pi --exclude-tools`, so it
+  subtracts from pi's defaults exactly as section 5 describes. pi-subagents'
+  tools (`subagent`, `subagent_supervisor`, `bg_wait`, `contact_supervisor`) are
+  always excluded too, so posture is the same whether pi-subagents is installed
+  or not.
+- **MCP.** Each role runs as an ordinary pi process, so it connects the same
+  `mcp.json` servers and loads the same extensions as your session. This
+  includes pi's built-in MCP.
+- **Nesting.** Only `lead` (`allowNestedSubagents: true`) keeps `crew_agent`.
+  The depth is capped: a role that `lead` dispatches cannot dispatch further.
+- **Model.** A role inherits your session's model and thinking level.
+- **Result.** A failed role (non-zero exit, a model error, an abort) is a tool
+  error. Output over 50 KB is cut off, and the full text is written to a file
+  whose path appears in the result. Aborting your turn stops the role. Set
+  `CREW_AGENT_TIMEOUT_SECONDS` to stop roles that run too long; by default there
+  is no timeout.
+- **Overlays.** A project `.pi/agents/<role>.md` that declares `package: crew`
+  replaces the packaged role, the same rule as section 3. It is used only when
+  pi trusts the project. In an untrusted project, the interactive UI asks first.
+  Without a UI, the packaged role runs and the result says the overlay was not
+  used.
+
+It needs pi 1.4.0 or newer (the oldest version tested). On an older pi it does
+not load and shows a warning. It works alongside pi-subagents: both tools are
+registered, and neither shadows the other. Each dispatch starts a new pi process
+and reconnects stdio MCP servers, so it starts more slowly than an in-process
+pi-subagents child. Not yet verified: real models (the tests use a fake one),
+Windows, and pi-mcp-adapter.
+
+This release ships both paths. A later release is planned to make `crew_agent`
+the pi path and drop the `pi.subagents.agents` manifest entry and the
+`pi-subagents` peer dependency. pi-subagents then stays available for your own
+agents.
