@@ -111,7 +111,7 @@ invocation; saved, standing, reusable, and prior-run authority is rejected.
 
 ## 6. Experimental: Crew's own `crew_agent` tool
 
-Since 0.55.0, Crew ships its own minimal agent extension for pi,
+Since 0.56.0, Crew ships its own minimal agent extension for pi,
 `pi-extension/index.ts`. It is **experimental and off by default**: without the
 opt-in it registers nothing, and the pi-subagents path above is unchanged and
 remains the default. Turn it on for a pi process with an environment variable:

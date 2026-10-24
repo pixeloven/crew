@@ -4,7 +4,7 @@ Release notes for each version, newest first. Every version bump adds its
 section here in the same PR. Earlier releases are described in their pull
 requests and tags.
 
-## 0.55.0
+## 0.56.0
 
 ### Added
 
