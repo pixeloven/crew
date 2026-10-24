@@ -15,6 +15,28 @@ Add this at project or user scope:
 
 Restart Claude Code; plugins load at session start.
 
+### Enable packs per project
+
+Crew can sit at either scope. Enable each pack only in the projects that use it,
+in that project's `.claude/settings.json`:
+
+```json
+{
+  "enabledPlugins": { "infra-skills@pixeloven": true }
+}
+```
+
+or `claude plugin install infra-skills@pixeloven --scope project`. User scope
+(`~/.claude/settings.json`, and the CLI's default) is the alternative for a pack
+every project needs.
+
+Every listed skill's description is paid on every turn. Claude Code budgets the
+listing at `skillListingBudgetFraction` of the context window (default `0.01`).
+Over budget it lists the least-used skills by name only, without warning, and
+agents then pick the right skill less often. Leaving unused packs out of a
+project keeps Crew's descriptions in the listing. Crew Doctor's
+`description-cost.claude-code` row predicts the collapse and names both remedies.
+
 ## 2. Verify each layer separately
 
 Free native checks:

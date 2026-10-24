@@ -22,6 +22,34 @@ so the served version is whatever `pixeloven/marketplace` currently points at. A
 `~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/skills`; the exact
 skill-root table in `codex debug prompt-input "hi"` is stronger evidence.
 
+### Enable packs per project
+
+`codex plugin add` enables a plugin in `~/.codex/config.toml`, so it applies to
+every project. Codex merges `plugins` across its config layers, so keep a pack to
+the projects that use it: switch it off in `~/.codex/config.toml` and on in each
+such project's `.codex/config.toml`:
+
+```toml
+# ~/.codex/config.toml
+[plugins."infra-skills@pixeloven"]
+enabled = false
+
+# <project>/.codex/config.toml
+[plugins."infra-skills@pixeloven"]
+enabled = true
+```
+
+Codex reads a project's `.codex/config.toml` only when that project is trusted
+(`projects."<abs>".trust_level = "trusted"`). Enabling a pack in your user config
+alone is the alternative for a pack every project needs. Per-skill
+`[[skills.config]]` entries are read from user config and `-c` flags, not from a
+project's file. Checked against `openai/codex` `rust-v0.163.0` source on
+2026-10-24.
+
+Codex gives the skills list about 2% of the context window. When the list
+outgrows it, Codex shortens every description, so packs a project doesn't use
+still cost it.
+
 Codex's legacy manifest path needs `.claude-plugin/plugin.json` to declare
 `"skills": "./skills"`. Removing it installs zero plugin skills silently.
 
