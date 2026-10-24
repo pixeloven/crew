@@ -19,7 +19,8 @@ requests and tags.
   `.pi/agents/<role>.md` overlay applies only inside the session's own trusted
   project. A role inherits the session's project trust (`--approve`) only inside
   that project (symlinks resolved) when the session trusts it; otherwise it runs
-  with `--no-approve`. Confirming an overlay grants no trust. See `docs/quickstart-pi.md` section 6.
+  with `--no-approve`. Confirming an overlay grants no trust. See
+  `docs/quickstart-pi.md` section 6.
 - Contract tests for the extension (`tests/test_pi_extension.py`). They run the
   real pi CLI against a fake model and a fake MCP server, so they make no billed
   calls. A new `pi-extension` CI job runs them on pi 1.4.0.
