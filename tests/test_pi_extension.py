@@ -97,7 +97,7 @@ class PiExtensionContract(unittest.TestCase):
             "PI_TELEMETRY": "0",
             "CREW_PI_AGENT": "1",
         }
-        for key in ("CREW_AGENT_DEPTH", "CREW_AGENT_TIMEOUT_SECONDS"):
+        for key in ("CREW_AGENT_DEPTH", "CREW_AGENT_TIMEOUT_SECONDS", "CREW_PI_DISPATCH"):
             cls.env.pop(key, None)
         cls.roles = roles()
 
@@ -147,6 +147,14 @@ class PiExtensionContract(unittest.TestCase):
 
     def test_without_the_opt_in_nothing_is_registered(self) -> None:
         self.assertNotIn("crew_agent", self.operator_tools({"CREW_PI_AGENT": ""}))
+
+    def test_dispatch_off_leaves_crew_agent_unregistered(self) -> None:
+        tools = self.operator_tools({"CREW_PI_DISPATCH": "off"})
+        self.assertNotIn("crew_agent", tools)
+        self.assertIn(MCP_TOOL, tools)
+
+    def test_dispatch_switch_only_reacts_to_off(self) -> None:
+        self.assertIn("crew_agent", self.operator_tools({"CREW_PI_DISPATCH": "on"}))
 
     def test_opt_in_registers_crew_agent_beside_mcp(self) -> None:
         tools = self.operator_tools()
