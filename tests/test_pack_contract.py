@@ -1,5 +1,6 @@
 import json
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -548,6 +549,37 @@ class ClaudeListingBudgetTests(unittest.TestCase):
             self.assertIn("collapse to names only", row["inference"])
             self.assertIn("2026-10-23", row["inference"])
             self.assertIn("skillListingBudgetFraction", row["recommendation"])
+
+    def test_recommended_fraction_keeps_descriptions_in_every_predicted_window(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base, skills=300)
+            listing = claude_listing_inputs(base / "project", base / "home", environ={})
+            row = self.row(base, crew, pack, listing)
+            self.assertEqual(2, row["inference"].count("collapse to names only"))
+            fraction = float(re.search(r"`skillListingBudgetFraction` in Claude settings to at least ([\d.]+)",
+                                       row["recommendation"]).group(1))
+            raised = self.row(base, crew, pack, {**listing, "fraction": fraction})
+            self.assertNotIn("collapse to names only", raised["inference"])
+            self.assertEqual("", raised["recommendation"])
+
+    def test_env_char_budget_gets_an_env_recommendation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew, pack = self.world(base, skills=60)
+            listing = claude_listing_inputs(
+                base / "project",
+                base / "home",
+                context_window=200_000,
+                environ={"SLASH_COMMAND_TOOL_CHAR_BUDGET": "9000"},
+            )
+            row = self.row(base, crew, pack, listing)
+            self.assertEqual("DEGRADED", row["status"])
+            self.assertNotIn("skillListingBudgetFraction` in Claude settings", row["recommendation"])
+            needed = int(re.search(r"`SLASH_COMMAND_TOOL_CHAR_BUDGET` \(.*?\) to at least ([\d,]+) chars",
+                                   row["recommendation"]).group(1).replace(",", ""))
+            self.assertEqual("DEGRADED", self.row(base, crew, pack, {**listing, "fraction": 1.0})["status"])
+            self.assertEqual("OK", self.row(base, crew, pack, {**listing, "char_budget": needed})["status"])
 
     def test_row_is_ok_when_descriptions_fit(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

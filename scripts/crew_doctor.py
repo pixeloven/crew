@@ -2807,13 +2807,23 @@ def _claude_listing_check(costs: list[dict[str, Any]], listing: dict[str, Any]) 
     )
     actions = []
     if any(collapsed_at.values()):
-        size = window or max(size for size, names in collapsed_at.items() if names)
-        chars_per_token = CLAUDE_CHARS_PER_TOKEN.get(size, 4)
-        needed = (reserved + listing_chars + 1) / (size * chars_per_token)
-        actions.append(
-            f"To keep descriptions, raise `skillListingBudgetFraction` in Claude settings to at least "
-            f"{math.ceil(needed * 1000) / 1000:g} (the budget is paid every turn)"
-        )
+        needed_chars = reserved + listing_chars + 1
+        if listing.get("char_budget"):
+            actions.append(
+                f"To keep descriptions, raise `{CLAUDE_BUDGET_ENV}` ({listing['char_budget_source']}) to at least "
+                f"{needed_chars:,} chars, or unset it to use `skillListingBudgetFraction` (the budget is paid "
+                "every turn)"
+            )
+        else:
+            needed = max(
+                needed_chars / (size * CLAUDE_CHARS_PER_TOKEN.get(size, 4))
+                for size, names in collapsed_at.items()
+                if names
+            )
+            actions.append(
+                f"To keep descriptions, raise `skillListingBudgetFraction` in Claude settings to at least "
+                f"{math.ceil(needed * 1000) / 1000:g} (the budget is paid every turn)"
+            )
     user_packs = [
         cost["label"]
         for cost in costs

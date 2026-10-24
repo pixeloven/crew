@@ -31,7 +31,8 @@ or `claude plugin install infra-skills@pixeloven --scope project`. User scope
 every project needs.
 
 Every listed skill's description is paid on every turn. Claude Code budgets the
-listing at `skillListingBudgetFraction` of the context window (default `0.01`).
+listing at `skillListingBudgetFraction` of the context window (default `0.01`),
+or at `SLASH_COMMAND_TOOL_CHAR_BUDGET` chars when that variable is set.
 Over budget it lists the least-used skills by name only, without warning, and
 agents then pick the right skill less often. Leaving unused packs out of a
 project keeps Crew's descriptions in the listing. Crew Doctor's
