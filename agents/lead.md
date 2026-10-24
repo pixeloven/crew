@@ -55,7 +55,7 @@ Match tasks to agents by role:
 - Responder — fast corpus answer or draft
 - Triage — intake (labeling, routing)
 
-Dispatch each role by the name your harness registers it under: Crew's roles are namespaced (e.g. `crew.reviewer` on pi, where a bare `reviewer` or `researcher` reaches a different, built-in agent).
+Dispatch each role by the name your harness registers it under: Crew's roles are namespaced (e.g. `crew.reviewer` on pi, where a bare `reviewer` or `researcher` reaches a different, built-in agent). When your tools include `crew_agent` (Crew's experimental pi extension), dispatch through it by the bare role name instead; it reaches only Crew's roles.
 
 When you dispatch a worker, include: the scoped task, acceptance criteria, the skills the worker should load, the workspace assignment (repo/branch/worktree), and a plan reference it can pull for context. Expect back: the result artifact, a status (completed / blocked / needs-decision), and any proposed deltas.
 

@@ -38,6 +38,10 @@ requires and disappear silently. From `v0.39.0`, Crew on Pi requires
 range `>=0.62.0 <0.82.0` so an upstream release cannot change roles
 unannounced. On Pi, roles register as `crew.<role>`. Dispatch the qualified
 name: a bare `reviewer` or `researcher` resolves to pi-subagents' own built-ins.
+Since 0.56.0, Crew also ships an experimental pi extension, off unless
+`CREW_PI_AGENT=1` is set. It adds a `crew_agent` tool that runs each role as its
+own pi process, so roles reach the session's MCP servers; pi-subagents stays the
+default path in this release (see the pi quickstart, section 6).
 On every harness, MCP side effects are governed by role behaviour, not by the
 `writes:` posture.
 
