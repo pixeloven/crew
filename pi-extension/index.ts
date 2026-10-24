@@ -285,25 +285,25 @@ export default async function (pi: ExtensionAPI) {
 		async execute(_id, params, signal, onUpdate, ctx) {
 			let role = roles.get(params.agent);
 			if (!role) throw new Error(`Unknown Crew role "${params.agent}". Roles: ${[...roles.keys()].join(", ")}`);
-			const project = path.resolve(ctx.cwd);
-			const cwd = path.resolve(project, params.cwd ?? "");
+			const project = fs.realpathSync(path.resolve(ctx.cwd));
+			const cwd = fs.realpathSync(path.resolve(project, params.cwd ?? ""));
 			// The session's trust covers only its own project, so an overlay from a cwd
 			// outside it is never used, and the child is trusted only inside it.
 			const inProject = within(project, cwd);
-			let trusted = inProject && ctx.isProjectTrusted();
+			const trusted = inProject && ctx.isProjectTrusted();
 			let note = "";
 			const overlay = findOverlay(cwd, inProject ? project : cwd, role.name);
 			if (overlay && !inProject) {
 				note = `\n\n[${overlay} was not used: it is outside the session's project, so Crew's packaged ${role.name} ran]`;
 			} else if (overlay) {
-				trusted =
+				const use =
 					trusted ||
 					(ctx.hasUI &&
 						(await ctx.ui.confirm(
 							`Run the project's ${role.name} role?`,
 							`${overlay} overrides Crew's ${role.name}. Project roles are repo-controlled; only continue for a trusted repository.`,
 						)));
-				if (trusted) role = readRole(overlay) ?? role;
+				if (use) role = readRole(overlay) ?? role;
 				else note = `\n\n[${overlay} was not used: the project is not trusted, so Crew's packaged ${role.name} ran]`;
 			}
 			const r = await runRole(role, params.task, {

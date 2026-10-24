@@ -53,7 +53,7 @@ class PiExtensionContract(unittest.TestCase):
         if not (PI_CLI and pathlib.Path(PI_CLI).is_file() and NODE):
             raise AssertionError(f"CREW_REQUIRE_PI=1 but PI_CLI={PI_CLI!r} or node is missing")
         cls.tmp = tempfile.TemporaryDirectory()
-        base = pathlib.Path(cls.tmp.name)
+        base = pathlib.Path(cls.tmp.name).resolve()
         cls.llm = subprocess.Popen(
             [NODE, str(FIXTURES / "fake-llm.mjs")], stdout=subprocess.PIPE, text=True
         )
@@ -237,6 +237,28 @@ class PiExtensionContract(unittest.TestCase):
             nested = re.search(r"CHILD=\[(.*)\]", reply).group(1)
             for tools in (REPLY.search(reply).group(3), REPLY.search(nested).group(3)):
                 self.assertEqual(expected, "project_probe" in tools.split(","), reply)
+
+    def test_a_cwd_that_links_out_of_the_project_is_outside_it(self) -> None:
+        outside = self.elsewhere / ".pi"
+        (outside / "agents").mkdir(parents=True)
+        (outside / "settings.json").write_text(
+            json.dumps({"extensions": [str(FIXTURES / "project-tool.mjs")]}), encoding="utf-8"
+        )
+        (outside / "agents" / "reviewer.md").write_text(
+            "---\nname: reviewer\npackage: crew\ndescription: overlay\n---\n\nYou are Overlay — a project role.\n",
+            encoding="utf-8",
+        )
+        link = self.project / "vendor"
+        link.symlink_to(self.elsewhere, target_is_directory=True)
+        try:
+            reply = self.text(self.dispatch("reviewer IN vendor", "report", None, "--approve"))
+        finally:
+            link.unlink()
+            shutil.rmtree(outside)
+        role, _, tools = REPLY.search(reply).groups()
+        self.assertEqual(marker("reviewer"), role)
+        self.assertNotIn("project_probe", tools.split(","))
+        self.assertIn("was not used: it is outside the session's project", reply)
 
     def test_overlay_outside_the_session_project_is_never_used(self) -> None:
         outside = self.elsewhere / ".pi" / "agents" / "reviewer.md"
