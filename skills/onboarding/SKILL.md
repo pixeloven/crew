@@ -69,8 +69,8 @@ success criterion.
 ### 3. Audit local ownership and layout
 
 Derive only the slots the installed Crew skills actually declare in
-`expects-local:`. Keep recommended names such as `litellm-access-map` and
-`vault-ops` separate from required slots. Record the concern → local-skill owner
+`expects-local:`. A project's own local skills for other concerns are not
+slots and are never reported as unfilled. Record the concern → local-skill owner
 map; do not create a catalogue the runtime already supplies.
 
 Canonical local skills live once at `.agents/skills/<name>/SKILL.md`. Claude can

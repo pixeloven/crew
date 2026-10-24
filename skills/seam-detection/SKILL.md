@@ -1,59 +1,34 @@
 ---
 name: seam-detection
-description: Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects ExternalSecret, scheduling, MCP access, exit-code, and RBAC seam patterns.
+description: Use when scanning a diff for protected changes or reviewing widened permissions, secrets, storage, or runtime contracts. Detects registered seam crossings and agent-runtime exit-code changes, and defines the finding format.
 tier: concept
 requires: []
 expects-local: [protected-seams, secret-paths]
 ---
 
-A seam crossing is any change that touches a protected pattern in the project's seams registry without the crossing having been explicitly flagged by the author. The registry is a **consumer-local** skill; the seams below are common shapes, and a consumer's registry may add or drop entries. This skill defines how to detect crossings in practice.
+A seam crossing is any change that touches a protected pattern in the project's seams registry without the crossing having been explicitly flagged by the author. The registry is a **consumer-local** skill; the shapes below are common ones, and a consumer's registry may add or drop entries. This skill defines how to detect crossings in practice.
 
-## Detection patterns
+## Detecting by registry
 
-### Seam 1 — Secret management contract
+Read the project's `protected-seams` registry first. Each entry names the protected pattern, the files it lives in, and how to grep for it. For each entry:
 
-**Scan for in diffs:**
-- Any `refreshInterval` value other than `"0"` on an ExternalSecret
-- `deletionPolicy` changed from `Retain`
-- Hardcoded secrets, tokens, passwords, or API keys (any string matching key/token/password patterns)
-- ExternalSecret created without a same-PR consumer workload
-- `ClusterSecretStore` reference to anything other than the project's registered store (most deployments register exactly one — its name is in the project's secret-paths local skill)
+1. Run its grep against the changed files (`git diff <base>...HEAD -- <paths>`), not the whole tree.
+2. Read every hit in context and decide whether the change alters the protected contract or only touches the file (see False positives).
+3. Report each crossing in the finding format below.
 
-**Shell grep (run against changed files):**
-```bash
-git diff HEAD~1 | grep -E '(refreshInterval|deletionPolicy|password|token|apiKey|secret)' | grep -v '#'
-gitleaks detect --source . --no-git
-```
+A stack pack may seed registry entries for its own shapes (Kubernetes secret sync, scheduling, RBAC, an LLM or tool gateway's access lists); the registry entry, not the pack, is what you scan for. Whatever the registry says, always scan for hardcoded secrets — any string matching key, token, password or API-key patterns — with the project's secret scanner (`gitleaks detect --source . --no-git` is one example) and the `secret-paths` local skill.
 
-### Seam 2 — Workload scheduling contract
+## Common shapes
 
-**Scan for in diffs:**
-- Deployment, StatefulSet, DaemonSet, or Job with no `tolerations` block
-- `tolerations` block missing `node-role.kubernetes.io/control-plane`
-- `storageClassName` changed between the project's storage tiers (e.g. a runtime/NVMe class vs a retained/HDD class — names in the project's registry), or to a third class
-- `storageClassName: ""` used outside a documented static-PV binding pattern
+Most registries hold some of these. Each is described by what it protects, not by product:
 
-**Shell grep:**
-```bash
-git diff HEAD~1 -- '*.yaml' | grep -E '(storageClassName|tolerations)' 
-# Then verify control-plane toleration is present in every workload
-```
+- **Secret contract** — how secrets reach workloads: which store they come from, how often they refresh, what happens to them on delete, and that each synced secret has a consumer.
+- **Scheduling contract** — where workloads may run and on what storage: placement rules, storage tiers, and static-volume bindings.
+- **Access boundary** — which callers may reach which tools or services through a gateway: allowlists, access groups, and what an empty list means. An empty list that fails *open* is the crossing to look for first.
+- **Runtime contract** — the agent runtime's exit codes, result schema and retry policy (below).
+- **Authorization widening** — a grant that lets an identity do more than before: new bindings, new verbs on existing rules, wildcards, escalation-adjacent permissions, broad subjects, or a wider scope where a narrow one would do.
 
-### Seam 3 — LiteLLM MCP access boundary
-
-The load-bearing boundary is the **server `access_groups` ∩ team allowlist ∩ VK groups** intersection (mechanism in the project's gateway-routing local skill; the project's registry names it as a seam), not a VK-vs-MCP credential split.
-
-**Scan for in diffs:**
-- A VK's `mcp_access_groups` (or `object_permission`) changed — a consumer's opted-in capability groups widened or narrowed
-- A team's allowlist (`object_permission.mcp_access_groups`) changed — the hard ceiling every member VK is capped by
-- A server's `access_groups` changed in the LiteLLM proxy config `mcp_servers` block, or a new MCP server added
-- A per-server `allowed_tools` allowlist removed or widened
-- A group left matching zero servers, or a VK left with no groups (both fail *open* — treated as unrestricted / full-allowlist inheritance)
-
-**Shell grep:**
-```bash
-git diff HEAD~1 | grep -E '(mcp_access_groups|access_groups|allowed_tools|mcp_servers|object_permission)'
-```
+For authorization widening, report the *delta in authority*, not just the diff: what could this identity do after the change that it couldn't before, and what is the worst thing that new permission allows on the named resources? A report-only auditor that gains a delete permission becomes an armed reaper **with no code change**.
 
 ### Seam 4 — Agent runtime contract
 
@@ -69,26 +44,6 @@ Only applies where a project runs its own autonomous runtime. The **concrete** c
 ```bash
 git diff HEAD~1 -- '*orchestrator*' '*[Ww]orkflow*' | grep -E '(exit|retry|[Rr]esult|maxDuration)'
 ```
-
-### RBAC grants (a common fifth shape)
-
-Authorization widening is load-bearing, easy to miss in review, and trivially greppable — it meets the registry bar wherever a project runs Kubernetes RBAC. The canonical case: an auditor workload is report-only *because* its ClusterRole grants only `get`/`list`; adding `delete` to that verb list converts it into an armed reaper **with no code change**.
-
-**Scan for in diffs:**
-- New `ClusterRole` / `ClusterRoleBinding` / `Role` / `RoleBinding` manifests, or new `subjects:` on an existing binding
-- **Verb widening** on existing `rules:` — especially `delete`, `deletecollection`, `patch`, `update` appearing where only `get`/`list`/`watch` were
-- Wildcards: `verbs: ["*"]`, `resources: ["*"]`, `apiGroups: ["*"]`
-- **Escalation-adjacent verbs** — `escalate` / `bind` on `roles`/`clusterroles`, `create` on `rolebindings`/`clusterrolebindings`, `impersonate` on users/groups/serviceaccounts
-- A binding whose subject is a broad group (`system:authenticated`, `system:serviceaccounts`) rather than a named ServiceAccount
-- ClusterRole where a namespaced Role would do — scope creep from namespace to cluster
-
-**Shell grep:**
-```bash
-git diff HEAD~1 -- '*.yaml' | grep -E '(kind: (Cluster)?Role(Binding)?|^\+.*(verbs|resources|apiGroups|subjects):|\*)'
-git diff HEAD~1 | grep -E '^\+.*(escalate|bind|impersonate|deletecollection)'
-```
-
-Report the *delta in authority*, not just the diff: what could this identity do after the change that it couldn't before, and what is the worst thing that new verb permits on the named resources?
 
 ## Reporting a seam finding
 
@@ -110,9 +65,9 @@ Mark as **Required** in the review. Do not approve or suggest merge until the au
 
 Not every touch of a seam-related file is a crossing. Context matters:
 
-- An ExternalSecret file modified to add a label (not touching `refreshInterval` or `deletionPolicy`) is not a crossing
+- A secret-sync manifest modified to add a label, without touching its store, refresh or delete behaviour, is not a crossing
 - A comment or logging change in a runtime orchestrator is not a crossing
 - A new test that imports the runtime's result type but doesn't change its schema is not a crossing
-- A new `Role` that only adds `get`/`list` on resources the identity could already read is worth a Note, not a Required finding
+- A new grant that only adds read access to resources the identity could already read is worth a Note, not a Required finding
 
 When in doubt, flag it. A false positive costs a brief discussion. A missed crossing can break production.

@@ -3730,10 +3730,11 @@ class DerivedContractTests(unittest.TestCase):
             },
             set(contract["declared"]),
         )
-        self.assertNotIn("litellm-access-map", contract["declared"])
-        self.assertNotIn("vault-ops", contract["declared"])
-        self.assertIn("litellm-access-map", contract["recommended_vocabulary"])
-        self.assertIn("vault-ops", contract["recommended_vocabulary"])
+        # crew#106 D4: platform-specific names left Crew rather than staying as vocabulary.
+        for removed in ("litellm-access-map", "vault-ops"):
+            self.assertNotIn(removed, contract["declared"])
+            self.assertNotIn(removed, contract["recommended_vocabulary"])
+        self.assertEqual([], contract["recommended_vocabulary"])
 
     def test_block_sequence_local_slots_are_derived(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

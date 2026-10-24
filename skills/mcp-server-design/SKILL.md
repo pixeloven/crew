@@ -1,6 +1,6 @@
 ---
 name: mcp-server-design
-description: Use when building MCP tools or servers with FastMCP. Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision.
+description: Use when building MCP tools or servers in any framework (FastMCP is the worked example). Covers tool boundaries, discovery descriptions, structured errors, failure semantics, registration, and the MCP vs AXI vs CLI decision.
 tier: subject
 requires: []
 ---
@@ -9,11 +9,13 @@ requires: []
 
 Before writing an MCP tool, confirm the primary caller *and* whose credentials the capability carries. The full three-class decision table — MCP (federated, authorization-carrying) vs AXI (local agent tooling, no auth of its own) vs CLI (humans, scripts, CI) — and the off-the-shelf-first default that precedes it both live in `agent-platform-design`; apply it before writing any server code. A capability whose credential must never leave one machine belongs in an AXI, however convenient federating it would be.
 
-The FastMCP-specific consequences:
+The consequences for the server you write:
 - When MCP is the canonical surface, the MCP tool owns validation, schema, and side effects. Any CLI shim forwards structured args and translates exit codes — it never duplicates logic; it calls the MCP tool or the underlying library directly.
 - Human-primary capabilities belong in the project's CLI; add an MCP tool when an agent is a caller.
 
-## FastMCP basics
+## A minimal tool
+
+The examples use FastMCP (Python); the same shape holds in any MCP framework or SDK — one function per tool, typed parameters, a description the model reads, and a structured return.
 
 ```python
 from fastmcp import FastMCP
@@ -68,7 +70,7 @@ Document this asymmetry if both surfaces exist.
 
 ## Server registration
 
-MCP servers are registered per the harness's MCP config (`.mcp.json` for Claude Code, the pi MCP config for pi.dev), or federated behind the platform's LiteLLM gateway so any client whose virtual key holds the right access group can reach them — see the project's gateway-routing local skill.
+MCP servers are registered per the harness's MCP config (`.mcp.json` for Claude Code, the pi MCP config for pi.dev), or federated behind the platform's LLM/MCP gateway (for example LiteLLM) so any client whose credential holds the right access can reach them — see the project's gateway-routing local skill.
 
 ## Writing to the substrate from an MCP server
 

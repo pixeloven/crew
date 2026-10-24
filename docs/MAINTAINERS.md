@@ -15,7 +15,7 @@ crew/
 ├── docs/CATALOG.md                 # GENERATED skill inventory
 ├── docs/capabilities.txt           # capability vocabulary (documented in docs/CAPABILITIES.md)
 ├── templates/AGENTS.md             # the onboarding scaffold (behavioral spine + ▸ Fill blocks)
-├── templates/local-skills/         # 5 declared slots + 2 recommended vocabulary stubs
+├── templates/local-skills/         # 5 declared slot stubs
 ├── scripts/render_roles.py         # role renderer; --check is the CI drift gate
 ├── scripts/role_contract.py        # shared role posture/runtime-knob contract
 ├── scripts/frontmatter.py          # dependency-free leading-frontmatter field parser

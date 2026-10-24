@@ -17,7 +17,7 @@ description: <Project>'s deployment conventions — scheduling tolerations, Stor
 
 ## Secrets
 
-> **▸ Fill:** the secret flow (e.g. 1Password → ESO), the registered ClusterSecretStore name, and the ExternalSecret invariants that must never change silently.
+> **▸ Fill:** the secret flow (e.g. 1Password → ESO), the registered secret store name, and the secret-sync invariants that must never change silently (e.g. ExternalSecrets keep `refreshInterval: "0"` and `deletionPolicy: Retain`, and every ExternalSecret has a consumer in the same PR).
 
 ## Namespaces & misc
 

@@ -43,67 +43,31 @@ What should happen next. Not implementation instructions — the action to take.
 
 When filing a GitHub issue for a persistent degradation:
 
-- **Title:** `[ops] <component>: <symptom>` — e.g., `[ops] <app>: pod CrashLoopBackOff after ESO sync failure`
+- **Title:** `[ops] <component>: <symptom>` — e.g., `[ops] <app>: pod CrashLoopBackOff after secret sync failure`
 - **Label:** `domain:ops`
 - **Body:** Use the incident report structure above
 - **Deduplicate:** Search open issues before filing. If an issue already exists, add a comment with updated observations rather than opening a duplicate.
 
 ## Ops sweep output format
 
-For scheduled health sweeps (even clean ones):
+For scheduled health sweeps (even clean ones), write one section per component the project's `topology` local skill names, in the order it lists them:
 
 ```
 ## Ops Sweep — <date>
 
 **Result:** Clean / <N> issues found
 
-### ArgoCD
-- <app>: Healthy ✓
-- <app>: Degraded — <reason>
+### <component>
+- <item>: Healthy ✓
+- <item>: Degraded — <reason>
 
-### Kubernetes nodes
-- <node>: Ready ✓
-- <node>: NotReady — <reason>
-
-### Pods (non-Running)
-- <namespace>/<pod>: <status> — <reason>
-
-### ExternalSecrets
-- <namespace>/<es>: SecretSynced ✓
-- <namespace>/<es>: SecretSyncedError — <reason>
+### <component>
+- <item>: Healthy ✓
 
 ### Issues filed
 - #<number>: <title>
 ```
 
+How to check each component — the commands, MCP tools, or dashboards — comes from the stack's diagnostics skill and the project's own runbooks, not from this template.
+
 A clean sweep with no issues still produces output. Silence is not confirmation.
-
-## Diagnostic command reference
-
-```bash
-# Node state
-kubectl get nodes -o wide
-kubectl describe node <node>
-
-# Pod state (non-Running)
-kubectl get pods -A | grep -Ev 'Running|Completed'
-
-# ArgoCD via LiteLLM MCP (primary)
-# mcp tool: argocd-list_applications
-# mcp tool: argocd-get_application
-
-# ArgoCD fallback (CLI)
-argocd app list
-
-# ExternalSecrets
-kubectl get externalsecret -A
-kubectl describe externalsecret -n <ns> <name>
-
-# Node-OS level checks (example: Talos — substitute your node OS's tooling)
-talosctl health --nodes <ip>
-talosctl logs --nodes <ip> -k   # kernel logs
-
-# Logs
-kubectl logs -n <ns> <pod>
-kubectl logs -n <ns> <pod> --previous   # crashed container
-```

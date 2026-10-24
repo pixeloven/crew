@@ -18,11 +18,11 @@ Bare use of an ambiguous term below is banned in favour of the qualified form.
 | **surface** | the collective noun for the **agent runtimes** — the runtime entry points where an agent actually runs and is reached (a web chat UI, a worker runtime, a conversational agent runtime, an editor CLI). "client" is banned for this sense. |
 | **tenant** | a **hard-isolation boundary** for untrusted or CI-supplied code (e.g. ephemeral CI runners). A tenant is an isolation domain; a consumer is a trusted user of the platform. Never call a consumer a tenant. |
 | **gateway** | banned bare — always qualify. **LLM/MCP gateway** = the model-and-tool federation front door (virtual keys, MCP access groups). **ingress gateway** = the cluster's HTTP entry (ingress controller / reverse proxy). A conversational agent runtime is a *surface*, never a "gateway". |
-| **app** | banned bare — three distinct senses: the ArgoCD **`Application` kind** (the registration object) · the deployed **workload** (the running thing) · the literal **`apps/` directory** (where a base lives). Say which. |
-| **workload** | the deployed unit the GitOps controller manages as **one Application** — the default noun for "a deployed thing". |
+| **app** | banned bare — three distinct senses: the GitOps controller's **registration object** (for example an Argo CD `Application`) · the deployed **workload** (the running thing) · the literal **`apps/` directory** (where a base lives). Say which. |
+| **workload** | the deployed unit the GitOps controller manages as **one registration** (for example one Argo CD `Application`) — the default noun for "a deployed thing". |
 | **deployment** / **service** | Capitalized = the **K8s kind only** (`Deployment`, `Service`). Lowercase "deployment" in a topology / registration context is ambiguous → prefer **workload**. |
 | **component** | reserved for a shared manifest **base** under `base/{component}/` — a reusable base composed by an aggregator overlay. Not a synonym for workload or service. |
-| **project** | banned bare — the ArgoCD **`AppProject`** (an RBAC / allow-list boundary) · the **consumer project** (the actor / repo that consumes the platform) · a **repo**. Say which. |
+| **project** | banned bare — a controller's **access boundary** (an RBAC / allow-list grouping, for example an Argo CD `AppProject`) · the **consumer project** (the actor / repo that consumes the platform) · a **repo**. Say which. |
 | **skill** | a loadable capability doc (`skills/<name>/SKILL.md`). A **platform skill** is generic and lives in the foundation; a **local skill** holds a consumer's specifics and lives in that consumer's overlay. It shadows a same-named package skill only in a flat namespace such as Pi's; Claude Code and Codex namespace the Crew plugin copy as `crew:skill`, so both stay visible. |
 | **MCP server** vs **MCP consumer** | an **MCP server** *exposes* tools / resources over MCP (the provider being called). An **MCP consumer** (client) is a runtime that *connects to and calls* an MCP server — typically a surface. Name which side you mean; "MCP client" alone hides it. |
 | **the operator** | **the human being who directs the work** — the person an agent escalates to, asks for a decision, or reports to. This is the default and winning reading of the phrase in every agent contract, prompt, plan, and doc. A *tool* named "operator" is written in code style (`operator`); see below. |
@@ -67,10 +67,10 @@ A thing carries (up to) three names, one per level. Keep them aligned unless a d
 | Level | What names it | Portable? |
 |---|---|---|
 | **Platform (conceptual)** | this glossary's vocabulary — *surface*, *workload*, *consumer*, *gateway* | yes — same across every consumer |
-| **Deployment** | the ArgoCD **Application name** + the **namespace name** (these should match) | no — one consumer's chosen names |
+| **Deployment** | the GitOps controller's **registration name** + the **namespace name** (these should match) | no — one consumer's chosen names |
 | **K8s primitive** | the in-cluster object names — `Deployment`, `Service`, `PVC`, ingress objects | no — the running objects |
 
-Read a name by its level: a platform-level word (*surface*) names a *role*; a deployment-level word names *one consumer's* Application / namespace; a primitive-level word names a *running object*. When someone says "the X app", resolve which level they mean before acting.
+Read a name by its level: a platform-level word (*surface*) names a *role*; a deployment-level word names *one consumer's* registration / namespace; a primitive-level word names a *running object*. When someone says "the X app", resolve which level they mean before acting.
 
 ## How a consumer specializes this
 

@@ -94,7 +94,7 @@ class ProvidesFieldTests(unittest.TestCase):
             "provides: []\n": True,
             "provides: protected-seams\n": True,
             "provides: [not-a-slot]\n": True,
-            # Recommended vocabulary is not an expected-local slot roles cite.
+            # A name Crew no longer reserves is not a slot roles cite.
             "provides: [vault-ops]\n": True,
         }
         for extra, should_fail in cases.items():
@@ -232,8 +232,8 @@ class PackOwnedSlotTests(unittest.TestCase):
             )
 
     def test_redeclaring_a_crew_slot_fails(self) -> None:
-        # Both kinds of crew name: a slot roles cite, and recommended vocabulary.
-        for crew_slot in ("topology", "vault-ops"):
+        # Crew names are the slots roles cite; vault-ops is no longer one (crew#106 D4).
+        for crew_slot in ("topology", "secret-paths"):
             with self.subTest(slot=crew_slot), tempfile.TemporaryDirectory() as tmp:
                 pack = pathlib.Path(tmp)
                 write_slotted_pack(pack)
