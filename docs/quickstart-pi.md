@@ -2,6 +2,9 @@
 
 ## 1. Install a role-discoverable release
 
+This installs Crew's skills and its roles. To use the skills without the roles,
+skip to section 7.
+
 Pin a published Crew release for reproducibility; replace `vX.Y.Z` with the
 chosen tag:
 
@@ -177,3 +180,40 @@ This release ships both paths. A later release is planned to make `crew_agent`
 the pi path and drop the `pi.subagents.agents` manifest entry and the
 `pi-subagents` peer dependency. pi-subagents then stays available for your own
 agents.
+
+## 7. Skills only, without roles
+
+To use Crew's methodology without its roles, skip the package install and
+load the skills on each launch with `--skill`. This path needs no pi-subagents,
+registers no `crew.<role>` agents and no `crew_agent` tool, so the choice
+between the two role runtimes above does not apply. Check out a release tag
+in full, because some skills (`doctor`, `onboarding`, `learn`) run Crew's
+`scripts/` by absolute path:
+
+```sh
+git clone --depth 1 --branch vX.Y.Z https://github.com/pixeloven/crew /abs/crew
+pi --skill /abs/crew/skills
+```
+
+One `--skill` pointing at the `skills/` directory loads every Crew skill. To
+load a subset, pass each skill directory instead, repeating the flag:
+
+```sh
+pi --skill /abs/crew/skills/plan-generation --skill /abs/crew/skills/pr-review-checklist
+```
+
+`--no-skills` turns off pi's own skill discovery (project, user, and package
+skills) but still loads every `--skill` path, so `pi --no-skills --skill
+/abs/crew/skills` shows exactly Crew's skills. Skills that describe dispatching
+a role still name the roles; without them, do that work in the session.
+
+The checked-out tag is the pin. To update, read the `### Consumer impact`
+section of every [CHANGELOG](../CHANGELOG.md) release between your tag and the
+new one, then check out the new tag.
+
+How this was verified: on pi 0.87.1 and 1.4.0, with a fake model that reports
+the skill names in the system prompt it receives, so no billed calls.
+`--skill <crew>/skills` listed every skill in the tree (21 at 0.57.1). One skill
+directory, or its `SKILL.md`, listed that one skill. Two `--skill` flags listed
+both skills. `--no-skills --skill <crew>/skills` still listed all 21, and a run
+with no `--skill` listed none.

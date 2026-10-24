@@ -4,6 +4,39 @@ Release notes for each version, newest first. Every version bump adds its
 section here in the same PR. Earlier releases are described in their pull
 requests and tags.
 
+From 0.57.1 on, every version's section opens with a `### Consumer impact`
+section. It always lists the same three items, and an item with nothing to
+report says "None":
+
+- **Renamed or moved:** each skill or role that changed its name or home, as
+  `old name -> new home`.
+- **Removed:** each skill or role that is gone.
+- **Action needed:** each contract change a consumer must act on before
+  bumping, such as slots, frontmatter, or peer floors.
+
+A consumer who pins a tag reads this section in every release between their
+pin and the new tag to decide whether the bump is safe. The other sections
+(`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
+convention and are not backfilled.
+
+## 0.57.1
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** None.
+
+### Added
+
+- **Release notes say what moved** (crew#105). Each release section now opens
+  with a fixed `### Consumer impact` section, described at the top of this
+  file and in `docs/MAINTAINERS.md` (Versioning).
+- **Skills-only on pi** (crew#105). `docs/quickstart-pi.md` section 7 shows
+  how to load Crew's skills with `pi --skill`, without its roles or the
+  pi-subagents peer. One `--skill <crew>/skills` loads every skill. This was
+  verified on pi 0.87.1 and 1.4.0 against a fake model, with no billed calls.
+
 ## 0.57.0
 
 ### Added
