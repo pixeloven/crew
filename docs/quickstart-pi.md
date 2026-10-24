@@ -150,6 +150,13 @@ extension API and CLI:
   used. Only overlays inside the session's project count: the search does not
   go above the project directory, and an overlay under a `cwd` outside the
   project is never used (the result says the packaged role ran).
+- **Trust.** A role gets your session's project trust only when it runs
+  inside the session's project and your session trusts that project (or you
+  confirmed its overlay). It then starts with `--approve` and loads the same
+  trust-protected project resources (`.pi/settings.json`, project extensions,
+  `.pi/mcp.json`) as your session. Otherwise it starts with `--no-approve`, so a
+  role never gains trust your session lacks. A `lead` passes the same rule on
+  to the workers it dispatches.
 
 It needs pi 1.4.0 or newer (the oldest version tested). On an older pi it does
 not load and shows a warning. It works alongside pi-subagents: both tools are

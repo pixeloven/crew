@@ -15,6 +15,8 @@
  *  - posture:  the role's `excludeTools` is subtracted from the child's default tools.
  *  - nesting:  only `allowNestedSubagents` roles keep `crew_agent`; depth is capped.
  *  - model:    the child inherits the dispatching session's model and thinking level.
+ *  - trust:    the child is trusted only when the session trusts the project and the
+ *              role runs inside it; it never gains trust the session lacks.
  *  - handoff:  the child's final assistant text is the tool result; failures are tool
  *              errors; large output spills to a file; abort and timeout kill the child.
  */
@@ -35,7 +37,6 @@ const PACKAGE = "crew";
 const OPT_IN_ENV = "CREW_PI_AGENT";
 const DEPTH_ENV = "CREW_AGENT_DEPTH";
 const TIMEOUT_ENV = "CREW_AGENT_TIMEOUT_SECONDS";
-const ROLES_DIR_ENV = "CREW_PI_AGENTS_DIR";
 // Operator session is depth 0; a lead child (1) may dispatch workers (2), which may not.
 const MAX_DEPTH = 2;
 // The oldest pi this was tested on. --exclude-tools needs 0.77, built-in MCP 0.99.
@@ -148,6 +149,7 @@ interface RunOptions {
 	depth: number;
 	model?: string;
 	thinking?: string;
+	trusted: boolean;
 	timeoutMs?: number;
 	signal?: AbortSignal;
 	onText?: (text: string) => void;
@@ -167,6 +169,7 @@ async function runRole(role: Role, task: string, opts: RunOptions): Promise<RunR
 	const args = ["--mode", "json", "-p", "--no-session", "--append-system-prompt", promptFile];
 	if (opts.model) args.push("--model", opts.model);
 	if (opts.thinking) args.push("--thinking", opts.thinking);
+	args.push(opts.trusted ? "--approve" : "--no-approve");
 	args.push("--exclude-tools", deniedTools(role).join(","));
 	args.push(`Task: ${task}`);
 
@@ -260,7 +263,7 @@ export default async function (pi: ExtensionAPI) {
 	const depth = Number(process.env[DEPTH_ENV] ?? "0") || 0;
 	if (depth >= MAX_DEPTH) return;
 	const here = path.dirname(fileURLToPath(import.meta.url));
-	const roles = loadRoles(process.env[ROLES_DIR_ENV] ?? path.join(here, "..", "pi-agents"));
+	const roles = loadRoles(path.join(here, "..", "pi-agents"));
 	if (roles.size === 0) return;
 	const timeoutSeconds = Number(process.env[TIMEOUT_ENV] ?? "0");
 	const timeoutMs = timeoutSeconds > 0 ? timeoutSeconds * 1000 : undefined;
@@ -285,15 +288,16 @@ export default async function (pi: ExtensionAPI) {
 			const project = path.resolve(ctx.cwd);
 			const cwd = path.resolve(project, params.cwd ?? "");
 			// The session's trust covers only its own project, so an overlay from a cwd
-			// outside it is never used.
+			// outside it is never used, and the child is trusted only inside it.
 			const inProject = within(project, cwd);
+			let trusted = inProject && ctx.isProjectTrusted();
 			let note = "";
 			const overlay = findOverlay(cwd, inProject ? project : cwd, role.name);
 			if (overlay && !inProject) {
 				note = `\n\n[${overlay} was not used: it is outside the session's project, so Crew's packaged ${role.name} ran]`;
 			} else if (overlay) {
-				const trusted =
-					ctx.isProjectTrusted() ||
+				trusted =
+					trusted ||
 					(ctx.hasUI &&
 						(await ctx.ui.confirm(
 							`Run the project's ${role.name} role?`,
@@ -307,6 +311,7 @@ export default async function (pi: ExtensionAPI) {
 				depth,
 				model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
 				thinking: ctx.thinkingLevel,
+				trusted,
 				timeoutMs,
 				signal,
 				onText: (text) => onUpdate?.({ content: [{ type: "text", text }], details: undefined }),

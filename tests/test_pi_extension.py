@@ -97,7 +97,7 @@ class PiExtensionContract(unittest.TestCase):
             "PI_TELEMETRY": "0",
             "CREW_PI_AGENT": "1",
         }
-        for key in ("CREW_AGENT_DEPTH", "CREW_AGENT_TIMEOUT_SECONDS", "CREW_PI_AGENTS_DIR"):
+        for key in ("CREW_AGENT_DEPTH", "CREW_AGENT_TIMEOUT_SECONDS"):
             cls.env.pop(key, None)
         cls.roles = roles()
 
@@ -223,6 +223,20 @@ class PiExtensionContract(unittest.TestCase):
         self.assertIn("ROLE=Overlay ", trusted)
         self.assertIn(f"ROLE={marker('reviewer')} ", untrusted)
         self.assertIn("was not used: the project is not trusted", untrusted)
+
+    def test_child_inherits_the_session_project_trust_and_never_more(self) -> None:
+        settings = self.project / ".pi" / "settings.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(json.dumps({"extensions": [str(FIXTURES / "project-tool.mjs")]}), encoding="utf-8")
+        try:
+            trusted = self.text(self.dispatch("lead", "DISPATCH reviewer :: report", None, "--approve"))
+            untrusted = self.text(self.dispatch("lead", "DISPATCH reviewer :: report", None, "--no-approve"))
+        finally:
+            shutil.rmtree(self.project / ".pi")
+        for reply, expected in ((trusted, True), (untrusted, False)):
+            nested = re.search(r"CHILD=\[(.*)\]", reply).group(1)
+            for tools in (REPLY.search(reply).group(3), REPLY.search(nested).group(3)):
+                self.assertEqual(expected, "project_probe" in tools.split(","), reply)
 
     def test_overlay_outside_the_session_project_is_never_used(self) -> None:
         outside = self.elsewhere / ".pi" / "agents" / "reviewer.md"

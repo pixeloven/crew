@@ -17,8 +17,9 @@ requests and tags.
   depth is capped. Roles inherit the session's model and thinking level.
   Failures become tool errors, and output over 50 KB spills to a file. A project
   `.pi/agents/<role>.md` overlay applies only inside the session's own trusted
-  project. See
-  `docs/quickstart-pi.md` section 6.
+  project. A role inherits the session's project trust (`--approve`) only inside
+  that project when the session trusts it; otherwise it runs with
+  `--no-approve`. See `docs/quickstart-pi.md` section 6.
 - Contract tests for the extension (`tests/test_pi_extension.py`). They run the
   real pi CLI against a fake model and a fake MCP server, so they make no billed
   calls. A new `pi-extension` CI job runs them on pi 1.4.0.
