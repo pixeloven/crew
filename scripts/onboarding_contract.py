@@ -520,19 +520,21 @@ def learning_section(text: str) -> str:
 def audit_learning_section(text: str | None, profile: str = "standard") -> dict[str, Any]:
     """Read-only. Learning is optional spine: absence means learn is report-only.
 
-    Under the `hosted` profile any finding but `OK` is `N/A` with no recommendation.
+    Under the `hosted` profile `N/A` carries no recommendation, and `DEGRADED`
+    stays `DEGRADED` with the fix left to the host instead of proposed as an edit.
     """
     if profile not in AUDIT_PROFILES:
         raise ValueError(f"unknown audit profile {profile!r}; expected one of {AUDIT_PROFILES}")
     finding = _audit_learning_section(text)
-    if profile == "hosted" and finding["status"] != "OK":
-        return {
-            **finding,
-            "status": "N/A",
-            "fact": f"{finding['fact']}; the host reserves AGENTS.md for humans",
-            "recommendation": "",
-        }
-    return finding
+    if profile != "hosted" or finding["status"] == "OK":
+        return finding
+    if finding["status"] == "DEGRADED":
+        return {**finding, "recommendation": "the host decides whether the declared queue is fixed"}
+    return {
+        **finding,
+        "fact": f"{finding['fact']}; the host reserves AGENTS.md for humans",
+        "recommendation": "",
+    }
 
 
 def _audit_learning_section(text: str | None) -> dict[str, Any]:

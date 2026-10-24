@@ -154,7 +154,9 @@ proposals (docs/LEARNING.md). Audit it with
 `scripts/onboarding_contract.py --check-learning <AGENTS.md>`. `N/A` means learn
 stays report-only, which is a valid choice, so offer the section as an optional
 addition and never report it as drift. `DEGRADED` means the declared queue is
-unusable, for example under a `skills` directory.
+unusable, for example under a `skills` directory. Under the hosted profile
+`DEGRADED` stays `DEGRADED` and fails the check, with the fix left to the host;
+only an absent section or queue is `N/A`.
 
 For existing files, report what behavior is present, missing, duplicated, or
 ambiguous. Propose moves as a mapping of source content → destination skill or
