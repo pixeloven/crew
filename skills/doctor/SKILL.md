@@ -173,8 +173,8 @@ context_window=<this session's window>)` as `claude_listing=`. The
 Code would list by name only. It is `DEGRADED` when any would, and `N/A` when no
 window is supplied, in which case it predicts for 200K and 1M. The fix it names
 is `skillListingBudgetFraction`, sized for the smallest collapsing window, or
-`SLASH_COMMAND_TOOL_CHAR_BUDGET` when that variable sets the budget. It also recommends project-scope enablement for
-any pack enabled in user settings. Other plugins and synced skills are not
+`SLASH_COMMAND_TOOL_CHAR_BUDGET` when that variable sets the budget. It also
+recommends project-scope enablement for any pack enabled in user settings. Other plugins and synced skills are not
 counted, so a crowded session collapses sooner than predicted.
 
 Emit exactly one profile using this shared taxonomy:
