@@ -110,8 +110,8 @@ onboarded `AGENTS.md` carries the `## Reporting contract` section, so reports
 lead with decisions from adoption rather than by per-session correction. Audit
 it with `scripts/onboarding_contract.py --check-reporting <AGENTS.md>`; a
 `MISSING` or `DEGRADED` result is a proposed addition. Under the hosted audit
-profile, add `--audit-profile hosted`: the result is `N/A` and nothing is
-proposed.
+profile, add `--audit-profile hosted`: a missing or partial section is `N/A`
+instead of drift and nothing is proposed; a complete section is still `OK`.
 
 Skills that moved from Crew to a pack change their namespaced name. Audit each
 entry file, local skill, and overlay with
