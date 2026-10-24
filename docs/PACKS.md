@@ -129,9 +129,8 @@ expects-local: [tracker-fields, topology]
   never `example-skills:tracker-fields` or `example-skills-tracker-fields`. The
   consumer's fill is named `<project>-<slot>` by the same convention as Crew's;
 - **unique** within the file;
-- **not a Crew slot name** — neither a slot in `roles/expected-local-skills.txt`
-  nor Crew's recommended vocabulary. Crew's names are reserved, so one slot name
-  never means two contracts;
+- **not a Crew slot name** — not a slot in `roles/expected-local-skills.txt`.
+  Crew's names are reserved, so one slot name never means two contracts;
 - **stubbed** at `templates/local-skills/<slot>.md`;
 - **referenced** by at least one pack skill's `expects-local:`. A slot nothing
   defers to is a fill no skill reads.

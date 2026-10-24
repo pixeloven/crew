@@ -1,6 +1,6 @@
 ---
 name: pr-review-checklist
-description: Use when reviewing code/manifests for merge, approving a PR, or requesting changes. Applies Python, Kubernetes, Terraform, and Ansible checks plus scope, secrets, and load-bearing-assumption review.
+description: Use when reviewing code/manifests for merge, approving a PR, or requesting changes. Applies scope, secrets, seam and load-bearing-assumption checks, then each touched stack's own review checks.
 tier: concept
 requires: []
 expects-local: [platform-conventions, protected-seams]
@@ -18,45 +18,15 @@ When the review is posted to the PR, it starts with the agent marker `🤖 **Age
 - [ ] The project's protected-seams registry checked, if it defines one — per `seam-detection`
 - [ ] Commit message follows `<type>(<scope>): <subject>` format
 
-## Python
+## Code
 
-- [ ] `uv run ruff check` passes (lint)
-- [ ] `uv run ruff format --check` passes (formatting)
-- [ ] `uv run pytest` passes
-- [ ] New public functions/methods have a short docstring (one line, purpose only — no wall-of-text)
-- [ ] No `print()` — use `console.print()` (Rich) or logging
-- [ ] CLI commands: `typer.Argument` / `typer.Option` with `help=` strings
+- [ ] The project's lint, format and test gates pass (its `AGENTS.md` or the stack's conventions skill names them)
 - [ ] MCP tools: tool descriptions are precise (agents use them for selection)
 - [ ] No parallel implementation of a capability that exists in MCP — CLI is a thin wrapper
 
-## Kubernetes manifests
+## Stack checks
 
-- [ ] Control-plane toleration present in every Deployment/StatefulSet/DaemonSet (see your platform's conventions skill)
-- [ ] StorageClass matches data type per the project's conventions skill (e.g. a runtime/ephemeral tier for databases vs a retained tier for user data)
-- [ ] Pod security context per the project's conventions skill (e.g. `runAsNonRoot: true`, `seccompProfile: RuntimeDefault`, the project's `fsGroup`)
-- [ ] Capabilities: `drop: [ALL]` unless a specific capability is justified
-- [ ] No hardcoded secrets — all secrets via ExternalSecret referencing the project's registered ClusterSecretStore
-- [ ] ExternalSecrets: `refreshInterval: "0"`, `deletionPolicy: Retain`
-- [ ] ExternalSecret has a same-PR consumer (no speculative ESOs)
-- [ ] GPU workloads: node selector + `nvidia.com/gpu: 1` in overlay patch, not base
-- [ ] `kubectl kustomize build <overlay>` passes without error
-- [ ] Namespace PodSecurity levels preserved (some namespaces legitimately require elevated levels — the project's conventions skill says which)
-
-## Terraform
-
-- [ ] `terraform validate` passes
-- [ ] No secrets in `.tfvars` or HCL — use 1Password provider or `OP_SERVICE_ACCOUNT_TOKEN`
-- [ ] Node IPs defined via inventory/variable indirection (not inline literals)
-- [ ] Non-sensitive shared config in `common.tfvars`
-- [ ] Changes are idempotent (`terraform plan` on an already-applied state shows no diff)
-
-## Ansible
-
-- [ ] No secrets in playbooks, vars files, or inventory — `op run --env-file=ansible/op.env` pattern
-- [ ] `ansible_user` matches the project's inventory convention (its conventions skill says what)
-- [ ] Service-management tasks follow the project's documented patterns (some services must not be restarted by Ansible — the conventions skill lists them)
-- [ ] Templates mixing bash and Jinja2 have the comment delimiter remap header
-- [ ] Playbook is idempotent — safe to run twice
+For each stack the diff touches (Kubernetes manifests, Terraform, Ansible, CI workflows, a language), apply that stack's conventions skill's review checks. A stack with no conventions skill installed gets the universal checks above plus the project's `platform-conventions`; say in the review that no stack checks were applied.
 
 ## Seam check summary
 

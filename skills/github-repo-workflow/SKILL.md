@@ -14,7 +14,7 @@ When a task requires editing a GitHub repo (manifests, configs, code), follow th
 
 You don't need to set up credentials. The environment provides:
 
-- `GH_TOKEN` env var (mounted from a 1Password Secret)
+- `GH_TOKEN` env var (injected from the project's secret manager)
 - `gh` CLI installed and authenticated against `GH_TOKEN`
 - git's credential helper for `https://github.com` set to `gh auth git-credential` system-wide (`/etc/gitconfig`)
 - `safe.directory = *` set system-wide so cloned repos don't trigger ownership warnings
