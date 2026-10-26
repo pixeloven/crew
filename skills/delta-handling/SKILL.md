@@ -38,6 +38,21 @@ Lead may auto-approve without pausing execution. Record the decision.
 | Risk or auth change | The change alters the risk profile, or brings secrets/auth surfaces into scope. |
 | Downstream impact | Changes that affect another agent's assigned task or expected input. |
 | Exit/completion criteria change | The definition of "done" for the plan or a phase is being altered. |
+| Repeated same-theme findings | Successive review rounds keep finding defects in the fixes around one questionable abstraction, and each fix accretes more machinery around it. Escalate before another fix round. |
+
+## A review finding cannot amend the accepted ask
+
+The accepted ask is the requirement the plan was built from. A review finding can show the work falls short of it; it cannot add to it. A fix that adds a guarantee, subsystem, compatibility surface or monitoring requirement the ask did not contain is scope expansion, whatever the finding's label ("security", "required"). Escalate it as scope expansion instead of starting a fix round for it. A finding that the work fails the ask itself is still fixed in the round.
+
+## Escalating a scope expansion or repeated findings
+
+An escalation under either of the two rules above states:
+
+1. **Original requirement** — what the accepted ask says, quoted where possible.
+2. **Proposed expansion** — what the finding or the next fix round would add.
+3. **Smallest compliant alternative** — the least change that satisfies the ask as written.
+4. **Consequences of each** — what taking the expansion costs, and what declining it risks.
+5. **Recommendation** — which to take, and why.
 
 For escalations: pause execution, surface the delta clearly (what changed, why, what the risk is), wait for human decision before resuming.
 
@@ -67,5 +82,11 @@ Append to the plan's history section after every delta:
 **Escalated — scope expansion:**
 > Delta 2 — Worker proposes adding integration tests to the PR. Integration tests were not in the original plan. Pausing. Operator: should we expand scope or defer tests to a follow-up issue?
 
+**Escalated — review finding outside the ask:**
+> Delta 3 — Reviewer marks "add retry telemetry and an alert" as required (security). The ask was to fix the token refresh race. Original requirement: refresh tokens without the race. Proposed expansion: a new metric and alert. Smallest compliant alternative: the race fix with a regression test. Consequences: the expansion adds a monitoring surface someone must own; declining leaves retries visible only in logs. Recommend the race fix now and a follow-up issue for telemetry. Operator: expand scope or defer?
+
+**Escalated — repeated same-theme findings:**
+> Delta 4 — Round 3 findings are again defects in the cache-invalidation wrapper added in round 1 to answer a round-1 finding. Each fix has added more machinery around the wrapper. Pausing before round 4 with the five elements above; recommend dropping the wrapper for the plain invalidation call the ask needed.
+
 **Escalated — seam crossing:**
-> Delta 3 — Worker modified the ExternalSecret refreshInterval to "1h" to simplify debugging. This crosses the secret management contract seam. Reverting change. Operator: please advise.
+> Delta 5 — Worker modified the ExternalSecret refreshInterval to "1h" to simplify debugging. This crosses the secret management contract seam. Reverting change. Operator: please advise.

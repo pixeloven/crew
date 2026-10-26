@@ -892,5 +892,36 @@ class QualifiedDispatchTests(unittest.TestCase):
                 self.assertEqual(1, " ".join(text.split()).count(self.SENTENCE))
 
 
+class ReviewBoundTests(unittest.TestCase):
+    """The reviewer cites both delta-handling rules that bound review rounds, and
+    the rules it cites exist there (crew#126)."""
+
+    RULES = (
+        "A review finding cannot amend the accepted ask",
+        "Repeated same-theme findings",
+    )
+    ESCALATION = (
+        "Original requirement",
+        "Proposed expansion",
+        "Smallest compliant alternative",
+        "Consequences of each",
+        "Recommendation",
+    )
+
+    def test_delta_handling_defines_both_rules_and_the_escalation_shape(self) -> None:
+        text = (ROOT / "skills/delta-handling/SKILL.md").read_text(encoding="utf-8")
+        for phrase in (*self.RULES, *self.ESCALATION):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_rendered_reviewers_cite_both_rules(self) -> None:
+        for path in ("agents/reviewer.md", "pi-agents/reviewer.md"):
+            text = (ROOT / path).read_text(encoding="utf-8")
+            with self.subTest(path=path):
+                self.assertIn("`delta-handling`", text)
+                for rule in self.RULES:
+                    self.assertEqual(1, text.count(f"**{rule}.**"))
+
+
 if __name__ == "__main__":
     unittest.main()

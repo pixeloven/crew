@@ -37,6 +37,16 @@ convention and are not backfilled.
   `entry_file_cost(<crew root>)` to `compose_doctor_report` as `entry_file=`.
   It is reported, never failed; no rule changes, and the Work quality section
   stays always-on.
+- **Review rounds are bounded** (crew#126). `delta-handling` adds two rules.
+  A review finding cannot amend the accepted ask: a fix that adds a guarantee,
+  subsystem, compatibility surface or monitoring requirement the ask did not
+  contain is scope expansion, whatever the finding's label. A new escalation
+  class, repeated same-theme findings, escalates before another fix round
+  when successive fixes keep accreting machinery around one questionable
+  abstraction. Either escalation states the original requirement, the
+  proposed expansion, the smallest compliant alternative, the consequences of
+  each, and a recommendation. The reviewer role cites both rules; its
+  adversarial posture is unchanged.
 
 ## 0.57.1
 
