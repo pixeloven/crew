@@ -2367,6 +2367,45 @@ def description_cost(package_root: pathlib.Path, label: str | None = None) -> di
     }
 
 
+ENTRY_FILE_TEMPLATE = "templates/AGENTS.md"
+
+
+def entry_file_cost(crew_root: pathlib.Path) -> dict[str, Any]:
+    """Size the entry-file sections onboarding merges from Crew's AGENTS.md template.
+
+    Counted in characters, like `description_cost`. The leading HOW TO USE
+    comment is scaffold guidance, not merged contract, so counting starts at the
+    first `# ` heading. Each `## ` section (its `### ` subsections included) is
+    one row; text before the first `## ` is the preamble.
+    """
+    source = pathlib.Path(crew_root) / ENTRY_FILE_TEMPLATE
+    result: dict[str, Any] = {"root": str(crew_root), "source": str(source), "sections": [], "total": 0, "error": ""}
+    try:
+        text = source.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        result["error"] = "absent"
+        return result
+    except (OSError, UnicodeDecodeError) as error:
+        result["error"] = f"unreadable: {error}"
+        return result
+    lines = text.splitlines(keepends=True)
+    start = next((index for index, line in enumerate(lines) if line.startswith("# ")), None)
+    if start is None:
+        result["error"] = "no `# ` heading"
+        return result
+    sections: list[dict[str, Any]] = [{"name": "preamble", "chars": 0}]
+    fenced = False
+    for line in lines[start:]:
+        if line.lstrip().startswith("```"):
+            fenced = not fenced
+        if not fenced and line.startswith("## "):
+            sections.append({"name": line[3:].strip(), "chars": 0})
+        sections[-1]["chars"] += len(line)
+    result["sections"] = sections
+    result["total"] = sum(section["chars"] for section in sections)
+    return result
+
+
 def claude_listing_inputs(
     project_root: pathlib.Path,
     home: pathlib.Path,
@@ -2759,6 +2798,44 @@ def _description_cost_check(costs: list[dict[str, Any]]) -> dict[str, Any]:
             {"claim": f"{cost['label']} descriptions total {cost['total']:,} chars", "source": cost["root"]}
             for cost in costs
         ],
+    }
+
+
+def _entry_file_cost_check(cost: dict[str, Any], costs: list[dict[str, Any]]) -> dict[str, Any]:
+    if cost["error"]:
+        fact = f"entry-file sections not measured: {ENTRY_FILE_TEMPLATE} {cost['error']}"
+        return {
+            "check": "description-cost.entry-file",
+            "status": "N/A",
+            "fact": fact,
+            "inference": "",
+            "recommendation": "",
+            "untested": fact,
+            "evidence": [{"claim": fact, "source": cost["source"]}],
+        }
+    largest = sorted(cost["sections"], key=lambda section: section["chars"], reverse=True)[:3]
+    fact = (
+        f"always-on entry-file chars: {cost['total']:,} across {len(cost['sections'])} sections "
+        f"onboarding merges from {ENTRY_FILE_TEMPLATE} (largest: "
+        + "; ".join(f"{section['name']} {section['chars']:,}" for section in largest)
+        + ")"
+    )
+    inference = "measures Crew's template, not this project's entry file; project text and omitted sections change it"
+    described = sum(item["total"] for item in costs)
+    if described:
+        inference = (
+            f"{cost['total'] / described:.1f}x the always-on description total ({described:,}); "
+            f"together {cost['total'] + described:,} always-on chars; " + inference
+        )
+    # Reported, never failed: the merged sections are always-on by design.
+    return {
+        "check": "description-cost.entry-file",
+        "status": "OK",
+        "fact": fact,
+        "inference": inference,
+        "recommendation": "",
+        "untested": "",
+        "evidence": [{"claim": f"merged entry-file sections total {cost['total']:,} chars", "source": cost["source"]}],
     }
 
 
@@ -3563,6 +3640,7 @@ def compose_doctor_report(
     packs: list[dict[str, Any]] | None = None,
     description_costs: list[dict[str, Any]] | None = None,
     claude_listing: dict[str, Any] | None = None,
+    entry_file: dict[str, Any] | None = None,
     moved_skill_refs: dict[str, Any] | None = None,
     inventory: dict[str, Any] | None = None,
     proposals: dict[str, Any] | None = None,
@@ -3573,6 +3651,8 @@ def compose_doctor_report(
     optional: omitted, the report carries no fill, pack, cost, or moved-skill rows.
     `claude_listing` (from `claude_listing_inputs`) adds `description-cost.claude-code`
     when `description_costs` is also given.
+    `entry_file` (from `entry_file_cost`) adds `description-cost.entry-file`, which
+    compares it with the description total when `description_costs` is given.
     `inventory` (a `crew-inventory/1` document) adds `inventory.capability-map`.
     `proposals` (from `learn_contract.inspect_proposals`) adds the proposals.* and
     learned.skills rows; omitted, it adds none.
@@ -3713,6 +3793,8 @@ def compose_doctor_report(
         checks.append(_description_cost_check(description_costs))
         if claude_listing is not None:
             checks.append(_claude_listing_check(description_costs, claude_listing))
+    if entry_file is not None:
+        checks.append(_entry_file_cost_check(entry_file, description_costs or []))
     if moved_skill_refs is not None:
         checks.extend(_moved_skill_checks(moved_skill_refs, packs or []))
     if inventory is not None:

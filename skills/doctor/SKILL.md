@@ -167,6 +167,13 @@ the dated harness budgets in `crew_doctor.py`, which are measurements and not
 limits. This row never fails. When the total exceeds a budget, name the packs an
 operator could disable for headroom.
 
+Also pass `entry_file_cost(<crew root>)` as `entry_file=`. The
+`description-cost.entry-file` row sizes, in the same characters, the sections
+Onboarding merges from `templates/AGENTS.md` into the entry file, names the
+largest, and adds them to the description total for the full always-on cost.
+It measures Crew's template, not the consumer's file. This row never fails: the
+merged sections, Work quality included, are always-on by design.
+
 For Claude Code, also pass `claude_listing_inputs(<project>, <home>,
 context_window=<this session's window>)` as `claude_listing=`. The
 `description-cost.claude-code` row predicts which Crew and pack skills Claude

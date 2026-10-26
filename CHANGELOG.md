@@ -19,6 +19,25 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.58.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** None.
+
+### Added
+
+- **Doctor reports the entry-file cost** (crew#129). A new
+  `description-cost.entry-file` row, beside the description-budget row, sizes
+  in characters the sections Onboarding merges from `templates/AGENTS.md`
+  (about 19,400 chars at this version), names the largest, and adds them to the
+  description total, so a consumer sees the full always-on cost. Pass
+  `entry_file_cost(<crew root>)` to `compose_doctor_report` as `entry_file=`.
+  It is reported, never failed; no rule changes, and the Work quality section
+  stays always-on.
+
 ## 0.57.1
 
 ### Consumer impact

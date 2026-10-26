@@ -19,6 +19,7 @@ from scripts.crew_doctor import (
     compose_doctor_report,
     declared_local_slots,
     description_cost,
+    entry_file_cost,
     inspect_installations,
     inspect_packs,
     predict_name_only,
@@ -440,6 +441,72 @@ class DoctorPackTests(unittest.TestCase):
             self.assertIn("2026-09-05", row["inference"])
             self.assertIn("example-skills", row["recommendation"])
             self.assertNotEqual([row["recommendation"]], report["top_actions"])
+
+    def test_entry_file_cost_sizes_merged_template_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            crew = base / "crew"
+            write_crew(crew, "0.38.0")
+            write_skill(crew, "crew-skill")
+            template = crew / "templates/AGENTS.md"
+            template.parent.mkdir(parents=True)
+            comment = "<!--\nHOW TO USE: scaffold guidance, not merged.\n-->\n\n"
+            preamble = "# AGENTS.md\n\nIntro.\n\n"
+            work = "## Work quality\n\nRule.\n\n### Sub\n\nDetail.\n\n"
+            skills = "## Skills\n\n```sh\n## not a heading\n```\n"
+            template.write_text(comment + preamble + work + skills, encoding="utf-8")
+
+            cost = entry_file_cost(crew)
+            self.assertEqual("", cost["error"])
+            self.assertEqual(
+                [("preamble", len(preamble)), ("Work quality", len(work)), ("Skills", len(skills))],
+                [(section["name"], section["chars"]) for section in cost["sections"]],
+            )
+            self.assertEqual(len(preamble + work + skills), cost["total"])
+
+            report = compose_doctor_report(
+                inspect_installations(base / "project", base / "home"),
+                runtime_comparisons=[],
+                local_slots=declared_local_slots(crew),
+                role_postures=[],
+                persona_evidence=[],
+                description_costs=[description_cost(crew)],
+                entry_file=cost,
+            )
+            checks = [row["check"] for row in report["checks"]]
+            self.assertEqual(
+                checks.index("description-cost.always-on") + 1, checks.index("description-cost.entry-file")
+            )
+            row = report["checks"][checks.index("description-cost.entry-file")]
+            self.assertEqual("OK", row["status"])
+            self.assertIn(f"{cost['total']:,}", row["fact"])
+            self.assertIn(f"Work quality {len(work):,}", row["fact"])
+            self.assertIn(f"together {cost['total'] + len(DESCRIPTION):,}", row["inference"])
+            self.assertEqual("", row["recommendation"])
+            render_doctor_report(report)
+
+    def test_entry_file_cost_without_template_is_not_applicable(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            cost = entry_file_cost(base / "crew")
+            self.assertEqual("absent", cost["error"])
+            report = compose_doctor_report(
+                inspect_installations(base / "project", base / "home"),
+                runtime_comparisons=[],
+                local_slots=declared_local_slots(ROOT),
+                role_postures=[],
+                persona_evidence=[],
+                entry_file=cost,
+            )
+            row = next(row for row in report["checks"] if row["check"] == "description-cost.entry-file")
+            self.assertEqual("N/A", row["status"])
+            self.assertTrue(row["untested"])
+
+    def test_entry_file_cost_measures_shipped_template(self) -> None:
+        cost = entry_file_cost(ROOT)
+        self.assertEqual("", cost["error"])
+        self.assertIn("Work quality", [section["name"] for section in cost["sections"]])
+        self.assertGreater(cost["total"], description_cost(ROOT)["total"])
 
     def test_report_without_pack_inputs_is_unchanged(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
