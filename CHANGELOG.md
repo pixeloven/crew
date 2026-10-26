@@ -48,7 +48,8 @@ convention and are not backfilled.
 
 - **Renamed or moved:** None.
 - **Removed:** None.
-- **Action needed:** None.
+- **Action needed:** None. A project that shadows `lead` or `reviewer`, or
+  writes its own dispatch template, may want to adopt the split below.
 
 ### Added
 
@@ -60,6 +61,16 @@ convention and are not backfilled.
   `entry_file_cost(<crew root>)` to `compose_doctor_report` as `entry_file=`.
   It is reported, never failed; no rule changes, and the Work quality section
   stays always-on.
+
+### Changed
+
+- **The dispatch packet keeps the ask apart from the spec** (crew#127).
+  `orchestration-patterns` now splits a dispatch's task into the requester's
+  ask, in their own words, self-contained and never widened into a coverage
+  list, and the dispatcher's spec: build instructions, acceptance criteria
+  and out-of-scope items. A reviewer judges against the ask, and the spec
+  cannot add a requirement the ask lacks. `lead`, `reviewer` and
+  `plan-execution` say the same where they restate the packet.
 
 ## 0.57.1
 
