@@ -125,6 +125,8 @@ class ReportingContractTests(unittest.TestCase):
         section = reporting_contract_section(TEMPLATE)
         self.assertTrue(section.startswith("## Reporting contract"))
         self.assertIn("Decisions needed", section)
+        self.assertIn("`[key=<slug>] <question>", section)
+        self.assertIn("A decision closes on a record.", section)
         self.assertNotIn("## Tripwires", section)
 
     def test_onboarding_requires_the_reporting_contract_section(self) -> None:

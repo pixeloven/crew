@@ -794,6 +794,7 @@ class RoleReportingContractTests(unittest.TestCase):
     MARKER = "<!-- include: reporting-contract -->"
     KEY_RULES = (
         "Lead with decisions, or say there are none.",
+        "A decision closes on a record.",
         "Already handled is not news.",
         "Detail below the fold.",
         "Separate, don't shrink.",
@@ -813,6 +814,14 @@ class RoleReportingContractTests(unittest.TestCase):
         self.assertEqual(["## Reporting contract"], headings)
         for phrase in ("Decisions needed", "If no reply", "auditability", *self.KEY_RULES):
             self.assertIn(phrase, text)
+
+    def test_decisions_carry_a_key_and_close_on_a_dated_record(self) -> None:
+        text = self.SHARED.read_text(encoding="utf-8")
+        self.assertIn("`[key=<slug>] <question>", text)
+        self.assertIn('`[key=<slug>] closed <YYYY-MM-DD>: "<the human\'s words>"`', text)
+        self.assertIn("`[key=<slug>] moot <YYYY-MM-DD>: <evidence>`", text)
+        self.assertIn('"Later" is an answer too', text)
+        self.assertIn("reporting, decision records, external writes", text)
 
     def test_every_role_body_includes_the_contract_instead_of_copying_it(self) -> None:
         bodies = sorted((ROOT / "roles").glob("[!_]*/body.md"))

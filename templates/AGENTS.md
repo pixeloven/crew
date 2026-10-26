@@ -130,8 +130,15 @@ first is the signal, and it is usually one or two lines.
 - **Lead with decisions, or say there are none.** Open with
   `**Decisions needed: none.** <one line on state>`, or `**N decisions needed.**`
   followed by a numbered list, each item
-  `<question> — recommend <X>. If no reply: <default>.` A report without that
-  opening line is malformed.
+  `[key=<slug>] <question> — recommend <X>. If no reply: <default>.` The key is
+  a short slug that stays the same in every later report and record about that
+  decision. A report without that opening line is malformed.
+- **A decision closes on a record.** A decision stays open until a closing
+  record carries its key, the human's words (or the evidence that made it moot)
+  and the date: `[key=<slug>] closed <YYYY-MM-DD>: "<the human's words>"` or
+  `[key=<slug>] moot <YYYY-MM-DD>: <evidence>`. "Later" is an answer too,
+  recorded with its date. Listing a decision does not close it, and work is not
+  complete while a decision it raised has no closing record.
 - **Already handled is not news.** A finding you are already acting on goes in the
   PR body, issue or commit message, where its reader meets it in context.
 - **Detail below the fold.** Evidence, tables and per-file accounting follow the
@@ -156,15 +163,16 @@ Under a supervising host:
 
 - **A supervising host's contract wins.** When a session runs under a supervising
   host — a fleet tool, a CI job, a scheduler — and the task contract it was given
-  defines delegation, review, delivery, reporting, external writes or knowledge
-  capture, the host's contract governs that concern over this file and over any
-  skill. The trigger is the session's own task contract, not a setting in this
-  repository; what the contract leaves undefined, this file still governs.
+  defines delegation, review, delivery, reporting, decision records, external
+  writes or knowledge capture, the host's contract governs that concern over
+  this file and over any skill. The trigger is the session's own task contract,
+  not a setting in this repository; what the contract leaves undefined, this
+  file still governs.
 - **Unattended, record and stop.** When no human will answer during the run, a
   pause cannot wait for a reply. Record the decision needed, in the
-  decisions-first shape above, in the channel the host names (the final report
-  when it names none), then stop — or continue with the safe default when one
-  exists and the host contract lets you proceed.
+  decisions-first shape above with its key, in the channel the host names (the
+  final report when it names none), then stop — or continue with the safe
+  default when one exists and the host contract lets you proceed.
 
 The trade-off is deliberate. This costs auditability — a finding not surfaced is
 one the operator sees only by opening the PR — and pausing costs throughput. Both
