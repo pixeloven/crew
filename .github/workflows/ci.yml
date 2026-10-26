@@ -52,27 +52,6 @@ jobs:
           python3 scripts/render_roles.py --check
           python3 scripts/check_skill_refs.py
 
-  # Crew's experimental pi extension, run on the real pi CLI against a fake model
-  # and a fake MCP server (tests/fixtures/pi-extension): no billed calls. Bump the
-  # pi pin here and MIN_PI in pi-extension/index.ts together.
-  pi-extension:
-    name: pi extension contract (pi 1.4.0, fake model)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: "22"  # pi 1.4.0 needs >=22.19
-      - name: Install pi
-        run: npm install --no-save --ignore-scripts --prefix "$RUNNER_TEMP/pi" @earendil-works/pi-coding-agent@1.4.0
-      - name: crew_agent contract
-        env:
-          CREW_REQUIRE_PI: "1"
-        run: |
-          export PI_CLI="$RUNNER_TEMP/pi/node_modules/@earendil-works/pi-coding-agent/dist/bundle/cli.js"
-          python3 -m unittest tests.test_pi_extension -v
-
   generated-current:
     name: Generated catalog + index current
     runs-on: ubuntu-latest
@@ -109,7 +88,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin "$BASE" --depth=1 -q
-          changed=$(git diff --name-only "origin/$BASE...HEAD" -- skills agents pi-agents pi-extension roles templates || true)
+          changed=$(git diff --name-only "origin/$BASE...HEAD" -- skills agents pi-agents roles templates || true)
           if [ -z "$changed" ]; then
             echo "No skills/agents/templates change — version bump not required."; exit 0
           fi

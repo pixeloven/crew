@@ -19,6 +19,42 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.62.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** Crew's pi dispatch. The experimental pi extension
+  (`pi-extension/index.ts`) and its `crew_agent` tool are gone, and with them
+  the `CREW_PI_AGENT`, `CREW_PI_DISPATCH` and `CREW_AGENT_TIMEOUT_SECONDS`
+  variables. The package no longer declares the `pi.subagents.agents` manifest
+  entry or the `pi-subagents` peer dependency (nor the `@earendil-works/pi-coding-agent`
+  and `typebox` peers the extension needed). No skill or role is removed.
+- **Action needed:** pi users only. After the bump, pi registers no
+  `crew.<role>` agents and no `crew_agent` tool; unset the `CREW_PI_*` and
+  `CREW_AGENT_TIMEOUT_SECONDS` variables, which now do nothing. Crew still
+  loads its skills on pi (package or `--skill`), and the roles stay readable in
+  `pi-agents/*.md`. To run roles as workers on pi, use a supervising host such
+  as operator; keep `npm:pi-subagents` only for your own agents.
+
+### Removed
+
+- **pi dispatch** (both paths). Crew on pi now provides skills and readable
+  role files only; orchestration on pi belongs to a supervising host, not
+  Crew. Removed: the `crew_agent` extension, its contract tests and fake-model
+  fixtures, the `pi-extension` CI job, the `pi.extensions` and
+  `pi.subagents` manifest entries, all peer dependencies, and the lead role's
+  `crew_agent` dispatch sentence. The renderer still writes `pi-agents/*.md`
+  in the same frontmatter dialect, so a host can load them.
+
+### Changed
+
+- `docs/quickstart-pi.md` is rewritten around install, skills-only use and
+  readable roles, with an upgrade note; the plan to make `crew_agent` the
+  default pi path is dropped. The README, `docs/MAINTAINERS.md` and the
+  `doctor` skill no longer describe pi-subagents' tested range or the
+  extension.
+
 ## 0.61.0
 
 ### Consumer impact
