@@ -179,10 +179,10 @@ implementation delivery to the project's existing workflow.
 
 Since 0.54.0, Crew also runs under a supervising host: a fleet tool, CI job or
 scheduler. When the task contract a session was given defines delegation, review,
-delivery, reporting, external writes or knowledge capture, that contract wins over
-roles and skills. Unattended, an agent records the decision it needs in the
-channel the host names and stops instead of waiting. Whether a session is hosted
-is a property of that session, not a repository setting. A host that reserves
+delivery, reporting, decision records, external writes or knowledge capture, that
+contract wins over roles and skills. Unattended, an agent records the decision it
+needs in the channel the host names and stops instead of waiting. Whether a
+session is hosted is a property of that session, not a repository setting. A host that reserves
 `AGENTS.md` for humans selects Onboarding's `hosted` audit profile, which reports
 without proposing entry-file merges (`--audit-profile hosted`); the host's task
 contract says whether apply is available.
