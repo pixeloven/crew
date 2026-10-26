@@ -35,8 +35,9 @@ convention and are not backfilled.
   ask, in their own words, self-contained and never widened into a coverage
   list, and the dispatcher's spec: build instructions, acceptance criteria
   and out-of-scope items. A reviewer judges against the ask, and the spec
-  cannot add a requirement the ask lacks. `lead`, `reviewer` and
-  `plan-execution` say the same where they restate the packet.
+  cannot add a requirement the ask lacks. `lead`, `reviewer`,
+  `plan-execution` and the pi `crew_agent` tool's `task` parameter say the
+  same where they restate the packet.
 
 ## 0.59.0
 
