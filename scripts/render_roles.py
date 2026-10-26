@@ -14,7 +14,7 @@ name starts with `_` are skipped by the role loop.
 Both harnesses get the same name, description, body and capability posture. The
 only thing that differs is dialect: Claude Code subtracts tools with
 `disallowedTools`, pi with `excludeTools`, and every pi agent carries
-`package: crew` so pi-subagents registers it as `crew.<role>`. That translation lives HERE and
+`package: crew` so a host that loads it through pi-subagents registers it as `crew.<role>`. That translation lives HERE and
 nowhere else, so the two trees cannot drift apart by editing. A consumer whose
 runtime needs a role to behave differently shadows the rendered agent in its own
 overlay — per-harness prose does not belong in this repo, because the differences

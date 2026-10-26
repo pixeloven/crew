@@ -7,7 +7,7 @@ Code, pi.dev, and OpenAI Codex.
 | Harness | Foundation skills | Crew roles | Project behavior |
 |---|---|---|---|
 | Claude Code | plugin | seven rendered `agents/*.md` roles | root `AGENTS.md` through `CLAUDE.md` |
-| pi.dev | git package | seven rendered `pi-agents/*.md` roles, dispatched as `crew.<role>` | root `AGENTS.md` |
+| pi.dev | git package or `--skill` | seven rendered `pi-agents/*.md` roles as readable files; Crew dispatches nothing on pi | root `AGENTS.md` |
 | OpenAI Codex | plugin or vendored `.agents/skills` | uses Codex dispatch; plugin roles are unsupported | root `AGENTS.md` |
 
 The same `skills/<name>/SKILL.md` tree feeds every harness. Claude and Pi roles
@@ -31,17 +31,12 @@ catalogue pressure, not a permanent product byte limit.
 
 ## Install
 
-Use the harness quickstart and a published `vX.Y.Z` tag. Pi pins must be
-`v0.35.0` or newer: older Crew roles lack the identity frontmatter pi-subagents
-requires and disappear silently. From `v0.39.0`, Crew on Pi requires
-`pi-subagents` `>=0.62.0` for its `excludeTools` posture; Crew pins the tested
-range `>=0.62.0 <0.82.0` so an upstream release cannot change roles
-unannounced. On Pi, roles register as `crew.<role>`. Dispatch the qualified
-name: a bare `reviewer` or `researcher` resolves to pi-subagents' own built-ins.
-Since 0.56.0, Crew also ships an experimental pi extension, off unless
-`CREW_PI_AGENT=1` is set. It adds a `crew_agent` tool that runs each role as its
-own pi process, so roles reach the session's MCP servers; pi-subagents stays the
-default path in this release (see the pi quickstart, section 6).
+Use the harness quickstart and a published `vX.Y.Z` tag. On pi, Crew provides
+its skills and ships its roles as readable files (`pi-agents/*.md`); it
+registers no agents and no tools. Orchestration on pi belongs to a supervising
+host such as [operator](https://github.com/pixeloven/operator), not to Crew.
+Since 0.62.0 Crew no longer ships the experimental `crew_agent` pi extension or
+declares pi-subagents (see the [CHANGELOG](CHANGELOG.md)).
 On every harness, MCP side effects are governed by role behaviour, not by the
 `writes:` posture.
 
