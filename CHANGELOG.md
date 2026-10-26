@@ -45,8 +45,10 @@ convention and are not backfilled.
   when successive fixes keep accreting machinery around one questionable
   abstraction. Either escalation states the original requirement, the
   proposed expansion, the smallest compliant alternative, the consequences of
-  each, and a recommendation. The reviewer role cites both rules; its
-  adversarial posture is unchanged.
+  each, and a recommendation. The reviewer role cites both rules and reports
+  such findings in a new **Escalations** output section; the summary line
+  states the escalation count without changing the verdict. Its adversarial
+  posture is unchanged.
 
 ## 0.57.1
 
