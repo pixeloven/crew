@@ -36,6 +36,7 @@ Before advancing to the next phase:
 - [ ] All tasks in current phase have acceptance criteria marked met
 - [ ] Validation gate conditions are all satisfied
 - [ ] No unresolved deltas from this phase
+- [ ] Every decision this phase raised has a closing record (key, the human's words or the evidence that made it moot, date)
 - [ ] Artifacts from this phase are in a state the next phase can consume (merged PRs, published vault notes, applied manifests)
 - [ ] No protected seams were crossed without human sign-off
 
@@ -45,6 +46,7 @@ Before advancing to the next phase:
 - "The code looks correct" — run the tool that checks it
 - "No errors were mentioned" — check exit codes, not absence of error messages
 - "It worked before" — check the current state, not prior history
+- "The decisions were listed" — a phase is not complete while a decision it raised has no closing record
 
 ## When criteria conflict
 

@@ -54,9 +54,9 @@ An escalation under either of the two rules above states:
 4. **Consequences of each** — what taking the expansion costs, and what declining it risks.
 5. **Recommendation** — which to take, and why.
 
-For escalations: pause execution, surface the delta clearly (what changed, why, what the risk is), wait for human decision before resuming.
+For escalations: pause execution, surface the delta clearly (what changed, why, what the risk is) as a decision with a `[key=<slug>]`, per the reporting contract, and wait for the human's decision before resuming. The escalation closes only when its record carries that key, the human's words or the evidence that made it moot, and the date.
 
-Under a supervising host, route an escalation through the decision channel its task contract names, per the reporting contract's *A supervising host's contract wins* rule. When the run is unattended, record the delta and the decision it needs there and stop instead of waiting; continue only on a safe default the host contract allows.
+Under a supervising host, route an escalation through the decision channel its task contract names, and use its record format when it defines one, per the reporting contract's *A supervising host's contract wins* rule. When the run is unattended, record the delta and the decision it needs there and stop instead of waiting; continue only on a safe default the host contract allows.
 
 ## Delta record format
 
@@ -69,6 +69,7 @@ Append to the plan's history section after every delta:
 **Proposed by:** <agent>
 **Type:** <auto-approvable class | escalation class>
 **Decision:** Auto-approved by Lead / Approved by the operator / Rejected
+**Decision record:** (escalations only) `[key=<slug>] closed <YYYY-MM-DD>: "<the operator's words>"`, or `[key=<slug>] moot <YYYY-MM-DD>: <evidence>`
 **What changed:** one sentence describing the modification
 **Why:** one sentence explaining the trigger
 **Risk:** one sentence on what could go wrong
@@ -80,13 +81,15 @@ Append to the plan's history section after every delta:
 > Delta 1 — Worker hit GitHub API rate limit on PR creation. Retrying same task after 60s backoff. Auto-approved.
 
 **Escalated — scope expansion:**
-> Delta 2 — Worker proposes adding integration tests to the PR. Integration tests were not in the original plan. Pausing. Operator: should we expand scope or defer tests to a follow-up issue?
+> Delta 2 — Worker proposes adding integration tests to the PR. Integration tests were not in the original plan. Pausing. `[key=delta-2-integration-tests]` Operator: should we expand scope or defer tests to a follow-up issue?
+>
+> Closing record: `[key=delta-2-integration-tests] closed 2026-05-12: "Defer them, open a follow-up issue."`
 
 **Escalated — review finding outside the ask:**
-> Delta 3 — Reviewer marks "add retry telemetry and an alert" as required (security). The ask was to fix the token refresh race. Original requirement: refresh tokens without the race. Proposed expansion: a new metric and alert. Smallest compliant alternative: the race fix with a regression test. Consequences: the expansion adds a monitoring surface someone must own; declining leaves retries visible only in logs. Recommend the race fix now and a follow-up issue for telemetry. Operator: expand scope or defer?
+> Delta 3 — Reviewer marks "add retry telemetry and an alert" as required (security). The ask was to fix the token refresh race. Original requirement: refresh tokens without the race. Proposed expansion: a new metric and alert. Smallest compliant alternative: the race fix with a regression test. Consequences: the expansion adds a monitoring surface someone must own; declining leaves retries visible only in logs. Recommend the race fix now and a follow-up issue for telemetry. `[key=delta-3-retry-telemetry]` Operator: expand scope or defer?
 
 **Escalated — repeated same-theme findings:**
-> Delta 4 — Round 3 findings are again defects in the cache-invalidation wrapper added in round 1 to answer a round-1 finding. Each fix has added more machinery around the wrapper. Pausing before round 4 with the five elements above; recommend dropping the wrapper for the plain invalidation call the ask needed.
+> Delta 4 — Round 3 findings are again defects in the cache-invalidation wrapper added in round 1 to answer a round-1 finding. Each fix has added more machinery around the wrapper. Pausing before round 4 with the five elements above. `[key=delta-4-cache-wrapper]` Recommend dropping the wrapper for the plain invalidation call the ask needed.
 
 **Escalated — seam crossing:**
-> Delta 5 — Worker modified the ExternalSecret refreshInterval to "1h" to simplify debugging. This crosses the secret management contract seam. Reverting change. Operator: please advise.
+> Delta 5 — Worker modified the ExternalSecret refreshInterval to "1h" to simplify debugging. This crosses the secret management contract seam. Reverting change. `[key=delta-5-refresh-interval]` Operator: please advise.

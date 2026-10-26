@@ -19,6 +19,34 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.61.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** None. Onboarding apply keeps a project's existing
+  `## Reporting contract` section and the audit still accepts the older one,
+  so a project that wants decision keys and closing records edits its own
+  `AGENTS.md` section by hand from `templates/AGENTS.md`.
+
+### Changed
+
+- **Decisions carry a key and close on a record** (crew#125). The reporting
+  contract (every role, and `templates/AGENTS.md`) now lists each decision as
+  `[key=<slug>] <question> — recommend <X>. If no reply: <default>.` A new
+  rule, *A decision closes on a record*, keeps a decision open until a record
+  carries its key, the human's words (or the evidence that made it moot) and
+  the date; "later" is an answer with a date. The host rule now names
+  decision records, so a supervising host's decision channel and record format
+  still win.
+- **`delta-handling`** gives an escalated delta a key and adds a
+  `Decision record` line to the delta log, which holds the operator's words
+  instead of only "Approved by the operator".
+- **`plan-validation`** adds "The decisions were listed" to *What does NOT
+  count as validation* and a promotion-checklist item: a phase is not complete
+  while a decision it raised has no closing record.
+
 ## 0.60.0
 
 ### Consumer impact
