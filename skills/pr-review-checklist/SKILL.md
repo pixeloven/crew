@@ -6,7 +6,7 @@ requires: []
 expects-local: [platform-conventions, protected-seams]
 ---
 
-Every review opens with a one-sentence summary judgment (Pass / Pass with required changes / Block), then lists findings by category: Required, Recommended, Note.
+Every review opens with a one-sentence summary judgment (Pass / Pass with required changes / Block), then lists findings by category: Required, Recommended, Note, and Escalations for findings that would amend the accepted ask or repeat one theme across rounds (per `delta-handling`).
 
 When the review is posted to the PR, it starts with the agent marker `🤖 **Agent**:` — on the review body and on every inline comment — so the author can tell agent findings from human ones. Never post an agent review unmarked, and never add the marker to text a human wrote.
 
