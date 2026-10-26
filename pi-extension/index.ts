@@ -283,7 +283,11 @@ export default async function (pi: ExtensionAPI) {
 		promptSnippet: "Delegate scoped work to a Crew role (lead, implementer, reviewer, ...)",
 		parameters: Type.Object({
 			agent: Type.String({ description: "Crew role name, e.g. reviewer" }),
-			task: Type.String({ description: "The scoped task, with acceptance criteria" }),
+			task: Type.String({
+				description:
+					"The requester's ask in their own words, made self-contained and never widened, kept apart from " +
+					"the dispatcher's spec: scoped task, acceptance criteria and out-of-scope items",
+			}),
 			cwd: Type.Optional(Type.String({ description: "Working directory for the role" })),
 		}),
 		async execute(_id, params, signal, onUpdate, ctx) {

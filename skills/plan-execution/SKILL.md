@@ -64,6 +64,8 @@ A review dispatched as "review this" returns generic observations. A review disp
 
 Before dispatching, **extract the single load-bearing question** — the one claim that, if false, makes the change wrong. Then task the reviewer with falsifying it specifically, alongside the standard checklist. The implementer's load-bearing-assumptions list is where to look first; if it's empty on a non-trivial change, that absence is the first thing to probe.
 
+Hand the reviewer the requester's ask unchanged as the contract it judges against, kept apart from the hypothesis and checklist, which are your spec (see `orchestration-patterns`).
+
 ## Delta Handling
 
 When a worker agent proposes a delta (a change to the current plan), classify and route it per `delta-handling` — that skill owns the auto-approve vs escalate classes, the escalation procedure, and the record format. Record all deltas — approved or escalated — in the plan's history.

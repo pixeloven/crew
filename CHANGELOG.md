@@ -19,6 +19,26 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.60.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** None. A project that shadows `lead` or `reviewer`, or
+  writes its own dispatch template, may want to adopt the split below.
+
+### Changed
+
+- **The dispatch packet keeps the ask apart from the spec** (crew#127).
+  `orchestration-patterns` now splits a dispatch's task into the requester's
+  ask, in their own words, self-contained and never widened into a coverage
+  list, and the dispatcher's spec: build instructions, acceptance criteria
+  and out-of-scope items. A reviewer judges against the ask, and the spec
+  cannot add a requirement the ask lacks. `lead`, `reviewer`,
+  `plan-execution` and the pi `crew_agent` tool's `task` parameter say the
+  same where they restate the packet.
+
 ## 0.59.0
 
 ### Consumer impact

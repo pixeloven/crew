@@ -125,11 +125,13 @@ Use isolation for genuinely parallel independent work; for ordinary single-agent
 
 A worker starts cold. It does not inherit your conversation, your reasoning, or your assumptions — only what you hand it. Every dispatch carries:
 
-1. **The task** — one scoped unit, small enough that a wrong result is cheap to discard.
-2. **Acceptance criteria** — checkable **from the returned artifact alone**. If verifying requires having watched the work, the criteria are wrong.
+1. **The ask** — what the requester asked, in their own words, plus any boundary they stated. Make it self-contained: when it points at a report, decision or PR ("do items 2 and 4 of the review"), write in the substance of what it points at, because a pointer hands over prose that may since have gone stale. Never widen it into a general goal or an enumerated coverage list; a widened ask is a different contract.
+2. **Your spec** — one scoped unit, small enough that a wrong result is cheap to discard: build instructions, acceptance criteria checkable **from the returned artifact alone** (if verifying requires having watched the work, the criteria are wrong), and what is explicitly out of scope.
 3. **Context that isn't obvious from the artifacts** — the constraint you know and the worker can't infer.
 4. **Where to work** — repo, branch, worktree.
 5. **A plan reference** it can pull for the wider picture.
+
+Keep the ask and the spec apart, under separate headings, so the worker can tell whose words are whose. **A reviewer judges the result against the ask.** The spec narrows the ask into work; it cannot add a requirement the ask lacks. A requirement you think the ask is missing is a question for the requester, not an acceptance criterion. A reviewer's falsification brief — the claim to try to break — is spec, not ask.
 
 Expect back: the artifact, a status (`completed` / `blocked` / `needs-decision`), and any proposed deltas.
 
@@ -140,7 +142,7 @@ Expect back: the artifact, a status (`completed` / `blocked` / `needs-decision`)
 When handing off between agents (sequential), include in the handoff:
 1. What was produced (artifacts, PR links, vault notes)
 2. What the next agent needs to know (context that isn't obvious from the artifacts)
-3. What the acceptance criteria are for the next phase
+3. The ask, carried forward unchanged, and the acceptance criteria for the next phase
 
 Don't assume the next agent will read the full conversation history. Be explicit.
 
