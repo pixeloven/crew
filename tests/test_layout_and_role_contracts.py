@@ -892,5 +892,74 @@ class QualifiedDispatchTests(unittest.TestCase):
                 self.assertEqual(1, " ".join(text.split()).count(self.SENTENCE))
 
 
+class ReviewBoundTests(unittest.TestCase):
+    """The reviewer cites both delta-handling rules that bound review rounds, and
+    the rules it cites exist there (crew#126)."""
+
+    RULES = (
+        "A review finding cannot amend the accepted ask",
+        "Repeated same-theme findings",
+    )
+    ESCALATION = (
+        "Original requirement",
+        "Proposed expansion",
+        "Smallest compliant alternative",
+        "Consequences of each",
+        "Recommendation",
+    )
+
+    @staticmethod
+    def _section(text: str, heading: str) -> list[str]:
+        lines = text.splitlines()
+        start = lines.index(heading) + 1
+        end = next(
+            (i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines)
+        )
+        return lines[start:end]
+
+    @staticmethod
+    def _bold_leads(lines: list[str], marker: str) -> tuple[str, ...]:
+        leads = []
+        for line in lines:
+            if line.startswith(marker + "**"):
+                leads.append(line[len(marker) + 2 :].split("**", 1)[0].rstrip("."))
+        return tuple(leads)
+
+    def _numbered_bold_leads(self, lines: list[str]) -> tuple[str, ...]:
+        return tuple(
+            self._bold_leads([line.split(" ", 1)[1]], "")[0]
+            for line in lines
+            if line[:1].isdigit() and line.split(" ", 1)[0].rstrip(".").isdigit()
+        )
+
+    def test_delta_handling_defines_both_rules_and_the_escalation_shape(self) -> None:
+        text = (ROOT / "skills/delta-handling/SKILL.md").read_text(encoding="utf-8")
+        lines = text.splitlines()
+        table_rows = [
+            [cell.strip() for cell in line.strip("|").split("|")]
+            for line in lines
+            if line.startswith("|")
+        ]
+        self.assertEqual(1, [row[0] for row in table_rows].count(self.RULES[1]))
+        self.assertIn(f"## {self.RULES[0]}", lines)
+        escalation = self._section(text, "## Escalating a scope expansion or repeated findings")
+        self.assertEqual(self.ESCALATION, self._numbered_bold_leads(escalation))
+
+    def test_rendered_reviewers_cite_both_rules(self) -> None:
+        for path in ("agents/reviewer.md", "pi-agents/reviewer.md"):
+            text = (ROOT / path).read_text(encoding="utf-8")
+            with self.subTest(path=path):
+                rules = self._section(text, "## Findings and the accepted ask")
+                self.assertTrue(any("`delta-handling`" in line for line in rules))
+                self.assertEqual(self.RULES, self._bold_leads(rules, "- "))
+                output = self._section(text, "## Output format")
+                escalations = next(
+                    i for i, line in enumerate(output) if line.startswith("**Escalations:**")
+                )
+                self.assertEqual(
+                    self.ESCALATION, self._numbered_bold_leads(output[escalations + 1 :])
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

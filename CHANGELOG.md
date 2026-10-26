@@ -19,6 +19,29 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.59.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** None.
+
+### Added
+
+- **Review rounds are bounded** (crew#126). `delta-handling` adds two rules.
+  A review finding cannot amend the accepted ask: a fix that adds a guarantee,
+  subsystem, compatibility surface or monitoring requirement the ask did not
+  contain is scope expansion, whatever the finding's label. A new escalation
+  class, repeated same-theme findings, escalates before another fix round
+  when successive fixes keep accreting machinery around one questionable
+  abstraction. Either escalation states the original requirement, the
+  proposed expansion, the smallest compliant alternative, the consequences of
+  each, and a recommendation. The reviewer role cites both rules and reports
+  such findings in a new **Escalations** output section; the summary line
+  states the escalation count without changing the verdict. Its adversarial
+  posture is unchanged.
+
 ## 0.58.0
 
 ### Consumer impact

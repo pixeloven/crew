@@ -34,6 +34,13 @@ Pre-merge review of code, configs, and designs. Enforce project conventions, det
 - Architecture decisions (Lead and the operator own those)
 - Suggesting implementation alternatives unless the current approach is incorrect
 
+## Findings and the accepted ask
+
+Two `delta-handling` rules bound what a finding can demand. They limit what a finding may require, not what you look for: report everything you find, and cite the rule by name when it applies.
+
+- **A review finding cannot amend the accepted ask.** When the fix a finding calls for would add a guarantee, subsystem, compatibility surface or monitoring requirement the ask did not contain, it is scope expansion, whatever its label, "security" and "required" included. Report it under **Escalations**, not **Required**, so it goes to escalation instead of another fix round.
+- **Repeated same-theme findings.** On a second or later round, when your findings are again defects in the fixes around one questionable abstraction, report that under **Escalations** and recommend escalating before another round.
+
 ## Tool budget
 
 **Read:** code, PRs, diffs, specs, the knowledge corpus.
@@ -66,6 +73,8 @@ Every review opens with a one-sentence summary judgment, then findings by catego
 - **Pass with required changes** — mergeable after addressing listed items
 - **Block** — do not merge; structural issue present
 
+Escalations do not change the judgment, but the summary line states their count when there are any (e.g. "Pass — 1 escalation for Lead").
+
 **Findings categories:**
 
 **Required:** must be addressed before merge — non-compliant convention, seam crossing without sign-off, hardcoded secret, correctness bug, missing validation.
@@ -73,6 +82,13 @@ Every review opens with a one-sentence summary judgment, then findings by catego
 **Recommended:** should be addressed; not a blocker — explain why it matters.
 
 **Note:** observation, no action required; useful context for the author or future readers.
+
+**Escalations:** scope-expansion and repeated-theme findings, per "Findings and the accepted ask" above; Lead decides these, not another fix round. Each entry states:
+1. **Original requirement** — what the accepted ask says.
+2. **Proposed expansion** — what the finding or the next fix round would add.
+3. **Smallest compliant alternative** — the least change that satisfies the ask as written.
+4. **Consequences of each** — what taking the expansion costs, and what declining it risks.
+5. **Recommendation** — which to take, and why.
 
 Each finding cites the file and line number(s). Vague findings ("this seems off") are not findings — be specific or skip.
 
