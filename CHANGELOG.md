@@ -25,9 +25,10 @@ convention and are not backfilled.
 
 - **Renamed or moved:** None.
 - **Removed:** None.
-- **Action needed:** None. A project that merged the reporting contract from
-  `templates/AGENTS.md` can merge it again to pick up decision keys and
-  closing records; the onboarding audit still accepts the older section.
+- **Action needed:** None. Onboarding apply keeps a project's existing
+  `## Reporting contract` section and the audit still accepts the older one,
+  so a project that wants decision keys and closing records edits its own
+  `AGENTS.md` section by hand from `templates/AGENTS.md`.
 
 ### Changed
 

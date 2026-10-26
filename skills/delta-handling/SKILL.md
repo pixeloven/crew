@@ -69,7 +69,7 @@ Append to the plan's history section after every delta:
 **Proposed by:** <agent>
 **Type:** <auto-approvable class | escalation class>
 **Decision:** Auto-approved by Lead / Approved by the operator / Rejected
-**Decision record:** (escalations only) `[key=<slug>] closed <YYYY-MM-DD>: "<the operator's words>"`, or `moot <YYYY-MM-DD>: <evidence>`
+**Decision record:** (escalations only) `[key=<slug>] closed <YYYY-MM-DD>: "<the operator's words>"`, or `[key=<slug>] moot <YYYY-MM-DD>: <evidence>`
 **What changed:** one sentence describing the modification
 **Why:** one sentence explaining the trigger
 **Risk:** one sentence on what could go wrong
