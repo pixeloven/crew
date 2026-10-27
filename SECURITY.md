@@ -16,5 +16,6 @@ it, and the impact you expect.
 
 Crew ships one version line from `main`, and each release is a `vX.Y.Z` tag.
 Fixes land on `main` and go out in the next release. Older tags are not
-patched: Claude Code, which tracks `main`, picks a fix up on its next update;
-pi and Codex users move their pin to the tag that carries it.
+patched: Claude Code and Codex pick a fix up once `pixeloven/marketplace` moves
+its commit pin and the plugin updates; pi users move their pin to the tag that
+carries it.
