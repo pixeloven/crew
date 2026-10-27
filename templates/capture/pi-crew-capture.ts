@@ -10,7 +10,6 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 const SCRIPT =
   process.env.CREW_CAPTURE_SCRIPT ?? join(dirname(fileURLToPath(import.meta.url)), "../../scripts/learn_capture.py");
-const MODE = process.env.CREW_CAPTURE_MODE ?? "ab";
 
 type StopOutput = { decision?: string; reason?: unknown };
 
@@ -21,7 +20,7 @@ function send(ctx: ExtensionContext, event: Record<string, unknown>): StopOutput
     cwd: ctx.cwd,
     ...event,
   };
-  const run = spawnSync("python3", [SCRIPT, "--hook", "--harness", "pi", "--mode", MODE], {
+  const run = spawnSync("python3", [SCRIPT, "--hook", "--harness", "pi"], {
     input: JSON.stringify(payload),
     encoding: "utf8",
     timeout: 10_000,

@@ -41,8 +41,8 @@ convention and are not backfilled.
   docs/LEARNING.md dates the hook surface each harness exposes and lists the
   gaps: denials on Codex and pi, and reviewer findings and Doctor drift
   everywhere.
-- **The capture A/B.** `--mode ab` splits sessions between a `baseline` arm,
-  which only records, and a `capture` arm. `learn_capture.py --report` compares
+- **The capture A/B.** The hook splits sessions by a hash of their id between a
+  `baseline` arm, which only records, and a `capture` arm. `learn_capture.py --report` compares
   the arms per session on proposals drafted, accepted and promoted, and on the
   lesson-test pass rate. The rule is to keep the hooks only if capture raises
   accepted lessons per session. The report prints the numbers and the operator

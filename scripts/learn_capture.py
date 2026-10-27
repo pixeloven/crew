@@ -13,7 +13,7 @@ signal kinds, counts and hashed keys, and its continuation prompt names counts
 only. Tool output, a prompt or a denial reason never reaches the prompt it
 writes, so a planted line cannot become an instruction by way of the hook.
 
-    learn_capture.py --hook --harness claude|codex|pi [--mode ab|capture|baseline]   < event JSON
+    learn_capture.py --hook --harness claude|codex|pi   < event JSON
     learn_capture.py --report CONSUMER_ROOT [--format json|markdown]
 
 `--hook` always exits 0. It writes only `<queue>/capture/sessions/*.json`, and
@@ -33,6 +33,7 @@ import json
 import os
 import pathlib
 import re
+import subprocess
 import sys
 from typing import Any
 
@@ -53,7 +54,6 @@ except ImportError:  # Direct script execution.
 
 SESSION_SCHEMA = "crew-capture-session/1"
 CREW_ROOT = pathlib.Path(__file__).resolve().parent.parent
-MODES = ("ab", "capture", "baseline")
 ARMS = ("baseline", "capture")
 SIGNAL_KINDS = ("repeated-failure", "denial", "correction")
 
@@ -86,10 +86,8 @@ def _digest(*parts: Any) -> str:
     return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
-def assign_arm(mode: str, session_id: str) -> str:
-    """`ab` splits sessions by a hash of their id: stable for a session, even across arms."""
-    if mode in ARMS:
-        return mode
+def assign_arm(session_id: str) -> str:
+    """Split sessions between the arms by a hash of their id: stable for a session."""
     return ARMS[int(hashlib.sha256(session_id.encode()).hexdigest()[:8], 16) % 2]
 
 
@@ -114,6 +112,20 @@ def proposal_ids(queue: pathlib.Path) -> list[str]:
     return sorted(
         path.stem for path in queue.glob("*.md") if path.name.upper() not in {"README.MD", "SKILL.MD"}
     )
+
+
+def committed_ids(root: pathlib.Path, queue: pathlib.Path) -> set[str]:
+    """Proposal ids tracked in the project's git HEAD: a pull or branch switch, not a fresh draft."""
+    try:
+        listed = subprocess.run(
+            ["git", "-C", str(root), "ls-tree", "--name-only", "HEAD", "--", f"{queue.relative_to(root).as_posix()}/"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return set()
+    if listed.returncode:
+        return set()
+    return {pathlib.PurePosixPath(line).stem for line in listed.stdout.splitlines() if line.endswith(".md")}
 
 
 def sessions_dir(queue: pathlib.Path) -> pathlib.Path:
@@ -152,6 +164,8 @@ def tool_failed(event: dict[str, Any]) -> bool:
 def record_signal(record: dict[str, Any], kind: str, key: str) -> None:
     signal = record["signals"].setdefault(key, {"kind": kind, "count": 0, "handed": False})
     signal["count"] += 1
+    if record["pending-trigger"]:  # `learn`'s own run, which the hook asked for, is not a signal.
+        signal["handed"] = True
 
 
 def qualifying(record: dict[str, Any]) -> list[str]:
@@ -189,14 +203,13 @@ def continuation(record: dict[str, Any], keys: list[str]) -> str:
 # ------------------------------------------------------------------- the hook
 
 
-def new_record(event: dict[str, Any], harness: str, mode: str, queue: pathlib.Path) -> dict[str, Any]:
+def new_record(event: dict[str, Any], harness: str, queue: pathlib.Path) -> dict[str, Any]:
     session_id = str(event["session_id"])
     return {
         "schema": SESSION_SCHEMA,
         "session": session_id,
         "harness": harness,
-        "mode": mode,
-        "arm": assign_arm(mode, session_id),
+        "arm": assign_arm(session_id),
         "crew": crew_version(),
         "started": now(),
         "opened-by": event.get("hook_event_name", ""),
@@ -209,7 +222,9 @@ def new_record(event: dict[str, Any], harness: str, mode: str, queue: pathlib.Pa
     }
 
 
-def apply_event(record: dict[str, Any], event: dict[str, Any], queue: pathlib.Path) -> dict[str, Any] | None:
+def apply_event(
+    record: dict[str, Any], event: dict[str, Any], root: pathlib.Path, queue: pathlib.Path,
+) -> dict[str, Any] | None:
     """Update a session record for one event; return the Stop output, if any."""
     name = event.get("hook_event_name")
     record["updated"] = now()
@@ -224,17 +239,22 @@ def apply_event(record: dict[str, Any], event: dict[str, Any], queue: pathlib.Pa
     elif name == "PermissionDenied":
         record_signal(record, "denial", "denial-" + _digest(event.get("tool_name"), event.get("tool_input")))
     elif name == "Stop":
-        return stop(record, event, queue)
+        return stop(record, event, root, queue)
     return None
 
 
-def stop(record: dict[str, Any], event: dict[str, Any], queue: pathlib.Path) -> dict[str, Any] | None:
+def stop(
+    record: dict[str, Any], event: dict[str, Any], root: pathlib.Path, queue: pathlib.Path,
+) -> dict[str, Any] | None:
     """Attribute new proposals, then trigger `learn` once per batch of new signals."""
     trigger = "capture" if record["pending-trigger"] else "session"
     known = set(record["queue-at-start"]) | set(record["proposals"])
-    for proposal in proposal_ids(queue):
-        if proposal not in known:
-            record["proposals"][proposal] = trigger
+    new = [proposal for proposal in proposal_ids(queue) if proposal not in known]
+    if new:
+        committed = committed_ids(root, queue)
+        for proposal in new:
+            if proposal not in committed:
+                record["proposals"][proposal] = trigger
     record["pending-trigger"] = False
     if record["arm"] != "capture" or event.get("stop_hook_active"):
         return None
@@ -272,7 +292,7 @@ def locked_record(root: pathlib.Path, path: pathlib.Path):
         os.close(fd)
 
 
-def handle_event(event: dict[str, Any], *, harness: str, mode: str) -> dict[str, Any] | None:
+def handle_event(event: dict[str, Any], *, harness: str) -> dict[str, Any] | None:
     """One hook invocation. Returns the Stop output to print, or None."""
     session_id = event.get("session_id")
     cwd = event.get("cwd") or os.getcwd()
@@ -290,21 +310,21 @@ def handle_event(event: dict[str, Any], *, harness: str, mode: str) -> dict[str,
         except ValueError:
             record = None
         if not isinstance(record, dict) or record.get("schema") != SESSION_SCHEMA:
-            record = new_record(event, harness, mode, queue)
-        output = apply_event(record, event, queue)
+            record = new_record(event, harness, queue)
+        output = apply_event(record, event, root, queue)
         handle.seek(0)
         handle.truncate()
         handle.write(json.dumps(record, indent=2, sort_keys=True) + "\n")
     return output
 
 
-def run_hook(harness: str, mode: str, stdin: str) -> str:
+def run_hook(harness: str, stdin: str) -> str:
     """Never fails the session: any error is swallowed and the hook prints nothing."""
     try:
         event = json.loads(stdin)
         if not isinstance(event, dict):
             return ""
-        output = handle_event(event, harness=harness, mode=mode)
+        output = handle_event(event, harness=harness)
     except Exception:  # noqa: BLE001 - a learning aid must never break the session it observes.
         return ""
     return json.dumps(output) if output else ""
@@ -365,15 +385,25 @@ def build_report(consumer_root: pathlib.Path) -> dict[str, Any]:
         if isinstance(record, dict) and record.get("schema") == SESSION_SCHEMA and record.get("arm") in ARMS:
             records.append(record)
 
-    arms: dict[str, Any] = {}
+    # Each proposal counts once: the first record, in sorted order, that lists it.
     attributed: set[str] = set()
+    owned: list[tuple[dict[str, Any], dict[str, str]]] = []
+    for record in records:
+        proposals = {
+            proposal: trigger for proposal, trigger in record.get("proposals", {}).items() if proposal not in attributed
+        }
+        attributed.update(proposals)
+        owned.append((record, proposals))
+
+    arms: dict[str, Any] = {}
     for arm in ARMS:
-        mine = [record for record in records if record["arm"] == arm]
+        mine = [record for record, _ in owned if record["arm"] == arm]
         by_trigger: dict[str, dict[str, int]] = {}
         tests = {"pass": 0, "fail": 0}
-        for record in mine:
-            for proposal, trigger in record.get("proposals", {}).items():
-                attributed.add(proposal)
+        for record, proposals in owned:
+            if record["arm"] != arm:
+                continue
+            for proposal, trigger in proposals.items():
                 outcome = outcomes.get(proposal)
                 counts = by_trigger.setdefault(trigger, {"drafted": 0, "accepted": 0, "promoted": 0})
                 counts["drafted"] += 1
@@ -441,14 +471,12 @@ def main(argv: list[str] | None = None) -> int:
     action.add_argument("--hook", action="store_true", help="handle one harness hook event from stdin")
     action.add_argument("--report", type=pathlib.Path, metavar="CONSUMER_ROOT", help="print the capture A/B")
     parser.add_argument("--harness", choices=HARNESSES, help="the harness sending the event (--hook)")
-    parser.add_argument("--mode", choices=MODES, default="ab",
-                        help="ab: split sessions between arms (default); capture or baseline: one arm")
     parser.add_argument("--format", choices=("json", "markdown"), default="json", help="--report output")
     args = parser.parse_args(argv)
     if args.hook:
         if not args.harness:
             parser.error("--hook needs --harness")
-        output = run_hook(args.harness, args.mode, sys.stdin.read())
+        output = run_hook(args.harness, sys.stdin.read())
         if output:
             print(output)
         return 0

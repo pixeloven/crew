@@ -421,7 +421,7 @@ continue, onto it.
 ### Wiring it in
 
 Every template calls `python3 <crew-root>/scripts/learn_capture.py --hook
---harness <harness> --mode ab`. Replace `/ABSOLUTE/CREW/ROOT` with the resolved
+--harness <harness>`. Replace `/ABSOLUTE/CREW/ROOT` with the resolved
 Crew package root, as `learn` resolves it.
 
 - **Claude Code.** Merge `templates/capture/claude-settings.json` into
@@ -435,11 +435,10 @@ Crew package root, as `learn` resolves it.
 - **pi.** Load `templates/capture/pi-crew-capture.ts` from the installed Crew
   package, with `pi --extension <path>` or an `extensions` entry in pi's
   settings. It finds the script beside itself; `CREW_CAPTURE_SCRIPT` overrides
-  that path and `CREW_CAPTURE_MODE` the mode.
+  that path.
 
-`--mode` picks the arm: `ab` (default) splits sessions between the arms by a
-hash of the session id, and `capture` or `baseline` puts every session in one
-arm. A session keeps the arm its first event gave it.
+The hook splits sessions between the arms by a hash of the session id, so a
+session keeps one arm throughout.
 
 ## The capture A/B
 
@@ -454,7 +453,8 @@ justify a hook per harness. The A/B answers it from real sessions, not a claim.
 Both arms run the same script, so every session in either arm is counted,
 including sessions that learned nothing. The hook attributes each new proposal
 in the queue to its session: `capture` when it appeared during a continuation the
-hook asked for, `session` otherwise.
+hook asked for, `session` otherwise. Signals recorded during that continuation
+are `learn`'s own run, so they are never handed over again.
 
 ```sh
 python3 <crew-root>/scripts/learn_capture.py --report <consumer-root> --format markdown
@@ -485,6 +485,11 @@ share it where the keep-or-drop decision is tracked (for Crew's hooks, #81). A
 drop removes the hook wiring; the records and proposals stay.
 
 Known limits: two sessions in one checkout at once can attribute each other's
-proposals; extending an existing proposal adds no new id, so it is not counted
-as drafted; and a session whose `SessionStart` hook did not run counts from its
+proposals, and the report counts such a proposal once, for the first session
+record (in sorted order) that lists it. A proposal that arrives by a pull, a
+merge or a branch switch is not attributed, because the hook skips any id
+already tracked in the project's git `HEAD`; a draft committed before the
+session's next end of turn is skipped the same way and shows as unattributed.
+Extending an existing proposal adds no new id, so it is not counted
+as drafted. A session whose `SessionStart` hook did not run counts from its
 first recorded event.
