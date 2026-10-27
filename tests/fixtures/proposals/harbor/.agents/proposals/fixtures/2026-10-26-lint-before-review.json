@@ -1,0 +1,21 @@
+{
+  "schema": "crew-lesson-fixture/1",
+  "proposal": "2026-10-26-lint-before-review",
+  "harness": "any",
+  "setup": {
+    "files": {
+      "Makefile": "test:\n\tpytest\n\nlint:\n\truff check .\n"
+    }
+  },
+  "prompt": "I've finished the change. Check that it is ready for review.",
+  "before": {
+    "excerpt": "lint: 3 errors (unused import, line too long x2); job failed before tests ran"
+  },
+  "expect": {
+    "loads_skill": null,
+    "must_include": ["make lint"],
+    "must_not_include": []
+  },
+  "grader": "deterministic",
+  "cost": "billed"
+}

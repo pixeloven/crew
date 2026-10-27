@@ -13,7 +13,7 @@ import tempfile
 import unittest
 
 from scripts.frontmatter import read_frontmatter
-from scripts.learn_contract import inspect_proposals
+from scripts.learn_contract import PROVENANCE_SOURCE, inspect_proposals
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -22,8 +22,9 @@ FLAG = re.compile(r"(?<![\w-])(--[a-z][a-z0-9-]*)")
 SCRIPT = re.compile(r"scripts/([a-z_]+\.py)")
 FENCED = re.compile(r"^```[^\n]*\n(.*?)^```", re.DOTALL | re.MULTILINE)
 INLINE = re.compile(r"`([^`]+)`")
-# Flags of the tool being learned, not of a Crew script (`<tool> --version`).
-TOOL_FLAGS = {"--version"}
+# Flags of the tool being learned (`<tool> --version`) or of the eval runner
+# (`claude plugin eval --scaffold`), not of a Crew script.
+TOOL_FLAGS = {"--version", "--scaffold"}
 
 
 def body() -> str:
@@ -42,6 +43,19 @@ def help_text(script: str) -> str:
 
 def script_flags(script: str) -> set[str]:
     return set(FLAG.findall(help_text(script)))
+
+
+def signal_sources(text: str) -> dict[str, str]:
+    """signal -> provenance-source, from the markdown table whose last column is `provenance-source`."""
+    rows = [[cell.strip() for cell in line.strip().strip("|").split("|")]
+            for line in text.splitlines() if line.strip().startswith("|")]
+    header = next(index for index, row in enumerate(rows) if row[-1] == "`provenance-source`")
+    found = {}
+    for row in rows[header + 2:]:
+        if len(row) != len(rows[header]):
+            break
+        found[row[0]] = row[-1].strip("`")
+    return found
 
 
 def commands(text: str) -> list[str]:
@@ -108,6 +122,17 @@ class LearnSkillContractTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertIn(kind, text)
                 self.assertIn(f'"{kind}"', inventory)
+
+    def test_experience_signals_map_to_provenance_sources_the_contract_accepts(self) -> None:
+        skill = signal_sources(body())
+        doc = signal_sources((ROOT / "docs/LEARNING.md").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {"correction", "repeated failure", "tool denial", "reviewer finding", "Doctor drift"}, set(skill)
+        )
+        self.assertEqual(skill, doc)
+        for signal, source in skill.items():
+            with self.subTest(signal=signal):
+                self.assertTrue(PROVENANCE_SOURCE.match(source), source)
 
 
 if __name__ == "__main__":

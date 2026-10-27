@@ -1,6 +1,6 @@
 ---
 name: plan-validation
-description: Use when deciding whether a phase can advance, whether work is complete, or what evidence “done” requires. Defines acceptance evaluation, validation-gate promotion, and invalid completion signals.
+description: Use when deciding whether a phase can advance, whether work is complete, or what evidence “done” requires. Defines acceptance evaluation, validation-gate promotion, invalid completion signals, and the closing retro that hands lessons to learn.
 tier: concept
 requires: []
 ---
@@ -64,3 +64,28 @@ When a validation gate passes, record it in the plan:
 ```
 
 This creates an audit trail. If Phase 3 fails, you can trace back to which gate last passed and when.
+
+## Retro: what the plan taught
+
+When a plan's last gate passes, run a retro before closing it, and after any
+reviewer pass: a review can overturn a finding the retro would otherwise keep.
+
+1. List the signals the plan raised: corrections from the operator, steps that
+   failed more than once, tool denials, reviewer findings the work had to fix,
+   and Doctor rows the work left `DEGRADED`. The plan's delta history, review
+   records and gate records hold most of them.
+2. Hand them to `learn` as its experience source. It drafts proposals into the
+   project's declared queue, or only reports them when no queue is declared, and
+   never applies one. Promotion stays the operator's.
+3. Record the outcome in the last gate record:
+
+```markdown
+**Retro:** 2026-05-14-lint-before-review (draft), 2026-05-14-test-target (needs-recurrence)
+```
+
+or `**Retro:** no lessons` when nothing would change the next session.
+
+The retro never holds a gate. Work that met its criteria is done, and its
+lessons wait in the queue for review. Under a supervising host whose task
+contract defines knowledge capture, follow it instead, per the reporting
+contract.
