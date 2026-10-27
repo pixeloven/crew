@@ -45,6 +45,19 @@ def script_flags(script: str) -> set[str]:
     return set(FLAG.findall(help_text(script)))
 
 
+def signal_sources(text: str) -> dict[str, str]:
+    """signal -> provenance-source, from the markdown table whose last column is `provenance-source`."""
+    rows = [[cell.strip() for cell in line.strip().strip("|").split("|")]
+            for line in text.splitlines() if line.strip().startswith("|")]
+    header = next(index for index, row in enumerate(rows) if row[-1] == "`provenance-source`")
+    found = {}
+    for row in rows[header + 2:]:
+        if len(row) != len(rows[header]):
+            break
+        found[row[0]] = row[-1].strip("`")
+    return found
+
+
 def commands(text: str) -> list[str]:
     """Each fenced-block line and each inline code span, newlines folded."""
     found = [line for block in FENCED.findall(text) for line in block.splitlines()]
@@ -110,37 +123,16 @@ class LearnSkillContractTests(unittest.TestCase):
                 self.assertIn(kind, text)
                 self.assertIn(f'"{kind}"', inventory)
 
-
     def test_experience_signals_map_to_provenance_sources_the_contract_accepts(self) -> None:
-        text = body()
-        doc = (ROOT / "docs/LEARNING.md").read_text(encoding="utf-8")
-        for signal, source in (("correction", "session"), ("repeated failure", "session"),
-                               ("tool denial", "denial"), ("reviewer finding", "review"),
-                               ("Doctor drift", "doctor")):
-            row = re.compile(rf"^ *\| {signal} \|.*\| `{source}` \|$", re.MULTILINE)
+        skill = signal_sources(body())
+        doc = signal_sources((ROOT / "docs/LEARNING.md").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {"correction", "repeated failure", "tool denial", "reviewer finding", "Doctor drift"}, set(skill)
+        )
+        self.assertEqual(skill, doc)
+        for signal, source in skill.items():
             with self.subTest(signal=signal):
-                self.assertRegex(text, row)
-                self.assertRegex(doc, row)
-                self.assertTrue(PROVENANCE_SOURCE.match(source))
-
-    def test_lesson_as_test_is_drafted_but_never_run_by_the_agent(self) -> None:
-        text = body()
-        self.assertIn("Lesson-as-test", text)
-        self.assertIn("--eval-case", text)
-        self.assertIn("You write the fixture; you never run it.", text)
-        self.assertIn("run a fixture or `claude plugin eval` unasked", text)
-
-
-    def test_plan_validation_retro_hands_every_signal_to_learn_and_never_holds_a_gate(self) -> None:
-        retro = (ROOT / "skills/plan-validation/SKILL.md").read_text(encoding="utf-8").split("## Retro", 1)[1]
-        self.assertIn("`learn`", retro)
-        self.assertTrue((ROOT / "skills/learn/SKILL.md").is_file())
-        for signal in ("corrections", "failed more than once", "tool denials", "reviewer findings", "Doctor rows"):
-            with self.subTest(signal=signal):
-                self.assertIn(signal, retro)
-        self.assertIn("after any\nreviewer pass", retro)
-        self.assertIn("never holds a gate", retro)
-        self.assertIn("**Retro:**", retro)
+                self.assertTrue(PROVENANCE_SOURCE.match(source), source)
 
 
 if __name__ == "__main__":

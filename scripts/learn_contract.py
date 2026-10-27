@@ -381,13 +381,16 @@ def context_leaks(text: str, *, project_names: list[str], remote_slugs: list[str
 
 
 def check_fixture(
-    path: pathlib.Path, proposal_id: str, *, excerpts: list[str] | None = None, target_skill: str | None = None
+    path: pathlib.Path, proposal_id: str, *, excerpts: list[str] | None = None, target_skill: str | None = None,
+    existing_skill: bool = False,
 ) -> list[dict[str, str]]:
     """Validate a crew-lesson-fixture/1 file.
 
     With the proposal's evidence `excerpts`, the fixture's `before.excerpt` must be
     recorded evidence: the regression test reproduces the original failure, not a
     paraphrase of it. With `target_skill`, `expect.loads_skill` names that skill.
+    With `existing_skill`, the baseline arm has the skill before the lesson, so the
+    fixture must assert more than that the skill loads.
     """
     gate = "fixture"
     try:
@@ -438,6 +441,12 @@ def check_fixture(
                 problems.append(f"expect.{key} must be a list of strings")
         if not loads and not expect.get("must_include") and not expect.get("must_not_include"):
             problems.append("expect asserts nothing: set loads_skill, must_include or must_not_include")
+        elif (existing_skill and not expect.get("must_include") and not expect.get("must_not_include")
+              and data.get("grader") != "model"):
+            problems.append(
+                "the lesson edits an existing skill, which the baseline arm has too: loads_skill alone "
+                "cannot fail without the lesson, so set must_include, must_not_include or a model grader"
+            )
     if data.get("grader") not in GRADERS:
         problems.append(f"grader must be one of {list(GRADERS)}")
     if data.get("cost") not in COSTS:
@@ -551,8 +560,10 @@ def check_proposal(
         elif not (path.parent / fixture).is_file():
             found.append(finding("fixture", f"fixture {fixture} does not exist in the queue"))
         else:
-            found.extend(check_fixture(path.parent / fixture, fields.get("id", ""),
-                                       excerpts=excerpts, target_skill=target_skill(fields)))
+            skill = target_skill(fields)
+            found.extend(check_fixture(path.parent / fixture, fields.get("id", ""), excerpts=excerpts,
+                                       target_skill=skill,
+                                       existing_skill=skill is not None and fields.get("target-sha256") != "absent"))
     elif needs_lesson_test(fields):
         found.append(finding(
             "fixture",
@@ -863,7 +874,10 @@ def eval_case_files(proposal: pathlib.Path, *, root: pathlib.Path | None = None)
     The plugin ships the skill as the proposal's diff would leave it, plus one case
     built from the lesson's fixture. Under the default with-without ablation, the
     no-plugin arm replays the original failure and the plugin arm shows the lesson
-    fixing it. Raises ValueError when the proposal cannot be rendered.
+    fixing it. For a lesson that edits an existing skill, the case appends the skill
+    before the diff to the system prompt of both arms, so the baseline has it and
+    the delta is the lesson's alone. Raises ValueError when the proposal cannot be
+    rendered.
     """
     proposal = pathlib.Path(proposal)
     root = pathlib.Path(root) if root else find_project_root(proposal.parent)
@@ -888,13 +902,15 @@ def eval_case_files(proposal: pathlib.Path, *, root: pathlib.Path | None = None)
     diff = next(content for tag, content in fenced_blocks(sections(_split(text)[1])["Proposed diff"])
                 if tag == "diff")
     target = fields["target"]
+    original: str | None = None
     if fields["target-sha256"] == "absent":
         skill_text = apply_diff("", diff)
     else:
         current = pathlib.Path(target).expanduser() if target.startswith("~/") else (root or proposal.parent) / target
         if _sha256(current) != fields["target-sha256"]:
             raise ValueError(f"{target} changed since the proposal was drafted; refresh the proposal first")
-        skill_text = apply_diff(current.read_text(encoding="utf-8"), diff)
+        original = current.read_text(encoding="utf-8")
+        skill_text = apply_diff(original, diff)
 
     case_id = fields["id"]
     expect = fixture["expect"]
@@ -929,6 +945,9 @@ def eval_case_files(proposal: pathlib.Path, *, root: pathlib.Path | None = None)
         f"  prompt: {_yaml(fixture['prompt'])}",
         f"  allowed_tools: {_yaml(['Read', 'Glob', 'Grep', 'Skill'])}",
     ]
+    if original is not None:
+        baseline = f"The project skill {skill}, as it stood before this lesson:\n\n{original}"
+        case.append(f"  append_system_prompt: {_yaml(baseline)}")
     setup = fixture["setup"]["files"]
     if setup:
         case += ["context:", f"  scaffold_script: {_yaml('scaffold.sh')}"]

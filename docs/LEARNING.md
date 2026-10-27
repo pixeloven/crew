@@ -258,7 +258,9 @@ original failure. The evidence becomes the regression test.
   carries the failure. A proposal whose `provenance-crew` is older than 0.63.0
   was drafted when the fixture was optional and is not required to have one.
 - The reviewer reads the fixture with the lesson: a test that cannot fail
-  without the lesson proves nothing.
+  without the lesson proves nothing. For a lesson that edits an existing
+  skill, the gate refuses a fixture that expects only `loads_skill`: the
+  baseline has that skill too, so loading it proves nothing about the lesson.
 
 ### Running it with `claude plugin eval`
 
@@ -278,7 +280,7 @@ output directory. It writes `<tmp-dir>/<id>/` and nothing else:
 | Rendered file | From |
 |---|---|
 | `skills/<name>/SKILL.md` | the target as the proposal's diff leaves it |
-| `evals/<id>/case.yaml` | `prompt`, and one grader per expectation |
+| `evals/<id>/case.yaml` | `prompt`, one grader per expectation and, when the lesson edits an existing skill, that skill before the diff as `append_system_prompt` |
 | `evals/<id>/scaffold.sh` | `setup.files`, written into the empty workspace |
 
 | Fixture | `claude plugin eval` grader |
@@ -289,7 +291,12 @@ output directory. It writes `<tmp-dir>/<id>/` and nothing else:
 | `grader: model` | also one `llm` grader: avoid the `before` failure |
 
 The default with-without ablation is the test: the no-plugin arm reproduces the
-original failure, and the plugin arm shows the lesson fixing it. The
+original failure, and the plugin arm shows the lesson fixing it. A new skill's
+baseline is no skill. An existing skill's baseline is that skill before the
+diff: `claude plugin eval` drops every plugin from the baseline arm, so the case
+appends the original `SKILL.md` (the one matching `target-sha256`) to both arms'
+system prompt. Both arms then have the skill as it was, and only the plugin arm
+has the lesson, so a lesson that changes nothing scores the same in both. The
 `tool_used: Skill` grader is reported as whether the skill fired, not scored.
 `--scaffold` runs the rendered script as you; it only writes the fixture's
 files. Every run is a model call, so the test runs only when the operator

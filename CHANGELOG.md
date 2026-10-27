@@ -49,8 +49,11 @@ convention and are not backfilled.
   `learn_contract.py --eval-case <proposal> --out <dir>` renders a skill lesson
   and its fixture as a `claude plugin eval` plugin. Under the default
   with-without ablation, the no-plugin arm replays the failure and the plugin arm
-  shows the fix. It reruns every gate first, writes only under `<dir>`, and runs
-  nothing; an eval is billed, so the operator runs it.
+  shows the fix. When the lesson edits an existing skill, the case appends that
+  skill as it was before the diff to both arms' system prompt, so the baseline
+  has the skill and the delta is the lesson's alone. It reruns every gate first,
+  writes only under `<dir>`, and runs nothing; an eval is billed, so the operator
+  runs it.
 
 ### Changed
 
@@ -59,7 +62,9 @@ convention and are not backfilled.
 - New `learn_contract.py --check` findings: `[classification]` when
   `occurrences` exceeds the evidence blocks; `[fixture]` when `before.excerpt`
   is not recorded evidence, when `expect.loads_skill` is not the skill the
-  lesson writes, or when a 0.63.0+ lesson with a diff is `reviewed` or
+  lesson writes, when a lesson that edits an existing skill expects only
+  `loads_skill` (the baseline has that skill too, so the test could not fail
+  without the lesson), or when a 0.63.0+ lesson with a diff is `reviewed` or
   `promoted` without a fixture.
 - The `reviewer` role checks that a lesson's fixture replays the recorded
   failure and would fail without the lesson.
