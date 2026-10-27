@@ -174,7 +174,7 @@ runs every gate, exits 1 on any finding, and prints each as `path: [gate] messag
 | `verbatim-promotion` | a proposed line copies 40 or more characters of an evidence excerpt (case and whitespace ignored). Evidence is data: restate the fact in your own words |
 | `methodology-context` | a methodology proposal's observation or issue text names the project root's basename, a git remote `owner/repo` (read from `.git/config`), an absolute path, an IP address, an email address, or a hostname |
 | `review` | a `reviewed` or `promoted` proposal has no `verdict: accept` |
-| `fixture` | a declared fixture is missing or fails the fixture schema; its `before.excerpt` is not in an evidence block; its `loads_skill` is not the skill the lesson writes; or a lesson with a diff is `reviewed` or `promoted` without one (lesson-as-test) |
+| `fixture` | a declared fixture is missing or fails the fixture schema; its `before.excerpt` is not in an evidence block; its `loads_skill` is not the skill the lesson writes; it expects only `loads_skill`, which is not scored, with no `must_include`, `must_not_include` or model grader; or a lesson with a diff is `reviewed` or `promoted` without one (lesson-as-test) |
 
 The verbatim gate is the line between citing evidence and obeying it. A planted
 sentence in a README is exactly the text a careless draft copies into a skill. The
@@ -258,15 +258,17 @@ original failure. The evidence becomes the regression test.
   carries the failure. A proposal whose `provenance-crew` is older than 0.63.0
   was drafted when the fixture was optional and is not required to have one.
 - The reviewer reads the fixture with the lesson: a test that cannot fail
-  without the lesson proves nothing. For a lesson that edits an existing
-  skill, the gate refuses a fixture that expects only `loads_skill`: the
-  baseline has that skill too, so loading it proves nothing about the lesson.
+  without the lesson proves nothing. The gate refuses a fixture that expects
+  only `loads_skill`: under the with-without ablation the `tool_used: Skill`
+  grader is not scored, so the fixture also needs `must_include`,
+  `must_not_include` or `grader: model`.
 
 ### Running it with `claude plugin eval`
 
 The runner is Claude Code's `claude plugin eval`, the eval tooling #72 measured
 skill triggering with. A skill lesson (`tool` or `project-fact`) renders as a
-small plugin under a directory the operator chooses, outside the repository:
+small plugin under a directory the operator chooses, outside the repository.
+Only a lesson that writes a new skill (`target-sha256: absent`) renders:
 
 ```sh
 python3 <crew-root>/scripts/learn_contract.py --eval-case <queue>/<id>.md --out <tmp-dir>
@@ -274,13 +276,13 @@ claude plugin eval <tmp-dir>/<id> --scaffold
 ```
 
 `--eval-case` reruns every gate first and refuses a failing proposal, an
-`AGENTS.md` or issue target, a fixture not meant for `claude`, or an existing
-output directory. It writes `<tmp-dir>/<id>/` and nothing else:
+`AGENTS.md` or issue target, an edit to an existing skill, a fixture not meant
+for `claude`, or an existing output directory. It writes `<tmp-dir>/<id>/` and nothing else:
 
 | Rendered file | From |
 |---|---|
 | `skills/<name>/SKILL.md` | the target as the proposal's diff leaves it |
-| `evals/<id>/case.yaml` | `prompt`, one grader per expectation and, when the lesson edits an existing skill, that skill before the diff as `append_system_prompt` |
+| `evals/<id>/case.yaml` | `prompt`, and one grader per expectation |
 | `evals/<id>/scaffold.sh` | `setup.files`, written into the empty workspace |
 
 | Fixture | `claude plugin eval` grader |
@@ -292,15 +294,21 @@ output directory. It writes `<tmp-dir>/<id>/` and nothing else:
 
 The default with-without ablation is the test: the no-plugin arm reproduces the
 original failure, and the plugin arm shows the lesson fixing it. A new skill's
-baseline is no skill. An existing skill's baseline is that skill before the
-diff: `claude plugin eval` drops every plugin from the baseline arm, so the case
-appends the original `SKILL.md` (the one matching `target-sha256`) to both arms'
-system prompt. Both arms then have the skill as it was, and only the plugin arm
-has the lesson, so a lesson that changes nothing scores the same in both. The
+baseline is no skill, so the delta is the lesson's. The
 `tool_used: Skill` grader is reported as whether the skill fired, not scored.
 `--scaffold` runs the rendered script as you; it only writes the fixture's
 files. Every run is a model call, so the test runs only when the operator
 approves it.
+
+A lesson that edits an existing skill does not render: `claude plugin eval`
+drops every plugin from the baseline arm, so the baseline would lack the skill
+as it stood before the lesson and the delta would not be the lesson's. Test it
+by hand, like an `AGENTS.md` lesson below: run the fixture's `prompt` in a fresh
+session over `setup.files` once with the skill as it is and once with the
+diff applied, and check `expect` against both. Only the patched run may pass.
+A pre-lesson baseline mechanism, where the baseline arm loads the skill before
+the lesson and the lesson arm only the edited skill, is a follow-up, built only
+if evals of edit lessons prove worth it.
 
 An `AGENTS.md` lesson has no plugin to load, so `claude plugin eval` cannot
 compare arms. Run its fixture where `AGENTS.md` loads: a fresh session in a
@@ -332,6 +340,8 @@ The schema is settled: a change to it is a schema bump. Every field maps onto a
 - `prompt` is what the operator asked when it went wrong.
 - `before.excerpt` is copied from one of the proposal's evidence blocks.
 - `expect` asserts at least one thing. `loads_skill` is the skill the lesson
-  writes, or `null` for an `AGENTS.md` lesson.
+  writes, or `null` for an `AGENTS.md` lesson. It is not scored, so a fixture
+  with `loads_skill` also sets `must_include`, `must_not_include` or
+  `grader: model`.
 - `grader` is `deterministic` or `model`; a `model` grader is a model call, so its
   `cost` is `billed`. A billed fixture runs only with explicit approval.

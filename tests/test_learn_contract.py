@@ -7,8 +7,6 @@ import sys
 import tempfile
 import unittest
 
-import yaml
-
 from scripts.check_skills import validate_local
 from scripts.crew_doctor import (
     compose_doctor_report,
@@ -297,61 +295,51 @@ class ExperienceLearningTests(unittest.TestCase):
         self.assertEqual(before, snapshot(HARBOR))
         self.assertEqual(2, run(str(LEARN), "--eval-case", str(SKILL_LESSON)).returncode)
 
-    def existing_skill_lesson(self, tmp: str, *, added: list[str], must_include: list[str]) -> pathlib.Path:
-        """The harbor skill lesson rewritten to edit a skill the consumer already has."""
-        consumer = pathlib.Path(tmp) / "harbor"
-        shutil.copytree(HARBOR, consumer)
+    def test_a_fixture_that_only_loads_the_skill_cannot_fail_and_fails_the_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "harbor"
+            shutil.copytree(HARBOR, consumer)
+            fixture = consumer / ".agents/proposals/fixtures/2026-10-26-integration-target.json"
+            data = json.loads(fixture.read_text(encoding="utf-8"))
+            data["expect"]["must_include"] = []
+            fixture.write_text(json.dumps(data), encoding="utf-8")
+            proposal = consumer / SKILL_LESSON.relative_to(HARBOR)
+            messages = [item["message"] for item in check_proposal(proposal) if item["gate"] == "fixture"]
+            self.assertEqual(1, len(messages), messages)
+            self.assertIn("loads_skill is not scored", messages[0])
+            with self.assertRaises(ValueError):
+                eval_case_files(proposal)
+
+    def test_eval_case_refuses_a_lesson_that_edits_an_existing_skill(self) -> None:
         before = ("---\nname: harbor-testing\n"
                   "description: Use when running or reporting on this project's integration tests, before calling "
                   "make test or claiming they passed, so the agent picks the target that starts the database and "
                   "runs them.\ntier: subject\nrequires: []\n---\n\n# harbor-testing\n\n"
                   "- `make test` selects unit tests only; integration tests show as zero collected there.\n")
-        skill = consumer / ".agents/skills/harbor-testing/SKILL.md"
-        skill.parent.mkdir(parents=True)
-        skill.write_text(before, encoding="utf-8")
-        diff = ["--- a/.agents/skills/harbor-testing/SKILL.md", "+++ b/.agents/skills/harbor-testing/SKILL.md",
-                f"@@ -6,5 +6,{7 + len(added)} @@", " ---", " ",
+        edit = ["--- a/.agents/skills/harbor-testing/SKILL.md", "+++ b/.agents/skills/harbor-testing/SKILL.md",
+                "@@ -6,5 +6,8 @@", " ---", " ",
                 "+<!-- crew:learned proposal=2026-10-26-integration-target date=2026-10-26 -->", "+",
                 " # harbor-testing", " ",
                 " - `make test` selects unit tests only; integration tests show as zero collected there.",
-                *(f"+{line}" for line in added)]
-        proposal = consumer / SKILL_LESSON.relative_to(HARBOR)
-        text = proposal.read_text(encoding="utf-8")
-        head, rest = text.split("```diff\n", 1)
-        text = head + "```diff\n" + "\n".join(diff) + "\n```" + rest.split("```", 1)[1]
-        digest = hashlib.sha256(before.encode("utf-8")).hexdigest()
-        proposal.write_text(text.replace("target-sha256: absent", f"target-sha256: {digest}"), encoding="utf-8")
-        fixture = proposal.parent / "fixtures/2026-10-26-integration-target.json"
-        data = json.loads(fixture.read_text(encoding="utf-8"))
-        data["expect"]["must_include"] = must_include
-        fixture.write_text(json.dumps(data), encoding="utf-8")
-        return proposal
-
-    def test_an_existing_skill_lesson_that_changes_nothing_fails_the_fixture_gate(self) -> None:
+                "+- Run integration tests with `make test-integration`, which brings the database up before the suite."]
         with tempfile.TemporaryDirectory() as tmp:
-            proposal = self.existing_skill_lesson(tmp, added=[], must_include=[])
-            messages = [item["message"] for item in check_proposal(proposal) if item["gate"] == "fixture"]
-            self.assertEqual(1, len(messages), messages)
-            self.assertIn("loads_skill alone cannot fail without the lesson", messages[0])
-            with self.assertRaises(ValueError):
-                eval_case_files(proposal)
-
-    def test_an_existing_skill_lesson_puts_the_skill_before_it_in_the_baseline_arm(self) -> None:
-        line = "- Run integration tests with `make test-integration`, which brings the database up before the suite."
-        with tempfile.TemporaryDirectory() as tmp:
-            proposal = self.existing_skill_lesson(tmp, added=[line], must_include=["make test-integration"])
+            consumer = pathlib.Path(tmp) / "harbor"
+            shutil.copytree(HARBOR, consumer)
+            skill = consumer / ".agents/skills/harbor-testing/SKILL.md"
+            skill.parent.mkdir(parents=True)
+            skill.write_text(before, encoding="utf-8")
+            proposal = consumer / SKILL_LESSON.relative_to(HARBOR)
+            head, rest = proposal.read_text(encoding="utf-8").split("```diff\n", 1)
+            text = head + "```diff\n" + "\n".join(edit) + "\n```" + rest.split("```", 1)[1]
+            digest = hashlib.sha256(before.encode("utf-8")).hexdigest()
+            proposal.write_text(text.replace("target-sha256: absent", f"target-sha256: {digest}"), encoding="utf-8")
             self.assertEqual([], check_proposal(proposal))
-            before = (proposal.parents[2] / ".agents/skills/harbor-testing/SKILL.md").read_text(encoding="utf-8")
-            files = eval_case_files(proposal)
-        after = files["skills/harbor-testing/SKILL.md"]
-        self.assertNotIn(line, before)
-        self.assertIn(line, after)
-        case = yaml.safe_load(files["evals/2026-10-26-integration-target/case.yaml"])
-        baseline = case["execution"]["append_system_prompt"]
-        self.assertTrue(baseline.endswith("\n\n" + before))
-        self.assertNotIn(line, baseline)
-        new_skill = yaml.safe_load(eval_case_files(SKILL_LESSON)["evals/2026-10-26-integration-target/case.yaml"])
-        self.assertNotIn("append_system_prompt", new_skill["execution"])  # a new skill's baseline is no skill
+            with self.assertRaises(ValueError) as raised:
+                eval_case_files(proposal)
+            self.assertIn("renders only a new-skill lesson", str(raised.exception))
+            out = pathlib.Path(tmp) / "out"
+            self.assertEqual(1, run(str(LEARN), "--eval-case", str(proposal), "--out", str(out)).returncode)
+            self.assertFalse(out.exists())
 
     def test_apply_diff_applies_a_modification_and_refuses_a_mismatch(self) -> None:
         diff = ["--- a/AGENTS.md", "+++ b/AGENTS.md", "@@ -3,3 +3,4 @@", " ## Testing", "",

@@ -170,7 +170,9 @@ wrong; `setup.files` is the least workspace that reproduces it; `before.excerpt`
 is copied from one of your evidence blocks; `expect` names what the lesson
 changes: `loads_skill` is the target skill (`null` for `AGENTS.md`), and
 `must_include` / `must_not_include` are short literal strings the fixed answer
-does or does not carry. Prefer `grader: deterministic`; every run is a model call,
+does or does not carry. `loads_skill` is not scored, so set at least one of
+them (or `grader: model`). `--eval-case` renders only a new-skill lesson; an
+edit to an existing skill is tested by hand (docs/LEARNING.md). Prefer `grader: deterministic`; every run is a model call,
 so `cost` is `billed`. You write the fixture; you never run it.
 
 A **methodology lesson** carries the text of an issue in one `issue` block and
