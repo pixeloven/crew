@@ -16,6 +16,7 @@ crew/
 ├── docs/capabilities.txt           # capability vocabulary (documented in docs/CAPABILITIES.md)
 ├── templates/AGENTS.md             # the onboarding scaffold (behavioral spine + ▸ Fill blocks)
 ├── templates/local-skills/         # 5 declared slot stubs
+├── templates/capture/              # opt-in hook capture wiring per harness (never auto-loaded)
 ├── scripts/render_roles.py         # role renderer; --check is the CI drift gate
 ├── scripts/role_contract.py        # shared role posture/runtime-knob contract
 ├── scripts/frontmatter.py          # dependency-free leading-frontmatter field parser
@@ -23,6 +24,7 @@ crew/
 ├── scripts/crew_inventory.py       # read-only inventory engine (crew-inventory/1) behind the capability map
 ├── scripts/onboarding_contract.py  # audit/apply lifecycle contract
 ├── scripts/learn_contract.py       # proposal-queue gates + Doctor evidence; docs/LEARNING.md is normative
+├── scripts/learn_capture.py        # opt-in capture hook + the capture A/B report (docs/LEARNING.md, Hook capture)
 ├── scripts/gen_catalog.py          # docs/CATALOG.md generator; --check in CI
 ├── scripts/check_skills.py         # schema-v2 + 110–300 character description gate; --pack, --report-cost, --local
 ├── scripts/check_skill_layout.py   # skill and consumer-role layout/frontmatter gate

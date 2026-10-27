@@ -215,6 +215,13 @@ evidence. Every lesson with a diff carries a fixture that replays the original
 failure; `learn_contract.py --eval-case` renders a new-skill lesson's fixture as
 a `claude plugin eval` case, which the operator runs before promoting it.
 
+An operator can also wire in an opt-in capture hook for Claude Code, Codex or pi
+from `templates/capture/`. It counts failures, denials and corrections, and at the
+end of a turn asks `learn` to draft from them, through the same gates. Crew ships
+it as an A/B against asking by hand: `learn_capture.py --report` compares
+accepted lessons per session, and the hooks stay only if capture raises them.
+See [Hook capture](docs/LEARNING.md#hook-capture).
+
 ## Maintenance
 
 One semver line drives the package and plugin manifests. Edit role sources rather

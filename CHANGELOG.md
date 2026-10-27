@@ -19,6 +19,40 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.64.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** None. Hook capture is opt-in, and Crew registers no hook
+  in any harness.
+
+### Added
+
+- **Hook capture** (#81, phase 2c). `scripts/learn_capture.py --hook` is an
+  opt-in hook for Claude Code, Codex and pi. Wire it in from `templates/capture/`.
+  It counts repeated tool failures, denials and corrections, and at the end of a
+  turn it asks the session's agent to run `learn` on them. It is a trigger, not
+  a drafter: `learn` writes the proposals, in 2a's format, into the declared
+  queue, through every gate. The hook does nothing without a declared queue. It
+  writes only session records under `<queue>/capture/sessions/`, never puts
+  session text in the request it makes, and hands each signal over once.
+  docs/LEARNING.md dates the hook surface each harness exposes and lists the
+  gaps: denials on Codex and pi, and reviewer findings and Doctor drift
+  everywhere.
+- **The capture A/B.** The hook splits sessions by a hash of their id between a
+  `baseline` arm, which only records, and a `capture` arm. `learn_capture.py --report` compares
+  the arms per session on proposals drafted, accepted and promoted, and on the
+  lesson-test pass rate. The rule is to keep the hooks only if capture raises
+  accepted lessons per session. The report prints the numbers and the operator
+  decides from real sessions.
+
+### Changed
+
+- Promotion records a lesson's test result under `## Review` as
+  `lesson-test: pass` or `lesson-test: fail`, which the A/B counts.
+
 ## 0.63.0
 
 ### Consumer impact

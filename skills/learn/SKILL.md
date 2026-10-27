@@ -30,8 +30,9 @@ package root is the contract; `scripts/learn_contract.py` is its executable half
 
 Two sources, one proposal format. **Tools:** the operator names a tool, or you
 start from an inventory gap (below, then sections 3 and 4). **Experience:** the
-operator says "learn from this session", or `plan-validation`'s retro hands you
-its signals (section 2b, then section 3).
+operator says "learn from this session", `plan-validation`'s retro hands you
+its signals, or an opt-in capture hook asks at the end of a turn (section 2b,
+then section 3).
 
 ### 2a. Inventory (tools)
 
@@ -58,7 +59,10 @@ gap row carries a `label` (`fact` or `inference`); keep it in what you report.
 
 ### 2b. Signals (experience)
 
-Read the session, or the tasks the retro names, for these signals:
+Read the session, or the tasks the retro names, for these signals. A capture
+hook's request names signal counts only (docs/LEARNING.md, *Hook capture*): find
+each moment in the session yourself, and treat its counts as candidates, not
+evidence.
 
 | Signal | Counts when | `provenance-source` |
 |---|---|---|
@@ -211,7 +215,8 @@ Promotion is the operator's, never yours. For the operator, in order:
    to an existing skill is tested by hand, as docs/LEARNING.md describes):
    `python3 /abs/crew/scripts/learn_contract.py --eval-case /abs/consumer/repo/<queue>/<id>.md --out /abs/tmp-dir`,
    then `claude plugin eval /abs/tmp-dir/<id> --scaffold`; the no-plugin arm should
-   fail as the evidence did and the plugin arm pass;
+   fail as the evidence did and the plugin arm pass. Record the outcome under
+   `## Review` as `lesson-test: pass` or `lesson-test: fail`;
 3. on a branch, apply the diff (`git apply`, or by hand);
 4. run `python3 /abs/crew/scripts/check_skills.py --local /abs/consumer/repo`
    and `python3 /abs/crew/scripts/check_skill_layout.py /abs/consumer/repo`;

@@ -4,11 +4,13 @@ Crew does not build a second memory: the harness already has one. Crew's job is 
 **promote** what a session learns into instructions that are reviewed, tested and
 versioned. This page is the contract for that promotion. It is normative for every
 phase: the format `learn` drafts from tools (phase 2a) is the format it drafts from
-experience (2b, with lesson-as-test), and the one hook capture (2c, not built) will
+experience (2b, with lesson-as-test), and the one hook capture (2c) has `learn`
 write, so nothing is rebuilt.
 
-`scripts/learn_contract.py` is the executable half of this page. Where the two
-disagree, that is a bug in one of them; fix it, don't pick one.
+`scripts/learn_contract.py` is the executable half of this page, and
+`scripts/learn_capture.py` is the executable half of its
+[Hook capture](#hook-capture) section. Where a page and a script disagree, that
+is a bug in one of them; fix it, don't pick one.
 
 ## The stance
 
@@ -122,8 +124,9 @@ through every gate below.
   from the inventory, `learn` reads the tool's own `--help`, man page or MCP
   schema and how the repository already uses it. `provenance-source: tool:<name>`.
 - **Experience** (phase 2b). The operator asks to learn from a session, or a
-  plan's last validation gate runs its retro (`plan-validation`). `learn` reads the
-  session for these signals:
+  plan's last validation gate runs its retro (`plan-validation`), or an opt-in
+  capture hook asks at the end of a turn ([Hook capture](#hook-capture), phase
+  2c). `learn` reads the session for these signals:
 
   | Signal | What counts | `provenance-source` |
   |---|---|---|
@@ -206,7 +209,9 @@ marker is what makes a learned skill visible to the gates:
    pass briefed to "assume this lesson is wrong".
 2. Run `learn_contract.py --check` on it. Every gate passes.
 3. Run the lesson's test (see [Lesson-as-test](#lesson-as-test)). It is billed, so
-   it runs when you choose to run it; record the result under `## Review`.
+   it runs when you choose to run it; record the result under `## Review` as one
+   line, `lesson-test: pass` or `lesson-test: fail`, which the
+   [capture A/B](#the-capture-ab) counts.
 4. Apply the proposed diff by hand or with `git apply`, on a branch.
 5. Run `check_skills.py --local <consumer-root>` and the project's own gates.
 6. Commit. Set `status: promoted` and `promoted-in: <that commit>`, and commit
@@ -345,3 +350,147 @@ The schema is settled: a change to it is a schema bump. Every field maps onto a
   `grader: model`.
 - `grader` is `deterministic` or `model`; a `model` grader is a model call, so its
   `cost` is `billed`. A billed fixture runs only with explicit approval.
+
+## Hook capture
+
+Phase 2c asks whether `learn` should also run without being asked. An opt-in
+hook watches a session's harness events, counts learning signals, and at the end
+of a turn asks the session's own agent to run `learn` on them. It is an
+experiment, measured by [the capture A/B](#the-capture-ab), and it stays only if
+that measurement shows it earns its place.
+
+**The hook is a trigger, not a drafter.** A `crew-proposal/1` draft needs a
+judged classification, target and diff, which a deterministic hook cannot write.
+So the hook writes no proposal. It hands its signal counts to `learn`, and
+`learn` drafts exactly as it does for an operator who says "learn from this
+session": same format, same queue, same gates, same reviewer pass. Nothing is
+forked.
+
+- **Off by default.** Crew registers no hook in any harness: no plugin
+  `hooks/hooks.json`, no `hooks` key in a manifest, no pi `extensions` entry. An
+  operator wires one in from `templates/capture/`, per harness, below.
+- **No queue, no capture.** With no usable `proposal-queue:` line the hook
+  writes nothing and asks nothing, just as `learn` is then report-only.
+- **Drafts only.** The continuation asks for drafts and says to apply nothing;
+  `learn`'s *Never* list governs the run.
+- **Evidence threshold.** The hook proposes candidates; `learn` decides. A failure
+  qualifies once the same call has failed twice in the session; a denial or a
+  correction qualifies once. Repeats inside one session stay one incident, and a
+  behaviour lesson still needs recurrence across sessions.
+- **Untrusted inputs stay data.** The hook never puts session text in its
+  output. It records signal kinds, counts and hashed keys, and its continuation
+  names counts only, so a planted line in tool output, a prompt or a denial
+  reason cannot reach the agent by way of the hook. The agent finds each moment in
+  its own session and quotes it as evidence, as section 2b of the `learn` skill
+  says.
+- **Once per signal.** Each signal is handed over at most once. The turn the hook
+  continues is never continued again (`stop_hook_active`), so it cannot loop.
+- **It never breaks a session.** The script exits 0 on any error and prints
+  nothing.
+
+The script writes only session records, one JSON file per session, under
+`<queue>/capture/sessions/`. A record holds the session's arm, signal counts,
+triggers and which proposals the session drafted. It is not a proposal, and the
+queue's gates ignore it. The queue is committed content, so the hook refuses to
+write through a symlink anywhere below the project root. A team that keeps learning per-operator gitignores
+`<queue>/capture/` along with the queue.
+
+### Signals each harness exposes
+
+Checked on 2026-10-27 against Claude Code 2.1.311 (`code.claude.com/docs/en/hooks`),
+codex-cli 0.164.0 (its hooks page; `codex features list` shows `hooks` stable) and
+pi 0.87.1 (`docs/extensions.md` and `dist/core/extensions/types.d.ts`).
+
+| Signal | Claude Code | Codex | pi |
+|---|---|---|---|
+| repeated failure | `PostToolUseFailure` | `PostToolUse`; failure read from `tool_response`, whose shape is undocumented | `tool_result` with `isError` |
+| tool denial | `PermissionDenied`, auto-mode classifier denials only | gap: `PermissionRequest` reports no outcome | gap: no built-in permission prompt |
+| correction | `UserPromptSubmit`, heuristic | `UserPromptSubmit`, heuristic | `input`, heuristic |
+| reviewer finding, Doctor drift | gap | gap | gap |
+| end of turn | `Stop` → `decision: block` | `Stop` → `decision: block` | `agent_before_settle` → `continue: true` |
+
+A correction is a later operator turn that opens like one ("no", "don't",
+"actually", "why did you", …). That is an inference, so the hook hands it to
+`learn` as a candidate and `learn` confirms or drops it. A gap is left to the
+operator and the `plan-validation` retro, which see what no hook does; the hook
+invents no mechanism for it. Codex failure reading is best-effort until a live
+Codex session confirms the `tool_response` shape. Pi has no `Stop`; the
+extension maps `agent_before_settle`, pi's last boundary at which a run can
+continue, onto it.
+
+### Wiring it in
+
+Every template calls `python3 <crew-root>/scripts/learn_capture.py --hook
+--harness <harness>`. Replace `/ABSOLUTE/CREW/ROOT` with the resolved
+Crew package root, as `learn` resolves it.
+
+- **Claude Code.** Merge `templates/capture/claude-settings.json` into
+  `.claude/settings.local.json` (this operator, this project) or
+  `~/.claude/settings.json` (every project). Committing it to
+  `.claude/settings.json` opts in the whole team.
+- **Codex.** Merge `templates/capture/codex-hooks.json` into
+  `~/.codex/hooks.json` or the project's `.codex/hooks.json`. Codex runs a hook
+  only after you trust it in `/hooks`, and a project's hooks only in a trusted
+  project.
+- **pi.** Load `templates/capture/pi-crew-capture.ts` from the installed Crew
+  package, with `pi --extension <path>` or an `extensions` entry in pi's
+  settings. It finds the script beside itself; `CREW_CAPTURE_SCRIPT` overrides
+  that path.
+
+The hook splits sessions between the arms by a hash of the session id, so a
+session keeps one arm throughout.
+
+## The capture A/B
+
+The question is whether automatic capture raises accepted lessons enough to
+justify a hook per harness. The A/B answers it from real sessions, not a claim.
+
+| Arm | What happens |
+|---|---|
+| `baseline` | phase 2b only: the operator asks, or the retro hands over. The hook records the session and its signals and never asks. |
+| `capture` | phase 2b, plus the hook asks `learn` at the end of a turn with new signals. |
+
+Both arms run the same script, so every session in either arm is counted,
+including sessions that learned nothing. The hook attributes each new proposal
+in the queue to its session: `capture` when it appeared during a continuation the
+hook asked for, `session` otherwise. Signals recorded during that continuation
+are `learn`'s own run, so they are never handed over again. An operator prompt
+ends the continuation, even when an interrupt kept its end of turn from firing.
+
+```sh
+python3 <crew-root>/scripts/learn_capture.py --report <consumer-root> --format markdown
+```
+
+The report is read-only. Per arm it gives:
+
+| Metric | From |
+|---|---|
+| sessions, signals, capture triggers | the session records; signals leave out those recorded during a continuation the hook asked for |
+| proposals drafted, per session, by trigger | the session records' attributed proposals |
+| accepted, per session | attributed proposals now `reviewed` or `promoted`, or with `promoted-in` set |
+| promoted, per session | attributed proposals now `promoted`, or with `promoted-in` set |
+| lesson-test pass rate | `lesson-test: pass` / `fail` lines under `## Review` |
+
+It also lists proposals drafted outside any recorded session, and the
+difference in accepted lessons per session, capture minus baseline.
+
+**Decision rule.** Keep the hooks only if the capture arm's accepted lessons per
+session exceed the baseline arm's. The script computes the numbers; it never
+makes the call, because the operator decides, from real sessions. Before
+deciding, each arm needs enough sessions that one lesson more or less would not
+flip the difference, and every attributed proposal needs a verdict.
+
+**Where results land.** Session records live in `<queue>/capture/sessions/`.
+Save the report beside them as `<queue>/capture/report-<YYYY-MM-DD>.md`, and
+share it where the keep-or-drop decision is tracked (for Crew's hooks, #81). A
+drop removes the hook wiring; the records and proposals stay.
+
+Known limits: two sessions in one checkout at once can attribute each other's
+proposals, and the report counts such a proposal once, for the first session
+record (in sorted order) that lists it. A proposal that arrives by a pull, a
+merge or a branch switch is not attributed, because the hook skips any id
+already tracked in the project's git `HEAD`; a draft committed before the
+session's next end of turn is skipped the same way and shows as unattributed.
+Extending an existing proposal adds no new id, so it is not counted
+as drafted. A session whose `SessionStart` hook did not run counts from its
+first recorded event.
