@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {"hooks": [{"type": "command", "command": "python3 /ABSOLUTE/CREW/ROOT/scripts/learn_capture.py --hook --harness claude --mode ab", "timeout": 10}]}
+    ],
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": "python3 /ABSOLUTE/CREW/ROOT/scripts/learn_capture.py --hook --harness claude --mode ab", "timeout": 10}]}
+    ],
+    "PostToolUseFailure": [
+      {"hooks": [{"type": "command", "command": "python3 /ABSOLUTE/CREW/ROOT/scripts/learn_capture.py --hook --harness claude --mode ab", "timeout": 10}]}
+    ],
+    "PermissionDenied": [
+      {"hooks": [{"type": "command", "command": "python3 /ABSOLUTE/CREW/ROOT/scripts/learn_capture.py --hook --harness claude --mode ab", "timeout": 10}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": "python3 /ABSOLUTE/CREW/ROOT/scripts/learn_capture.py --hook --harness claude --mode ab", "timeout": 10}]}
+    ]
+  }
+}
