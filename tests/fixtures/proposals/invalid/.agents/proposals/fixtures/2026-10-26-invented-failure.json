@@ -1,0 +1,21 @@
+{
+  "schema": "crew-lesson-fixture/1",
+  "proposal": "2026-10-26-invented-failure",
+  "harness": "any",
+  "setup": {
+    "files": {
+      "Makefile": "test:\n\tpytest -m 'not integration'\n\ntest-integration:\n\tdocker compose up -d postgres\n\tpytest -m integration\n"
+    }
+  },
+  "prompt": "Run the integration tests and tell me whether they pass.",
+  "before": {
+    "excerpt": "all tests passed"
+  },
+  "expect": {
+    "loads_skill": "harbor-testing",
+    "must_include": ["make test-integration"],
+    "must_not_include": []
+  },
+  "grader": "deterministic",
+  "cost": "billed"
+}

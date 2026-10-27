@@ -16,17 +16,22 @@ from scripts.crew_doctor import (
 from scripts.learn_contract import (
     BANNER,
     FIXTURE_SCHEMA,
+    LESSON_TEST_FROM,
     TRANSITIONS,
+    apply_diff,
     check_fixture,
     check_proposal,
     check_queue,
     check_transition,
     context_leaks,
+    eval_case_files,
     git_remote_slugs,
     inspect_proposals,
     learned_markers,
+    needs_lesson_test,
     queue_location,
     queue_location_errors,
+    render_eval_case,
     verbatim_copies,
 )
 from scripts.onboarding_contract import (
@@ -43,6 +48,10 @@ ORCHARD = FIXTURES / "orchard"
 QUEUE = ORCHARD / ".agents/proposals"
 VALID = QUEUE / "2026-10-21-gh-pr-checks.md"
 INVALID = FIXTURES / "invalid/.agents/proposals"
+HARBOR = FIXTURES / "harbor"
+HARBOR_QUEUE = HARBOR / ".agents/proposals"
+SKILL_LESSON = HARBOR_QUEUE / "2026-10-26-integration-target.md"
+BEHAVIOUR_LESSON = HARBOR_QUEUE / "2026-10-26-lint-before-review.md"
 TEMPLATE = (ROOT / "templates/AGENTS.md").read_text(encoding="utf-8")
 LEARN = ROOT / "scripts/learn_contract.py"
 
@@ -84,6 +93,9 @@ class ProposalGateTests(unittest.TestCase):
             "2026-10-21-recurrence-skipped.md": ("classification", "needs recurrence"),
             "2026-10-21-unmarked-promotion.md": ("learned-marker", "carries no crew:learned marker"),
             "2026-10-21-bad-fixture.md": ("fixture", "a model grader is a model call"),
+            "2026-10-26-untested-lesson.md": ("fixture", "carries its test"),
+            "2026-10-26-unbacked-recurrence.md": ("classification", "each incident counted carries its own evidence"),
+            "2026-10-26-invented-failure.md": ("fixture", "before.excerpt is not in any evidence block"),
         }
         self.assertEqual(set(expected), {path.name for path in INVALID.glob("*.md")})
         for name, (gate, message) in expected.items():
@@ -180,12 +192,12 @@ class ProposalGateTests(unittest.TestCase):
         self.assertEqual(frozenset(), TRANSITIONS["rejected"])
         self.assertEqual(frozenset(), TRANSITIONS["superseded"])
 
-    def test_fixture_schema_is_provisional_and_documented(self) -> None:
+    def test_fixture_schema_is_settled_and_documented(self) -> None:
         self.assertEqual("crew-lesson-fixture/1", FIXTURE_SCHEMA)
         self.assertEqual([], check_fixture(QUEUE / "fixtures/2026-10-21-gh-pr-checks.json", "2026-10-21-gh-pr-checks"))
         doc = (ROOT / "docs/LEARNING.md").read_text(encoding="utf-8")
-        self.assertIn("PROVISIONAL", doc)
-        self.assertIn("#72", doc)
+        self.assertNotIn("PROVISIONAL", doc)
+        self.assertIn("claude plugin eval", doc)
         self.assertIn(BANNER, doc)
 
     def test_check_reads_only(self) -> None:
@@ -193,6 +205,106 @@ class ProposalGateTests(unittest.TestCase):
         check_queue(QUEUE)
         check_queue(INVALID)
         self.assertEqual(before, snapshot(FIXTURES))
+
+
+class ExperienceLearningTests(unittest.TestCase):
+    """Phase 2b: lessons from a session, recurrence backed by evidence, lesson-as-test."""
+
+    def test_experience_lessons_pass_every_gate(self) -> None:
+        results = check_queue(HARBOR_QUEUE)
+        self.assertEqual(3, len(results))  # queue-level + two proposals
+        for path, found in results.items():
+            with self.subTest(path=path):
+                self.assertEqual([], found)
+
+    def test_lesson_as_test_applies_from_phase_2b_to_lessons_with_a_diff(self) -> None:
+        current = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
+        self.assertLessEqual(LESSON_TEST_FROM, tuple(int(part) for part in current.split(".")))
+        lesson = {"status": "reviewed", "classification": "project-fact", "provenance-crew": "0.63.0"}
+        self.assertTrue(needs_lesson_test(lesson))
+        self.assertTrue(needs_lesson_test({**lesson, "status": "promoted", "classification": "tool"}))
+        self.assertFalse(needs_lesson_test({**lesson, "status": "draft"}))  # drafted, not yet reviewed
+        self.assertFalse(needs_lesson_test({**lesson, "classification": "methodology"}))
+        self.assertFalse(needs_lesson_test({**lesson, "provenance-crew": "0.42.0"}))  # 2a, grandfathered
+        self.assertEqual([], check_proposal(QUEUE / "2026-10-02-gh-run-logs.md"))  # a 2a promotion stays valid
+
+    def test_a_fixture_must_load_the_skill_its_lesson_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            consumer = pathlib.Path(tmp) / "harbor"
+            shutil.copytree(HARBOR, consumer)
+            fixture = consumer / ".agents/proposals/fixtures/2026-10-26-integration-target.json"
+            fixture.write_text(fixture.read_text(encoding="utf-8").replace('"harbor-testing"', '"harbor-other"'),
+                               encoding="utf-8")
+            messages = [item["message"] for item in check_proposal(consumer / SKILL_LESSON.relative_to(HARBOR))]
+        self.assertTrue(any("lesson targets skill 'harbor-testing'" in m for m in messages), messages)
+
+    def test_eval_case_renders_the_skill_the_diff_writes_and_one_free_grader_per_expectation(self) -> None:
+        files = eval_case_files(SKILL_LESSON)
+        self.assertEqual(
+            {".claude-plugin/plugin.json", "skills/harbor-testing/SKILL.md",
+             "evals/2026-10-26-integration-target/case.yaml", "evals/2026-10-26-integration-target/scaffold.sh"},
+            set(files),
+        )
+        skill = files["skills/harbor-testing/SKILL.md"]
+        self.assertTrue(skill.startswith("---\nname: harbor-testing\n"))
+        self.assertIn("<!-- crew:learned proposal=2026-10-26-integration-target date=2026-10-26 -->", skill)
+        case = files["evals/2026-10-26-integration-target/case.yaml"]
+        for line in ('schema_version: "1.1"', 'name: "2026-10-26-integration-target"',
+                     'prompt: "Run the integration tests and tell me whether they pass."',
+                     'scaffold_script: "scaffold.sh"', 'type: "tool_used"', 'tool: "Skill"',
+                     'pattern: "make test-integration"'):
+            with self.subTest(line=line):
+                self.assertIn(line, case)
+        self.assertNotIn('type: "llm"', case)  # a deterministic fixture costs only the runs
+        self.assertEqual("lesson-harbor-testing",
+                         json.loads(files[".claude-plugin/plugin.json"])["name"])
+
+    def test_the_scaffold_recreates_the_fixture_workspace(self) -> None:
+        setup = json.loads((HARBOR_QUEUE / "fixtures/2026-10-26-integration-target.json").read_text())["setup"]["files"]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = render_eval_case(SKILL_LESSON, pathlib.Path(tmp) / "out")
+            workspace = pathlib.Path(tmp) / "workspace"
+            workspace.mkdir()
+            script = out / "evals/2026-10-26-integration-target/scaffold.sh"
+            completed = subprocess.run(["bash", str(script)], cwd=workspace, capture_output=True, text=True,
+                                       check=False)
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertEqual(setup, {name: (workspace / name).read_text() for name in setup})
+            with self.assertRaises(ValueError):  # never into an existing directory
+                render_eval_case(SKILL_LESSON, pathlib.Path(tmp) / "out")
+
+    def test_eval_case_refuses_what_it_cannot_test(self) -> None:
+        for path, phrase in (
+            (BEHAVIOUR_LESSON, "only a skill lesson renders"),
+            (QUEUE / "2026-10-21-review-before-retro.md", "only a skill lesson renders"),
+            (QUEUE / "2026-10-21-draft-pr-first.md", "only a skill lesson renders"),
+            (INVALID / "2026-10-26-invented-failure.md", "fails its gates"),
+        ):
+            with self.subTest(path=path.name):
+                with self.assertRaises(ValueError) as raised:
+                    eval_case_files(path)
+                self.assertIn(phrase, str(raised.exception))
+
+    def test_eval_case_is_read_only_on_the_queue_and_cli_needs_out(self) -> None:
+        before = snapshot(HARBOR)
+        with tempfile.TemporaryDirectory() as tmp:
+            completed = run(str(LEARN), "--eval-case", str(SKILL_LESSON), "--out", tmp)
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+            self.assertIn("claude plugin eval", completed.stdout)
+            self.assertTrue((pathlib.Path(tmp) / "2026-10-26-integration-target/evals/"
+                             "2026-10-26-integration-target/case.yaml").is_file())
+        self.assertEqual(before, snapshot(HARBOR))
+        self.assertEqual(2, run(str(LEARN), "--eval-case", str(SKILL_LESSON)).returncode)
+
+    def test_apply_diff_applies_a_modification_and_refuses_a_mismatch(self) -> None:
+        diff = ["--- a/AGENTS.md", "+++ b/AGENTS.md", "@@ -3,3 +3,4 @@", " ## Testing", "",
+                " - Run the suite with `make test`.", "+- Run `make lint` too."]
+        agents = (HARBOR / "AGENTS.md").read_text(encoding="utf-8")
+        applied = apply_diff(agents, diff)
+        self.assertIn("- Run the suite with `make test`.\n- Run `make lint` too.\n", applied)
+        self.assertEqual(agents.count("\n") + 1, applied.count("\n"))
+        with self.assertRaises(ValueError):
+            apply_diff(agents.replace("make test", "make check"), diff)
 
 
 class QueueLocationTests(unittest.TestCase):
@@ -295,6 +407,12 @@ class DoctorProposalTests(unittest.TestCase):
             rows = self.rows(consumer, gh="2.81.0")
         self.assertEqual("DEGRADED", rows["proposals.staleness"]["status"])
         self.assertIn("2026-10-21-draft-pr-first: AGENTS.md changed", rows["proposals.staleness"]["fact"])
+
+    def test_experience_lessons_count_like_any_other(self) -> None:
+        rows = self.rows(HARBOR)
+        self.assertEqual("OK", rows["proposals.queue"]["status"])
+        self.assertIn("1 reviewed", rows["proposals.queue"]["fact"])
+        self.assertEqual("OK", rows["proposals.staleness"]["status"])
 
     def test_undeclared_queue_is_not_applicable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

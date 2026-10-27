@@ -13,7 +13,7 @@ import tempfile
 import unittest
 
 from scripts.frontmatter import read_frontmatter
-from scripts.learn_contract import inspect_proposals
+from scripts.learn_contract import PROVENANCE_SOURCE, inspect_proposals
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -22,8 +22,9 @@ FLAG = re.compile(r"(?<![\w-])(--[a-z][a-z0-9-]*)")
 SCRIPT = re.compile(r"scripts/([a-z_]+\.py)")
 FENCED = re.compile(r"^```[^\n]*\n(.*?)^```", re.DOTALL | re.MULTILINE)
 INLINE = re.compile(r"`([^`]+)`")
-# Flags of the tool being learned, not of a Crew script (`<tool> --version`).
-TOOL_FLAGS = {"--version"}
+# Flags of the tool being learned (`<tool> --version`) or of the eval runner
+# (`claude plugin eval --scaffold`), not of a Crew script.
+TOOL_FLAGS = {"--version", "--scaffold"}
 
 
 def body() -> str:
@@ -108,6 +109,38 @@ class LearnSkillContractTests(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertIn(kind, text)
                 self.assertIn(f'"{kind}"', inventory)
+
+
+    def test_experience_signals_map_to_provenance_sources_the_contract_accepts(self) -> None:
+        text = body()
+        doc = (ROOT / "docs/LEARNING.md").read_text(encoding="utf-8")
+        for signal, source in (("correction", "session"), ("repeated failure", "session"),
+                               ("tool denial", "denial"), ("reviewer finding", "review"),
+                               ("Doctor drift", "doctor")):
+            row = re.compile(rf"^ *\| {signal} \|.*\| `{source}` \|$", re.MULTILINE)
+            with self.subTest(signal=signal):
+                self.assertRegex(text, row)
+                self.assertRegex(doc, row)
+                self.assertTrue(PROVENANCE_SOURCE.match(source))
+
+    def test_lesson_as_test_is_drafted_but_never_run_by_the_agent(self) -> None:
+        text = body()
+        self.assertIn("Lesson-as-test", text)
+        self.assertIn("--eval-case", text)
+        self.assertIn("You write the fixture; you never run it.", text)
+        self.assertIn("run a fixture or `claude plugin eval` unasked", text)
+
+
+    def test_plan_validation_retro_hands_every_signal_to_learn_and_never_holds_a_gate(self) -> None:
+        retro = (ROOT / "skills/plan-validation/SKILL.md").read_text(encoding="utf-8").split("## Retro", 1)[1]
+        self.assertIn("`learn`", retro)
+        self.assertTrue((ROOT / "skills/learn/SKILL.md").is_file())
+        for signal in ("corrections", "failed more than once", "tool denials", "reviewer findings", "Doctor rows"):
+            with self.subTest(signal=signal):
+                self.assertIn(signal, retro)
+        self.assertIn("after any\nreviewer pass", retro)
+        self.assertIn("never holds a gate", retro)
+        self.assertIn("**Retro:**", retro)
 
 
 if __name__ == "__main__":

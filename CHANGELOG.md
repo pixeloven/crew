@@ -19,6 +19,51 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.63.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** Before you set a lesson drafted by Crew 0.63.0 or later
+  to `reviewed` or `promoted`, give it a fixture, unless it is a methodology
+  lesson. Lessons drafted earlier keep the fixture optional. `--check` now also
+  fails a proposal whose `occurrences` exceeds its evidence blocks, and a fixture
+  whose `before.excerpt` is not in the proposal's evidence. Rerun
+  `learn_contract.py --check` on your queue after the bump.
+
+### Added
+
+- **Experience learning** (#81, phase 2b). `learn` takes a second source: the
+  operator asks it to learn from a session, or `plan-validation`'s retro hands it
+  the plan's signals. Signals are corrections, repeated failures, tool denials,
+  reviewer findings and Doctor drift, each recorded as its own evidence block
+  under `provenance-source` `session`, `denial`, `review` or `doctor`. The
+  proposal format is 2a's, unchanged.
+- **The `plan-validation` retro.** When a plan's last gate passes, after any
+  reviewer pass, the retro lists the plan's signals, hands them to `learn` and
+  records `**Retro:** <proposal ids>` or `no lessons` in the gate record. It
+  never holds a gate.
+- **Lesson-as-test.** Every lesson with a diff carries a
+  `crew-lesson-fixture/1` fixture that replays the original failure.
+  `learn_contract.py --eval-case <proposal> --out <dir>` renders a skill lesson
+  and its fixture as a `claude plugin eval` plugin. Under the default
+  with-without ablation, the no-plugin arm replays the failure and the plugin arm
+  shows the fix. It reruns every gate first, writes only under `<dir>`, and runs
+  nothing; an eval is billed, so the operator runs it.
+
+### Changed
+
+- `crew-lesson-fixture/1` is no longer provisional. Its shape is unchanged, and
+  docs/LEARNING.md maps each field to a `claude plugin eval` grader.
+- New `learn_contract.py --check` findings: `[classification]` when
+  `occurrences` exceeds the evidence blocks; `[fixture]` when `before.excerpt`
+  is not recorded evidence, when `expect.loads_skill` is not the skill the
+  lesson writes, or when a 0.63.0+ lesson with a diff is `reviewed` or
+  `promoted` without a fixture.
+- The `reviewer` role checks that a lesson's fixture replays the recorded
+  failure and would fail without the lesson.
+
 ## 0.62.0
 
 ### Consumer impact
