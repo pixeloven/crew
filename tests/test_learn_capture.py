@@ -168,6 +168,14 @@ class TriggerTests(unittest.TestCase):
             self.assertIsNone(project.send("Stop", stop_hook_active=False))  # already handed over
             self.assertEqual(1, len(project.record()["triggers"]))
 
+    def test_the_same_command_repeats_whatever_description_the_model_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Project(tmp)
+            for description in ("Run the tests", "Run the tests again"):
+                project.send("PostToolUseFailure", tool_name="Bash",
+                             tool_input={"command": "make test", "description": description}, error="Exit code 1")
+            self.assertEqual("block", project.send("Stop", stop_hook_active=False)["decision"])
+
     def test_the_continuation_carries_no_session_text(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             project = Project(tmp)
@@ -452,7 +460,7 @@ const fail = { type: "tool_result", toolName: "bash", input: { command: "make" }
 handlers.session_start({ type: "session_start", reason: "startup" }, ctx);
 handlers.tool_result(fail, ctx);
 handlers.tool_result(fail, ctx);
-const settle = { type: "agent_before_settle", context: { canContinue: true } };
+const settle = { type: "agent_before_settle", context: { canContinue: false } };
 const first = handlers.agent_before_settle(settle, ctx);
 const second = handlers.agent_before_settle(settle, ctx);
 console.log(JSON.stringify({ first, second }));

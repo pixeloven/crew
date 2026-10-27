@@ -87,6 +87,14 @@ def _digest(*parts: Any) -> str:
     return hashlib.sha256(json.dumps(parts, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
+def call_input(event: dict[str, Any]) -> Any:
+    """The call's input without free text the model rewrites on a retry (Claude Code's Bash description)."""
+    tool_input = event.get("tool_input")
+    if isinstance(tool_input, dict):
+        return {key: value for key, value in tool_input.items() if key != "description"}
+    return tool_input
+
+
 def assign_arm(session_id: str) -> str:
     """Split sessions between the arms by a hash of their id: stable for a session."""
     return ARMS[int(hashlib.sha256(session_id.encode()).hexdigest()[:8], 16) % 2]
@@ -240,9 +248,9 @@ def apply_event(
             record_signal(record, "correction", f"correction-{record['prompts']}")
     elif name in {"PostToolUse", "PostToolUseFailure"} and tool_failed(event):
         record_signal(record, "repeated-failure",
-                      "failure-" + _digest(event.get("tool_name"), event.get("tool_input")))
+                      "failure-" + _digest(event.get("tool_name"), call_input(event)))
     elif name == "PermissionDenied":
-        record_signal(record, "denial", "denial-" + _digest(event.get("tool_name"), event.get("tool_input")))
+        record_signal(record, "denial", "denial-" + _digest(event.get("tool_name"), call_input(event)))
     elif name == "Stop":
         return stop(record, event, root, queue)
     return None

@@ -56,7 +56,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("agent_before_settle", (event, ctx) => {
     const output = send(ctx, { hook_event_name: "Stop", stop_hook_active: continued });
-    if (output?.decision === "block" && typeof output.reason === "string" && event.context.canContinue) {
+    if (output?.decision === "block" && typeof output.reason === "string") {
       continued = true;
       return {
         entries: [{ type: "custom_message", customType: "crew-capture", content: output.reason, display: true }],
