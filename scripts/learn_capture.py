@@ -68,6 +68,7 @@ CORRECTION = re.compile(
 )
 EXIT_CODE = re.compile(r"^\s*Exit code:?\s*(-?\d+)", re.IGNORECASE)
 SAFE_ID = re.compile(r"[^A-Za-z0-9._-]+")
+CONTINUATION_OPENING = "Crew capture (docs/LEARNING.md, Hook capture):"
 LESSON_TEST = re.compile(r"^lesson-test:[ \t]*(pass|fail)\b", re.MULTILINE)
 
 
@@ -162,7 +163,9 @@ def tool_failed(event: dict[str, Any]) -> bool:
 
 
 def record_signal(record: dict[str, Any], kind: str, key: str) -> None:
-    signal = record["signals"].setdefault(key, {"kind": kind, "count": 0, "handed": False})
+    signal = record["signals"].setdefault(
+        key, {"kind": kind, "count": 0, "handed": False, "continuation": record["pending-trigger"]},
+    )
     signal["count"] += 1
     if record["pending-trigger"]:  # `learn`'s own run, which the hook asked for, is not a signal.
         signal["handed"] = True
@@ -192,7 +195,7 @@ def continuation(record: dict[str, Any], keys: list[str]) -> str:
     }
     found = "; ".join(f"{count} {named[kind]}" for kind, count in counts.items() if count)
     return (
-        "Crew capture (docs/LEARNING.md, Hook capture): this session recorded learning-signal "
+        f"{CONTINUATION_OPENING} this session recorded learning-signal "
         f"candidates since the last capture: {found}. Run the `learn` skill's experience source "
         "on them now: find each moment in this session yourself, drop candidates as its section 2b "
         "says, and draft any lesson that survives into the declared proposal queue through every "
@@ -231,6 +234,8 @@ def apply_event(
     if name == "UserPromptSubmit":
         record["prompts"] += 1
         prompt = event.get("prompt")
+        if not (isinstance(prompt, str) and prompt.startswith(CONTINUATION_OPENING)):
+            record["pending-trigger"] = False
         if record["prompts"] > 1 and isinstance(prompt, str) and CORRECTION.match(prompt):
             record_signal(record, "correction", f"correction-{record['prompts']}")
     elif name in {"PostToolUse", "PostToolUseFailure"} and tool_failed(event):
@@ -418,7 +423,9 @@ def build_report(consumer_root: pathlib.Path) -> dict[str, Any]:
         arms[arm] = {
             "sessions": sessions,
             "harnesses": sorted({record.get("harness", "") for record in mine}),
-            "signals": sum(len(record.get("signals", {})) for record in mine),
+            "signals": sum(
+                not signal.get("continuation") for record in mine for signal in record.get("signals", {}).values()
+            ),
             "triggers": sum(len(record.get("triggers", [])) for record in mine),
             **total,
             "by-trigger": by_trigger,

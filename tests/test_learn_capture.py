@@ -203,6 +203,28 @@ class TriggerTests(unittest.TestCase):
             project.fail(command="make lint")
             self.assertEqual("block", project.send("Stop", stop_hook_active=False)["decision"])
 
+    def test_an_operator_prompt_ends_an_interrupted_continuation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Project(tmp)
+            project.send("UserPromptSubmit", prompt="run the tests")
+            project.fail()
+            project.fail()
+            reason = project.send("Stop")["reason"]
+            # A harness that delivers the continuation as a prompt does not end it.
+            project.send("UserPromptSubmit", prompt=reason)
+            project.fail(command="python3 scripts/learn_contract.py --check draft.md")
+            project.fail(command="python3 scripts/learn_contract.py --check draft.md")
+            # The operator interrupts the requested learn run, so no Stop fires, and corrects the agent.
+            project.send("UserPromptSubmit", prompt="no, that's the wrong file")
+            project.draft("2026-10-27-asked")
+            output = project.send("Stop", stop_hook_active=False)
+            self.assertEqual("block", output["decision"])
+            self.assertIn("1 operator turn(s) that read like a correction", output["reason"])
+            self.assertNotIn("failed more than once", output["reason"])
+            self.assertEqual({"2026-10-27-asked": "session"}, project.record()["proposals"])
+            # The learn run's own failure is not a recorded signal in the report.
+            self.assertEqual(2, build_report(project.root)["arms"]["capture"]["signals"])
+
     def test_the_baseline_arm_records_signals_and_never_blocks(self) -> None:
         baseline = session_in("baseline", "s")
         with tempfile.TemporaryDirectory() as tmp:

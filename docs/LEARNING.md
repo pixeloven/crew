@@ -454,7 +454,8 @@ Both arms run the same script, so every session in either arm is counted,
 including sessions that learned nothing. The hook attributes each new proposal
 in the queue to its session: `capture` when it appeared during a continuation the
 hook asked for, `session` otherwise. Signals recorded during that continuation
-are `learn`'s own run, so they are never handed over again.
+are `learn`'s own run, so they are never handed over again. An operator prompt
+ends the continuation, even when an interrupt kept its end of turn from firing.
 
 ```sh
 python3 <crew-root>/scripts/learn_capture.py --report <consumer-root> --format markdown
@@ -464,7 +465,7 @@ The report is read-only. Per arm it gives:
 
 | Metric | From |
 |---|---|
-| sessions, signals, capture triggers | the session records |
+| sessions, signals, capture triggers | the session records; signals leave out those recorded during a continuation the hook asked for |
 | proposals drafted, per session, by trigger | the session records' attributed proposals |
 | accepted, per session | attributed proposals now `reviewed` or `promoted`, or with `promoted-in` set |
 | promoted, per session | attributed proposals now `promoted`, or with `promoted-in` set |
