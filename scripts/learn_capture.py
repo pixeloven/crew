@@ -249,10 +249,20 @@ def stop(record: dict[str, Any], event: dict[str, Any], queue: pathlib.Path) -> 
 
 
 @contextlib.contextmanager
-def locked_record(path: pathlib.Path):
-    """Open a session record under an exclusive lock; tool hooks can run in parallel."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
+def locked_record(root: pathlib.Path, path: pathlib.Path):
+    """Open a session record under an exclusive lock; tool hooks can run in parallel.
+
+    The queue is committed project content, so a hostile checkout could plant a
+    symlink in it to aim this write outside the project. No component below the
+    project root, nor the record itself, may be a symlink.
+    """
+    directory = root
+    for part in path.relative_to(root).parent.parts:
+        directory = directory / part
+        if directory.is_symlink():
+            raise OSError(f"{directory} is a symlink; capture writes only inside the project")
+        directory.mkdir(exist_ok=True)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o644)
     try:
         if fcntl is not None:
             fcntl.flock(fd, fcntl.LOCK_EX)
@@ -271,9 +281,9 @@ def handle_event(event: dict[str, Any], *, harness: str, mode: str) -> dict[str,
     resolved = resolve_queue(cwd)
     if resolved is None:
         return None
-    _, queue = resolved
+    root, queue = resolved
     name = f"{harness}-{SAFE_ID.sub('-', session_id).strip('-.')[:96]}.json"
-    with locked_record(sessions_dir(queue) / name) as handle:
+    with locked_record(root, sessions_dir(queue) / name) as handle:
         text = handle.read()
         try:
             record = json.loads(text) if text.strip() else None

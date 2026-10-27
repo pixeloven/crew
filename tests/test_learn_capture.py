@@ -124,6 +124,25 @@ class OptInTests(unittest.TestCase):
             self.assertEqual({"": []}, check_queue(project.queue, root=project.root))
 
 
+    def test_a_symlink_in_the_queue_never_aims_the_write_outside_the_project(self) -> None:
+        for planted in ("capture", "capture/sessions", "capture/sessions/claude-s1.json"):
+            with self.subTest(planted=planted), tempfile.TemporaryDirectory() as tmp, \
+                    tempfile.TemporaryDirectory() as outside:
+                project = Project(tmp)
+                link = project.queue / planted
+                link.parent.mkdir(parents=True, exist_ok=True)
+                target = pathlib.Path(outside) / "victim"
+                if planted.endswith(".json"):
+                    target.write_text("keep", encoding="utf-8")
+                else:
+                    target.mkdir()
+                link.symlink_to(target)
+                before = snapshot(pathlib.Path(outside))
+                self.assertEqual("", run_hook("claude", "capture", json.dumps(
+                    {"session_id": "s1", "cwd": tmp, "hook_event_name": "SessionStart"})))
+                self.assertEqual(before, snapshot(pathlib.Path(outside)))
+
+
 class TriggerTests(unittest.TestCase):
     def test_a_repeated_failure_triggers_learn_once(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

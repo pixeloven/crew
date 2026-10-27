@@ -391,7 +391,8 @@ forked.
 The script writes only session records, one JSON file per session, under
 `<queue>/capture/sessions/`. A record holds the session's arm, signal counts,
 triggers and which proposals the session drafted. It is not a proposal, and the
-queue's gates ignore it. A team that keeps learning per-operator gitignores
+queue's gates ignore it. The queue is committed content, so the hook refuses to
+write through a symlink anywhere below the project root. A team that keeps learning per-operator gitignores
 `<queue>/capture/` along with the queue.
 
 ### Signals each harness exposes
