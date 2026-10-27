@@ -212,8 +212,8 @@ it the plan's signals, and `learn` drafts the same proposals from experience:
 operator corrections, repeated failures, tool denials, reviewer findings and
 Doctor drift. A behaviour lesson needs two separate incidents, each with its own
 evidence. Every lesson with a diff carries a fixture that replays the original
-failure; `learn_contract.py --eval-case` renders a skill lesson's fixture as a
-`claude plugin eval` case, which the operator runs before promoting it.
+failure; `learn_contract.py --eval-case` renders a new-skill lesson's fixture as
+a `claude plugin eval` case, which the operator runs before promoting it.
 
 ## Maintenance
 

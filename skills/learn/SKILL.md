@@ -207,7 +207,8 @@ Promotion is the operator's, never yours. For the operator, in order:
 
 1. confirm `verdict: accept` and that `learn_contract.py --check` passes, then set
    `status: reviewed`;
-2. for a skill lesson, run its test when they choose to pay for it:
+2. for a new-skill lesson, run its test when they choose to pay for it (an edit
+   to an existing skill is tested by hand, as docs/LEARNING.md describes):
    `python3 /abs/crew/scripts/learn_contract.py --eval-case /abs/consumer/repo/<queue>/<id>.md --out /abs/tmp-dir`,
    then `claude plugin eval /abs/tmp-dir/<id> --scaffold`; the no-plugin arm should
    fail as the evidence did and the plugin arm pass;
