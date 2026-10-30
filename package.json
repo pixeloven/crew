@@ -1,6 +1,6 @@
 {
   "name": "@pixeloven/crew",
-  "version": "0.64.0",
+  "version": "0.65.0",
   "description": "Portable cross-project agent foundation: a methodology skill catalogue and an onboarding scaffold/skill for Claude Code, pi.dev and OpenAI Codex, plus 7 role agents for Claude Code, also shipped as readable role files for pi.dev.",
   "keywords": [
     "pi-package",

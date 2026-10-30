@@ -788,6 +788,7 @@ class RoleReportingContractTests(unittest.TestCase):
         "Already handled is not news.",
         "Detail below the fold.",
         "Separate, don't shrink.",
+        "The work has no narrator.",
         "Chunk and pause.",
         "Batch review.",
         "Confirm before an external write.",
