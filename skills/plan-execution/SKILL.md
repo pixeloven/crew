@@ -1,6 +1,6 @@
 ---
 name: plan-execution
-description: Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, test-first phases, acceptance criteria, validation gates, delta routing, and completion evidence.
+description: Use when executing an approved plan, dispatching a worker or review, or driving phased work to done. Covers phase order, test-first phases, acceptance criteria, validation gates, loop-back budgets, delta routing, and completion evidence.
 tier: concept
 requires: []
 expects-local: [protected-seams]
@@ -65,6 +65,18 @@ A review dispatched as "review this" returns generic observations. A review disp
 Before dispatching, **extract the single load-bearing question** — the one claim that, if false, makes the change wrong. Then task the reviewer with falsifying it specifically, alongside the standard checklist. The implementer's load-bearing-assumptions list is where to look first; if it's empty on a non-trivial change, that absence is the first thing to probe.
 
 Hand the reviewer the requester's ask unchanged as the contract it judges against, kept apart from the hypothesis and checklist, which are your spec (see `orchestration-patterns`).
+
+## Loop-backs: a trigger, an exit, a budget
+
+A loop-back sends work backwards: another fix round after a review, a passed phase reopened, a plan rescoped after what a later phase found. Loop-backs are how findings correct the work, and they help only while they are bounded.
+
+1. **A named trigger, not a feeling.** Name the acceptance criterion the work fails, or the plan assumption the evidence contradicts. "Could be cleaner" or "the reviewer is still unhappy" is not a trigger. A finding that would add to the accepted ask is not a trigger either: it is scope expansion, per `delta-handling`.
+2. **A written exit before the loop starts.** State what ends it: "re-review passes on the two required findings", "the integration suite is green on the reworked phase". A loop whose exit you cannot write is spinning, not converging.
+3. **A budget of two per plan.** The first loop-back is correction and the second is a real reframe. Do not start a third: the plan is mis-scoped, or the decision belongs to a human. Stop and escalate it with the five elements in `delta-handling` (its *Repeated same-theme findings* class covers the common case of review rounds).
+
+Record each loop-back in the plan's history as a delta: its trigger, its exit, and which of the two it is. Under a supervising host whose task contract bounds review or fix rounds, follow that bound instead, per the reporting contract.
+
+Adapted from Design with Intent's loop-back guardrails (github.com/ghaida/intent, CC0 1.0).
 
 ## Delta Handling
 

@@ -788,6 +788,7 @@ class RoleReportingContractTests(unittest.TestCase):
         "Already handled is not news.",
         "Detail below the fold.",
         "Separate, don't shrink.",
+        "The work has no narrator.",
         "Chunk and pause.",
         "Batch review.",
         "Confirm before an external write.",
@@ -950,6 +951,59 @@ class ReviewBoundTests(unittest.TestCase):
                 self.assertEqual(
                     self.ESCALATION, self._numbered_bold_leads(output[escalations + 1 :])
                 )
+
+
+class DesignWithIntentPortTests(unittest.TestCase):
+    """The ideas ported from Design with Intent stay in place, and each landing
+    credits its CC0 source."""
+
+    CREDIT = "github.com/ghaida/intent, CC0 1.0"
+    LOOP_RULES = (
+        "A named trigger, not a feeling.",
+        "A written exit before the loop starts.",
+        "A budget of two per plan.",
+    )
+    AI_PATTERNS = (
+        "Anthropomorphic manipulation:",
+        "Manufactured dependency:",
+        "Simulated understanding:",
+        "Undisclosed AI decisions:",
+    )
+    NARRATIVE_PATTERNS = (
+        "Smoothed-arc composite:",
+        "Manufactured-tension brief:",
+        "Story as evidence:",
+    )
+
+    @staticmethod
+    def _read(path: str) -> str:
+        return (ROOT / path).read_text(encoding="utf-8")
+
+    def test_plan_execution_bounds_loop_backs_and_validation_checks_them(self) -> None:
+        execution = self._read("skills/plan-execution/SKILL.md")
+        self.assertIn("## Loop-backs: a trigger, an exit, a budget", execution)
+        for rule in self.LOOP_RULES:
+            self.assertEqual(1, execution.count(f"**{rule}**"))
+        self.assertIn("`delta-handling`", execution)
+        self.assertIn(self.CREDIT, execution)
+        validation = self._read("skills/plan-validation/SKILL.md")
+        self.assertIn("budget of two (per `plan-execution`)", validation)
+
+    def test_review_checklist_names_every_pattern(self) -> None:
+        text = self._read("skills/pr-review-checklist/SKILL.md")
+        self.assertIn("## AI behaviour and narrative checks", text)
+        for pattern in (*self.AI_PATTERNS, *self.NARRATIVE_PATTERNS):
+            with self.subTest(pattern=pattern):
+                self.assertEqual(1, text.count(f"- [ ] **{pattern}**"))
+        self.assertIn(self.CREDIT, text)
+
+    def test_no_narrator_rule_spares_reports_and_credits_its_source(self) -> None:
+        for path in ("roles/_shared/reporting-contract.md", "templates/AGENTS.md"):
+            text = " ".join(self._read(path).split())
+            with self.subTest(path=path):
+                self.assertIn("This covers deliverables only", text)
+                self.assertIn("narrates its method", text)
+                self.assertIn(self.CREDIT, text)
 
 
 if __name__ == "__main__":

@@ -19,6 +19,39 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.65.0
+
+### Consumer impact
+
+- **Renamed or moved:** None.
+- **Removed:** None.
+- **Action needed:** None. A project that copied `templates/AGENTS.md` can add
+  the new *The work has no narrator* rule to its own reporting contract; the
+  onboarding check does not require it.
+
+### Added
+
+Three ideas adapted from Design with Intent (github.com/ghaida/intent, CC0 1.0),
+each credited where it lands. Nothing from that project is installed or
+depended on.
+
+- **Loop-back budget** (serves #126). `plan-execution` bounds loop-backs: each
+  needs a named trigger and an exit written before it starts, and a plan gets
+  two. The third is escalated through `delta-handling` instead of started.
+  `plan-validation`'s promotion checklist and its list of invalid completion
+  signals check the same.
+- **The work has no narrator.** A reporting-contract rule (beside #118) for
+  deliverables such as specs, briefs, runbooks and docs: no byline, no account
+  of making, no hedges or marks; provenance goes in the decision log and in
+  citations, and the delivering reply does not retell the work. Reports, recon
+  and evidence write-ups are exempt, because their method is their evidence.
+  It is rendered into every role and carried in `templates/AGENTS.md`.
+- **AI behaviour and narrative checks** in `pr-review-checklist`: four
+  AI-specific dark patterns (anthropomorphic manipulation, manufactured
+  dependency, simulated understanding, undisclosed AI decisions) and three
+  narrative pathologies for briefs and research write-ups (smoothed-arc
+  composite, manufactured-tension brief, story as evidence).
+
 ## 0.64.0
 
 ### Consumer impact

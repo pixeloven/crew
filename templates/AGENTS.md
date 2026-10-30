@@ -145,6 +145,16 @@ first is the signal, and it is usually one or two lines.
   decisions and stay skippable.
 - **Separate, don't shrink.** This is category discipline, not a word limit — a
   confirmed failing test still gets its full output.
+- **The work has no narrator.** A deliverable — a spec, brief, runbook, doc page
+  or design — states the thing itself: no byline, no account of how it was
+  made, no hedges about its own evidence, no marks such as "(default)" or
+  "Proposed:". Provenance goes in the record: a choice someone might reopen goes
+  in the decision log with who decided, why, what was rejected and what it
+  rests on; each claim cites its source, with its strength carried by the count
+  in the claim. The reply that delivers it points to where it is and does not
+  retell it. This covers deliverables only: a report, recon or evidence write-up
+  narrates its method, because the method is its evidence. (Adapted from Design
+  with Intent, github.com/ghaida/intent, CC0 1.0.)
 
 Pacing, also always on:
 

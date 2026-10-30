@@ -37,6 +37,7 @@ Before advancing to the next phase:
 - [ ] Validation gate conditions are all satisfied
 - [ ] No unresolved deltas from this phase
 - [ ] Every decision this phase raised has a closing record (key, the human's words or the evidence that made it moot, date)
+- [ ] Every loop-back this phase opened met its written exit or was escalated, and the plan has used no more than its budget of two (per `plan-execution`)
 - [ ] Artifacts from this phase are in a state the next phase can consume (merged PRs, published vault notes, applied manifests)
 - [ ] No protected seams were crossed without human sign-off
 
@@ -47,6 +48,7 @@ Before advancing to the next phase:
 - "No errors were mentioned" — check exit codes, not absence of error messages
 - "It worked before" — check the current state, not prior history
 - "The decisions were listed" — a phase is not complete while a decision it raised has no closing record
+- "Another round fixed it" — a loop-back counts only against the exit written before it started; a round that ends because nobody found more is not an exit
 
 ## When criteria conflict
 
