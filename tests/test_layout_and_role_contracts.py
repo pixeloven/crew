@@ -746,6 +746,50 @@ class RolePostureTests(unittest.TestCase):
                     bool(role.get("dispatch")), metadata.get("allowNestedSubagents", False)
                 )
 
+    def test_dispatch_is_expressed_for_every_harness(self) -> None:
+        import yaml
+
+        from scripts.role_contract import DISPATCH
+
+        self.assertEqual({"claude", "pi"}, set(DISPATCH))
+        for role_dir in sorted(
+            p for p in (ROOT / "roles").iterdir() if p.is_dir() and not p.name.startswith("_")
+        ):
+            role = yaml.safe_load((role_dir / "role.yml").read_text(encoding="utf-8"))
+            if not role.get("dispatch"):
+                continue
+            with self.subTest(role=role_dir.name):
+                text = (ROOT / "agents" / f"{role_dir.name}.md").read_text(encoding="utf-8")
+                metadata = yaml.safe_load(text.split("---\n", 2)[1])
+                denied = [t.strip() for t in str(metadata.get("disallowedTools", "")).split(",")]
+                self.assertNotIn(DISPATCH["claude"]["tool"], denied)
+                # A dispatching role runs as the session agent on Claude Code.
+                self.assertIn("session agent", role["description"])
+                self.assertIn("claude --agent crew:lead", text)
+
+    def test_routing_table_marks_lead_as_session_agent_and_no_role_trigger_only(self) -> None:
+        text = (ROOT / "templates" / "AGENTS.md").read_text(encoding="utf-8")
+        text = text.split("| Task domain | Agent | Activation |", 1)[1].split("\n\n", 1)[0]
+        rows = {
+            cells[2].strip("` "): cells[3].strip()
+            for cells in (line.split("|") for line in text.splitlines())
+            if len(cells) == 5 and cells[2].strip().startswith("`")
+        }
+        self.assertEqual(
+            {"lead", "implementer", "reviewer", "researcher", "triage", "investigator"}, set(rows)
+        )
+        self.assertEqual("**session agent**", rows["lead"])
+        for role in ("triage", "investigator"):
+            self.assertEqual("dispatch or **trigger**", rows[role])
+
+    def test_one_routing_table_lives_in_intake_process(self) -> None:
+        triage = (ROOT / "roles" / "triage" / "body.md").read_text(encoding="utf-8")
+        self.assertNotIn("| Route to |", triage)
+        self.assertIn("`intake-process`", triage)
+        intake = (ROOT / "skills" / "intake-process" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("Researcher (answer from the record)", intake)
+        self.assertIn("A raw alert or webhook is not intake work", intake)
+
     def test_pi_package_ships_skills_and_readable_roles_without_dispatch(self) -> None:
         import json
 
@@ -808,7 +852,7 @@ class RoleReportingContractTests(unittest.TestCase):
 
     def test_every_role_body_includes_the_contract_instead_of_copying_it(self) -> None:
         bodies = sorted((ROOT / "roles").glob("[!_]*/body.md"))
-        self.assertEqual(7, len(bodies))
+        self.assertEqual(6, len(bodies))
         for body in bodies:
             text = body.read_text(encoding="utf-8")
             with self.subTest(role=body.parent.name):
@@ -852,7 +896,7 @@ class RoleReportingContractTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
-        self.assertIn("7 roles rendered clean", completed.stdout)
+        self.assertIn("6 roles rendered clean", completed.stdout)
 
     def test_template_variant_keeps_every_key_rule(self) -> None:
         # templates/AGENTS.md speaks to the operator, so its wording differs on

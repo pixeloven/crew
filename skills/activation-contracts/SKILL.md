@@ -11,14 +11,16 @@ This skill is the contract that makes a trigger portable, and reference wiring f
 
 ## Two activation models
 
-Every role is one or the other. Say which in your routing table, because they need different things from you.
+A role can be either, or both: intake and diagnosis are triggered work that someone can also dispatch by hand. Say which in your routing table, because they need different things from you.
 
 | Model | Woken by | Needs | Typical roles |
 |---|---|---|---|
 | **Interactive dispatch** | the agent you're talking to | nothing — the routing table is enough | planning, implementation, review |
-| **Autonomous trigger** | an event or a schedule, with no human in the loop | infrastructure you deploy | intake, diagnosis, curation, drafting |
+| **Autonomous trigger** | an event or a schedule, with no human in the loop | infrastructure you deploy | intake, diagnosis, curation |
 
-A routing table that lists both without distinguishing them implies every role is one dispatch away. The triggered ones aren't, and that gap is why they stay dormant.
+A routing table that lists both without distinguishing them implies every role is one dispatch away, or hides a dispatchable role behind a trigger label. A role marked "dispatch or trigger" is one dispatch away now, and its trigger fires only once wired; an unwired trigger is why triggered work stays dormant.
+
+A planning role such as Lead is neither: it is the session agent, started as the session (on Claude Code, `claude --agent crew:lead`) rather than dispatched or triggered.
 
 ## The trigger interface
 

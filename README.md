@@ -1,13 +1,13 @@
 # Crew
 
 Crew is PixelOven's portable agent foundation: one methodology-skill catalogue,
-seven shared role definitions, and an audit-first onboarding contract for Claude
+six shared role definitions, and an audit-first onboarding contract for Claude
 Code, pi.dev, and OpenAI Codex.
 
 | Harness | Foundation skills | Crew roles | Project behavior |
 |---|---|---|---|
-| Claude Code | plugin | seven rendered `agents/*.md` roles | root `AGENTS.md` through `CLAUDE.md` |
-| pi.dev | git package or `--skill` | seven rendered `pi-agents/*.md` roles as readable files; Crew dispatches nothing on pi | root `AGENTS.md` |
+| Claude Code | plugin | six rendered `agents/*.md` roles; Lead runs as the session agent | root `AGENTS.md` through `CLAUDE.md` |
+| pi.dev | git package or `--skill` | six rendered `pi-agents/*.md` roles as readable files; Crew dispatches nothing on pi | root `AGENTS.md` |
 | OpenAI Codex | plugin or vendored `.agents/skills` | uses Codex dispatch; plugin roles are unsupported | root `AGENTS.md` |
 
 The same `skills/<name>/SKILL.md` tree feeds every harness. Claude and Pi roles

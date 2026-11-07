@@ -19,6 +19,63 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.66.0
+
+Crew ships six roles instead of seven, and every role definition is sharpened
+in the same release.
+
+### Consumer impact
+
+- **Renamed or moved:** `responder -> researcher`. Researcher now answers
+  simple questions from the record and drafts replies.
+- **Removed:** `responder` (`agents/responder.md`, `pi-agents/responder.md`,
+  `roles/responder/`). No alias ships: dispatch `researcher` instead.
+- **Action needed:** replace every `crew:responder` / `crew.responder`
+  dispatch and every `responder` routing row in your `AGENTS.md` and role
+  overlays with `researcher`; Crew Doctor reports any that remain as
+  `retired-roles.responder` (`DEGRADED`). Start Lead as the session agent
+  (`claude --agent crew:lead`) instead of dispatching it. Update the
+  Activation column of your routing table: `lead` is the session agent, and
+  `triage` and `investigator` are "dispatch or trigger". Re-pin the
+  marketplace.
+
+### Changed
+
+- **Researcher absorbs responder.** Same sources, stance and read set; the
+  role gains an answer-from-the-record mode (Answer, Source, Confidence) and
+  responder's draft-reply output, with a one-line rule for picking the mode.
+  Replies are drafts, never sent. Researcher keeps `writes: none`.
+- **Lead runs as the session agent.** Its description, body and the routing
+  table say to start it with the harness's session-agent option, because its
+  chat mode needs the operator in the conversation. `dispatch: true` is now
+  expressed for both harnesses (`DISPATCH` in `role_contract.py`): Claude
+  keeps the Agent tool and the renderer refuses a posture that would deny it;
+  pi still renders `allowNestedSubagents: true`.
+- **Investigator and triage are dispatchable.** The routing table marks both
+  "dispatch or trigger" instead of trigger-only, and `activation-contracts`
+  allows a role to be both. Investigator is widened to read-first diagnosis
+  of any failing test, CI run, bug report or incident, plus live
+  infrastructure where the project has some.
+- **One routing table.** `intake-process` holds the only copy, now with the
+  simple-question route to researcher and the protected-seam flag; triage's
+  body points at it.
+- **Alerts.** Raw alerts and webhooks go to investigator; triage takes an
+  alert only when it arrives filed as an issue.
+- **Implementer's description is stack-neutral**: no named infra stacks.
+- **Reviewer may run the PR's test plan** and the touched stack's validation,
+  reporting what failed or went unrun.
+- **`autonomous-agent-design`** counts six roles and its tool table covers
+  every remaining role, with researcher's write scope corrected.
+- Role counts in the README, manifests, quickstarts and `MAINTAINERS.md`.
+
+### Added
+
+- **Retired-role record in Crew Doctor.** `RETIRED_ROLES` maps
+  `responder` to `researcher`; `retired_role_references` scans a consumer's
+  entry files, local skills and role overlays, and `compose_doctor_report(...,
+  retired_role_refs=...)` adds a `retired-roles.<role>` row naming the
+  successor.
+
 ## 0.65.0
 
 ### Consumer impact

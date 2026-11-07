@@ -62,9 +62,21 @@ EXPECTED_ROLE_NAMES = (
     "investigator",
     "lead",
     "researcher",
-    "responder",
     "reviewer",
     "triage",
+)
+# Roles that left Crew, as retired role -> the role that absorbed it. Historical
+# migration metadata, like MOVED_SKILLS: Doctor uses it only to point a consumer
+# that still dispatches a retired role at its replacement.
+RETIRED_ROLES = {
+    "responder": ("researcher", "0.66.0"),
+}
+# A retired role named namespaced (`crew:<role>` on Claude/Codex, `crew.<role>` on
+# pi) or as a backticked bare name, as routing tables write it. Bare prose
+# ("an incident responder") is not a dispatch reference and does not match.
+RETIRED_ROLE_REFERENCE = re.compile(
+    r"(?:(?<![\w.:-])crew[:.](?P<namespaced>" + "|".join(re.escape(name) for name in RETIRED_ROLES)
+    + r")(?![\w-])|`(?P<bare>" + "|".join(re.escape(name) for name in RETIRED_ROLES) + r")`)"
 )
 # pi-subagents ships built-in agents under these bare names. A bare-named pi
 # project agent replaces the built-in (project beats builtin); it never shadows
@@ -3074,20 +3086,15 @@ def _proposal_checks(proposals: dict[str, Any]) -> list[dict[str, Any]]:
     return checks
 
 
-def moved_skill_references(consumer_root: pathlib.Path) -> dict[str, Any]:
-    """Find consumer references to skills that moved out of Crew. Reads only.
-
-    Scans the entry files, local skills, and role overlays a consumer owns.
-    """
-    root = pathlib.Path(consumer_root)
+def _consumer_reference_files(root: pathlib.Path):
+    """Yield (path, text-or-None, read-error) for each file a consumer owns that
+    may name a Crew skill or role: entry files, local skills, role overlays."""
     candidates: list[pathlib.Path] = [root / "AGENTS.md", root / "CLAUDE.md"]
     candidates.extend(sorted((root / ".agents/skills").rglob("*.md")))
     # .claude/skills/<name> is usually a directory symlink into .agents/skills/.
     candidates.extend(sorted((root / ".claude/skills").glob("*/SKILL.md")))
     for agents in ("agents", ".claude/agents", ".pi/agents"):
         candidates.extend(sorted((root / agents).rglob("*.md")))
-    references: list[dict[str, Any]] = []
-    reads: list[dict[str, str]] = []
     seen: set[pathlib.Path] = set()
     for path in candidates:
         resolved = path.resolve(strict=False)
@@ -3095,9 +3102,22 @@ def moved_skill_references(consumer_root: pathlib.Path) -> dict[str, Any]:
             continue
         seen.add(resolved)
         try:
-            text = path.read_text(encoding="utf-8")
+            yield path, path.read_text(encoding="utf-8"), ""
         except (OSError, UnicodeDecodeError) as exception:
-            reads.append({"state": "unreadable", "source": str(path), "detail": str(exception)})
+            yield path, None, str(exception)
+
+
+def moved_skill_references(consumer_root: pathlib.Path) -> dict[str, Any]:
+    """Find consumer references to skills that moved out of Crew. Reads only.
+
+    Scans the entry files, local skills, and role overlays a consumer owns.
+    """
+    root = pathlib.Path(consumer_root)
+    references: list[dict[str, Any]] = []
+    reads: list[dict[str, str]] = []
+    for path, text, error in _consumer_reference_files(root):
+        if text is None:
+            reads.append({"state": "unreadable", "source": str(path), "detail": error})
             continue
         for number, line in enumerate(text.splitlines(), start=1):
             for match in MOVED_SKILL_REFERENCE.finditer(line):
@@ -3111,6 +3131,55 @@ def moved_skill_references(consumer_root: pathlib.Path) -> dict[str, Any]:
                     }
                 )
     return {"references": references, "reads": reads, "inspection_sources": [str(root)]}
+
+
+def retired_role_references(consumer_root: pathlib.Path) -> dict[str, Any]:
+    """Find consumer references to roles Crew retired. Reads only.
+
+    Scans the same consumer-owned files as `moved_skill_references`.
+    """
+    root = pathlib.Path(consumer_root)
+    references: list[dict[str, Any]] = []
+    reads: list[dict[str, str]] = []
+    for path, text, error in _consumer_reference_files(root):
+        if text is None:
+            reads.append({"state": "unreadable", "source": str(path), "detail": error})
+            continue
+        for number, line in enumerate(text.splitlines(), start=1):
+            for match in RETIRED_ROLE_REFERENCE.finditer(line):
+                role = match.group("namespaced") or match.group("bare")
+                references.append(
+                    {"role": role, "text": match.group(0), "source": str(path), "line": number}
+                )
+    return {"references": references, "reads": reads, "inspection_sources": [str(root)]}
+
+
+def _retired_role_checks(retired: dict[str, Any]) -> list[dict[str, Any]]:
+    by_role: dict[str, list[dict[str, Any]]] = {}
+    for reference in retired["references"]:
+        by_role.setdefault(reference["role"], []).append(reference)
+    checks = []
+    for role, references in sorted(by_role.items()):
+        successor, version = RETIRED_ROLES[role]
+        where = ", ".join(f"{pathlib.Path(ref['source']).name}:{ref['line']}" for ref in references)
+        checks.append(
+            {
+                "check": f"retired-roles.{role}",
+                "status": "DEGRADED",
+                "fact": f"`{role}` is referenced ({where}), but Crew retired it in {version}",
+                "inference": "consumer references resolved against the retired-roles table",
+                "recommendation": (
+                    f"`{role}` moved into `{successor}`; dispatch `{successor}` instead "
+                    f"(e.g. `{PLUGIN_NAME}:{successor}`) and update each reference"
+                ),
+                "untested": "",
+                "evidence": [
+                    {"claim": f"line {ref['line']} names {ref['text']}", "source": ref["source"]}
+                    for ref in references
+                ],
+            }
+        )
+    return checks
 
 
 def _moved_skill_checks(moved: dict[str, Any], packs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -3643,12 +3712,15 @@ def compose_doctor_report(
     entry_file: dict[str, Any] | None = None,
     moved_skill_refs: dict[str, Any] | None = None,
     inventory: dict[str, Any] | None = None,
+    retired_role_refs: dict[str, Any] | None = None,
     proposals: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Compose all Doctor checks into one deterministic, non-persisted report.
 
     `slot_fills`, `packs`, `description_costs`, and `moved_skill_refs` are
     optional: omitted, the report carries no fill, pack, cost, or moved-skill rows.
+    `retired_role_refs` (from `retired_role_references`) adds a `retired-roles.*`
+    row per retired role the consumer still references; omitted, it adds none.
     `claude_listing` (from `claude_listing_inputs`) adds `description-cost.claude-code`
     when `description_costs` is also given.
     `entry_file` (from `entry_file_cost`) adds `description-cost.entry-file`, which
@@ -3797,6 +3869,8 @@ def compose_doctor_report(
         checks.append(_entry_file_cost_check(entry_file, description_costs or []))
     if moved_skill_refs is not None:
         checks.extend(_moved_skill_checks(moved_skill_refs, packs or []))
+    if retired_role_refs is not None:
+        checks.extend(_retired_role_checks(retired_role_refs))
     if inventory is not None:
         checks.append(_capability_map_check(inventory))
     if proposals is not None:
@@ -3864,7 +3938,7 @@ def compose_doctor_report(
                 )
             elif not matches:
                 fact = f"{harness} role {name} is missing"
-                inference = "the expected seven-role fleet is incomplete"
+                inference = "the expected six-role fleet is incomplete"
             else:
                 fact = f"{harness} role {name} posture evidence is incomplete or duplicated"
                 inference = "role readiness cannot be established"

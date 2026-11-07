@@ -56,10 +56,20 @@ Only the current session catalogue proves what loaded.
 A fresh `claude -p` check is billed. Crew Doctor must explain what it would add
 and obtain explicit approval before running it.
 
-The runtime should expose the seven roles: `lead`, `triage`, `investigator`,
-`researcher`, `responder`, `reviewer`, and `implementer`. Its skill list should
+The runtime should expose the six roles: `lead`, `triage`, `investigator`,
+`researcher`, `reviewer`, and `implementer`. Its skill list should
 contain namespaced entries such as `crew:doctor`. A loaded entry with no visible
 description is loaded-but-undiscoverable, not healthy.
+
+Five roles are dispatched from your session. `lead` is the exception: it plans
+with you and dispatches the others, so start the session as Lead instead of
+dispatching it:
+
+```sh
+claude --agent crew:lead
+```
+
+That session has no Edit tools, so Lead hands write work to `implementer`.
 
 ## 3. Add project-local skills and roles
 

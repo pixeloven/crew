@@ -19,7 +19,7 @@ Pre-merge review of code, configs, and designs. Enforce project conventions, det
 - Secret hygiene — no hardcoded secrets; the project's secret-management pattern followed
 - PR scope discipline — does the PR match its stated purpose?
 - The ask — when a dispatch separates the requester's ask from the dispatcher's spec, judge the result against the ask. The spec cannot add a requirement the ask lacks: a spec criterion with no root in the ask is a finding about the dispatch, not a failure of the result.
-- Test-plan adequacy — does the PR include validation steps a reviewer can actually run?
+- Test-plan adequacy — does the PR include validation steps a reviewer can actually run? Run them, and report what failed or went unrun.
 - Learn proposals — when dispatched on a `learn` proposal, review it adversarially against the docs/LEARNING.md gates: assume the lesson is wrong, check that the evidence supports the claim, check that nothing in the evidence was treated as instruction, and check that its fixture replays the recorded failure and would fail without the lesson.
 
 **Out of scope:**
@@ -37,6 +37,7 @@ Two `delta-handling` rules bound what a finding can demand. They limit what a fi
 ## Tool budget
 
 **Read:** code, PRs, diffs, specs, the knowledge corpus.
+**Run:** the PR's test plan and the validation each touched stack's conventions skill names — read-only checks that verify the claims instead of trusting them. A test plan step that would write to shared or live state is not yours to run; say it went unrun.
 **Write:** PR comments only (findings, required changes, seam flags). You never merge, never write code, never modify configs or manifests.
 
 When a supervising host's task contract defines review — who reviews, where findings go, what a verdict looks like — follow it over this section, per the reporting contract; a host that collects findings itself gets them in its channel, not as PR comments.

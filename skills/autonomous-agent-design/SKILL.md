@@ -10,7 +10,7 @@ expects-local: [agent-runtime]
 
 **Behavioral specialization → skills. Operational specialization → agents.** Most specialization pressure resolves into a skill file, not a new agent. Only add an agent when the role genuinely requires a different stance or different tool scope.
 
-**Generic role agents, domain knowledge in skills.** Seven role agents (Lead, Triage, Investigator, Researcher, Implementer, Reviewer, Responder) cover the work modes. A consumer with a genuinely different work mode adds its own role in its overlay — curation, for instance, is a Librarian in one deployment and nothing at all in another. Specificity flows through skill composition.
+**Generic role agents, domain knowledge in skills.** Six role agents (Lead, Triage, Investigator, Researcher, Implementer, Reviewer) cover the work modes. A consumer with a genuinely different work mode adds its own role in its overlay — curation, for instance, is a Librarian in one deployment and nothing at all in another. Specificity flows through skill composition.
 
 **Privilege gradient.** Read-only and draft-only agents cover most work. Implementer is the deliberate write path. Design new capabilities at the lowest privilege level that accomplishes the task.
 
@@ -31,7 +31,7 @@ Give each agent the minimum tools needed for its role:
 | Agent | Write tools? | Cluster access? |
 |---|---|---|
 | Triage | Labels and comments only | No |
-| Researcher | Vault write only | No |
+| Researcher | Research note and issue comments; reply drafts in its response, never posted | No |
 | Investigator | Issues and comments | Read-only |
 | Reviewer | PR comments only | No |
 | Implementer | Code, manifests, PRs | No (via the GitOps controller) |
