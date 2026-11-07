@@ -62,7 +62,6 @@ EXPECTED_ROLE_NAMES = (
     "investigator",
     "lead",
     "researcher",
-    "responder",
     "reviewer",
     "triage",
 )
@@ -3864,7 +3863,7 @@ def compose_doctor_report(
                 )
             elif not matches:
                 fact = f"{harness} role {name} is missing"
-                inference = "the expected seven-role fleet is incomplete"
+                inference = "the expected six-role fleet is incomplete"
             else:
                 fact = f"{harness} role {name} posture evidence is incomplete or duplicated"
                 inference = "role readiness cannot be established"

@@ -3067,7 +3067,7 @@ class InstallationTruthTests(unittest.TestCase):
             )
 
             self.assertIn(str(package / "skills"), {item["source"] for item in slots["evidence"]})
-            self.assertEqual(14, len(missing_roles))
+            self.assertEqual(12, len(missing_roles))
             self.assertTrue(
                 all(item["source"] for row in missing_roles for item in row["evidence"])
             )
@@ -4020,11 +4020,11 @@ class DerivedContractTests(unittest.TestCase):
                 return [row for row in report["checks"] if row["check"].startswith("role.")]
 
             complete = role_rows(inspect_role_postures(ROOT))
-            self.assertEqual(14, len(complete))
+            self.assertEqual(12, len(complete))
             self.assertEqual({"OK"}, {row["status"] for row in complete})
 
             missing = role_rows([])
-            self.assertEqual(14, len(missing))
+            self.assertEqual(12, len(missing))
             self.assertEqual({"DEGRADED"}, {row["status"] for row in missing})
             self.assertTrue(all("missing" in row["fact"] for row in missing))
 
@@ -4065,7 +4065,7 @@ class DerivedContractTests(unittest.TestCase):
 
     def test_m10_every_rendered_role_has_an_honest_effective_posture(self) -> None:
         rows = inspect_role_postures(ROOT)
-        self.assertEqual(14, len(rows))
+        self.assertEqual(12, len(rows))
         lead = next(row for row in rows if row["name"] == "lead" and row["harness"] == "claude")
         self.assertTrue(lead["denied_tools"])
         self.assertIn("create and overwrite", lead["write_effect"])
@@ -4391,7 +4391,7 @@ class DerivedContractTests(unittest.TestCase):
             name: row for name, row in role_checks.items() if not name.startswith("role.consumer.")
         }
 
-        self.assertEqual(14, len(fleet_checks))
+        self.assertEqual(12, len(fleet_checks))
         self.assertEqual(
             {
                 "role.consumer.claude.librarian",

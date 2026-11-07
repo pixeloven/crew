@@ -41,17 +41,16 @@ Delegate by work domain, without asking first. Reach for delegation by default o
 
 | Task domain | Agent | Activation |
 |-------------|-------|------------|
-| Planning, orchestration, complex multi-step work | `lead` | dispatch |
+| Planning, orchestration, complex multi-step work | `lead` | **session agent** |
 | Write work — code, manifests, configs, PRs | `implementer` | dispatch |
 | Pre-merge review, convention enforcement, seam detection | `reviewer` | dispatch |
-| Pre-implementation option analysis, technology evaluation | `researcher` | dispatch |
-| Issue / PR intake, labeling, routing | `triage` | **trigger** |
-| Reactive diagnosis, health sweeps, incidents | `investigator` | **trigger** |
-| Fast read + draft (answer a question / draft a reply) | `responder` | **trigger** |
+| Answers from the record, reply drafts, option analysis, technology evaluation | `researcher` | dispatch |
+| Issue / PR intake, labeling, routing | `triage` | dispatch or **trigger** |
+| Diagnosis of failing tests, CI runs, bugs, incidents; health sweeps; raw alerts and webhooks | `investigator` | dispatch or **trigger** |
 
 Dispatch each role by the name your harness registers it under: Crew's roles are namespaced (e.g. `crew.reviewer` on pi, where a bare `reviewer` or `researcher` reaches a different, built-in agent).
 
-**dispatch** = you invoke it from this session. **trigger** = it should run on an event or schedule with no human in the loop, which needs infrastructure you deploy — see `activation-contracts` and `templates/activation/`. A trigger-model role you haven't wired only runs when someone remembers it exists, and its work ends up absorbed into this session — which costs you the context isolation you would have got from dispatching it.
+**dispatch** = you invoke it from this session. **session agent** = it *is* the session: start one as that role (on Claude Code, `claude --agent crew:lead`) instead of dispatching it, because Lead plans with you in the conversation and dispatches the others. **trigger** = it should run on an event or schedule with no human in the loop, which needs infrastructure you deploy — see `activation-contracts` and `templates/activation/`. A trigger you haven't wired never fires: the role then runs only when someone remembers to dispatch it, and its work ends up absorbed into this session — which costs you the context isolation you would have got from dispatching it.
 
 ### Quality gate (implementation work)
 

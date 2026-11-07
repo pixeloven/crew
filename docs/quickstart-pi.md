@@ -1,6 +1,6 @@
 # Quickstart — pi.dev
 
-On pi, Crew provides two things: its methodology skills, and its seven roles as
+On pi, Crew provides two things: its methodology skills, and its six roles as
 readable files in `pi-agents/*.md`. Crew registers no agents and no tools on pi
 and does not dispatch anything. Orchestration on pi (running a role as a
 worker, in parallel or nested) is out of Crew's scope: a supervising host such
@@ -47,7 +47,7 @@ any prompt-mediated fresh-session probe is billed and requires explicit approval
 ## 3. Roles as readable files
 
 `pi-agents/<role>.md` holds each role (`lead`, `triage`, `investigator`,
-`researcher`, `responder`, `reviewer`, `implementer`), rendered from the same
+`researcher`, `reviewer`, `implementer`), rendered from the same
 `roles/<role>/` source as the Claude Code agents, so name, description, body
 and intended posture match. Read a role to see how that work is done, or hand
 the file to whatever runs your workers. Skills that describe dispatching a role

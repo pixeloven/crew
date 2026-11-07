@@ -211,7 +211,7 @@ therefore frontmatter write restrictions are advisory unless the host sandbox or
 permission system enforces them.
 
 Package-role runtime expectations are harness-specific: Claude and Pi should
-resolve the seven rendered roles; Codex plugins do not carry them, so confirm the
+resolve the six rendered roles; Codex plugins do not carry them, so confirm the
 project's routing contract and available Codex dispatch primitives instead.
 
 ### 6. Check intake and collisions

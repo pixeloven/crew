@@ -23,16 +23,20 @@ Apply exactly one `domain:*` label per item:
 
 ## Work type classification
 
-After applying a domain label, classify the work type to determine routing:
+After applying a domain label, classify the work type to determine routing. This is the single routing table: Triage's role body points here rather than keeping a copy.
 
 | Work type | Signal | Route to |
 |---|---|---|
-| Active incident / degradation | A workload failing, a deploy reported degraded, a host down | Investigator |
-| Pre-implementation research | "evaluate options for...", "research...", or `domain:research` label | Researcher |
-| Bounded write work | `domain:platform` or `domain:infra`, clear scope, no design needed | Implementer |
+| Simple question | Single-step, answerable from what the project has written down (repo, docs, git history, corpus) | Researcher (answer from the record) |
+| Failure or degradation | A failing test or CI run, a bug or symptom-only report, a workload failing, a deploy reported degraded, a host down, an alert filed as an issue | Investigator |
+| Pre-implementation research | "evaluate options for...", "research...", or `domain:research` label | Researcher (option analysis) |
+| Bounded write work | `domain:platform` or `domain:infra`, trivial or clear explicit scope, no design needed | Implementer |
 | PR opened, no orchestrated plan | Code review needed | Reviewer |
 | Multi-step / ambiguous / plan needed | More than one agent needed, unclear scope | Lead |
 | Single-agent, well-scoped (non-write) | Obvious owner, bounded non-implementation task | Lead to assign |
+| Touches protected seams | Any item crossing a seam in the project's registry | Flag for the operator — do not route autonomously |
+
+Alerts reach intake only when they arrive filed as issues. A raw alert or webhook is not intake work: wire it straight to Investigator.
 
 ## Processing an issue
 
@@ -64,4 +68,5 @@ When the domain or work type is unclear:
 - Does not make implementation decisions
 - Does not access the cluster
 - Does not write code or manifests
+- Does not draft replies (Researcher drafts them)
 - Does not re-classify items that already have a `domain:*` label from a previous pass

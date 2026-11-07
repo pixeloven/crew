@@ -11,8 +11,9 @@ roles/_shared/<part>.md and a body pulls it in with a line of its own:
 same as if the text were pasted there. `_shared` is not a role: directories whose
 name starts with `_` are skipped by the role loop.
 
-Both harnesses get the same name, description, body and capability posture. The
-only thing that differs is dialect: Claude Code subtracts tools with
+Both harnesses get the same name, description, body and capability posture,
+including `dispatch:` (the role dispatches other roles). The only thing that
+differs is dialect: Claude Code subtracts tools with
 `disallowedTools`, pi with `excludeTools`, and every pi agent carries
 `package: crew` so a host that loads it through pi-subagents registers it as `crew.<role>`. That translation lives HERE and
 nowhere else, so the two trees cannot drift apart by editing. A consumer whose
@@ -38,9 +39,9 @@ import re
 import sys
 
 try:
-    from .role_contract import FORBIDDEN_RUNTIME_KEYS, PI_PACKAGE_NAME, WRITE_POSTURES
+    from .role_contract import DISPATCH, FORBIDDEN_RUNTIME_KEYS, PI_PACKAGE_NAME, WRITE_POSTURES
 except ImportError:  # Direct script execution.
-    from role_contract import FORBIDDEN_RUNTIME_KEYS, PI_PACKAGE_NAME, WRITE_POSTURES
+    from role_contract import DISPATCH, FORBIDDEN_RUNTIME_KEYS, PI_PACKAGE_NAME, WRITE_POSTURES
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NOTICE = "<!-- GENERATED from roles/{role}/ — edit there and run scripts/render_roles.py -->"
@@ -111,6 +112,12 @@ def load_role(role_dir):
         )
     if data.get("writes") not in WRITES:
         sys.exit(f"{origin}: 'writes' must be one of {', '.join(WRITES)}")
+    if data.get("dispatch") not in (None, True, False):
+        sys.exit(f"{origin}: 'dispatch' must be true or false")
+    if data.get("dispatch"):
+        for harness, grant in DISPATCH.items():
+            if grant["tool"] in WRITES[data["writes"]][harness]:
+                sys.exit(f"{origin}: 'dispatch' needs {harness}'s {grant['tool']} tool, which 'writes' denies")
     return data
 
 
@@ -132,6 +139,8 @@ def frontmatter(role, harness):
         denied = WRITES[role["writes"]]["claude"]
         if denied:
             lines.append(f"disallowedTools: {', '.join(denied)}")
+        # A dispatching role keeps the Agent tool (load_role guarantees it is
+        # not denied) and runs as the session agent; nothing else to emit.
     else:
         # `package:` makes the runtime identity `crew.<name>` while `name:` stays
         # the bare local name. Without it a package agent named `reviewer` or
@@ -147,7 +156,7 @@ def frontmatter(role, harness):
         if role.get("dispatch"):
             # The child-safe nested `subagent` tool, granted without turning an
             # omitted `tools:` into an allowlist.
-            lines.append("allowNestedSubagents: true")
+            lines.extend(f"{key}: {value}" for key, value in DISPATCH["pi"]["frontmatter"].items())
     return "\n".join(lines)
 
 

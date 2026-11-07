@@ -1,3 +1,3 @@
 name: investigator
-description: Reactive diagnosis. Investigates alerts, failures and incidents, traces flows across components, and detects drift between declared and actual state. Produces findings, not fixes. Use for incidents, failing workloads, degraded services, and scheduled health sweeps.
+description: Read-first diagnosis. Investigates a failing test, CI run, bug report, alert or incident, traces flows across components, and detects drift between declared and actual state. Produces findings, not fixes. Use by dispatch or on a trigger for any failure, plus live-infrastructure health where the project has some.
 writes: none

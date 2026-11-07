@@ -49,6 +49,20 @@ WRITE_POSTURES = {
 }
 
 
+# `dispatch: true` means the role dispatches other roles, on every harness. Each
+# harness grants that differently, so the capability is spoken per dialect:
+#   claude — the Agent tool. A role cannot switch it on in subagent frontmatter;
+#            it must stay out of `disallowedTools`, and the role runs as the
+#            session agent (`claude --agent <role>`), where the tool is present.
+#   pi     — the child-safe nested `subagent` tool, granted by
+#            `allowNestedSubagents: true` without turning an omitted `tools:`
+#            into an allowlist.
+DISPATCH = {
+    "claude": {"tool": "Agent", "frontmatter": {}},
+    "pi": {"tool": "subagent", "frontmatter": {"allowNestedSubagents": "true"}},
+}
+
+
 def claude_role_identity(value: object) -> str | None:
     """Return a normalized Claude role identity when its syntax is supported."""
     if not isinstance(value, str):
