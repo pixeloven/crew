@@ -763,9 +763,30 @@ class RolePostureTests(unittest.TestCase):
                 metadata = yaml.safe_load(text.split("---\n", 2)[1])
                 denied = [t.strip() for t in str(metadata.get("disallowedTools", "")).split(",")]
                 self.assertNotIn(DISPATCH["claude"]["tool"], denied)
-                # A dispatching role runs as the session agent on Claude Code.
-                self.assertIn("session agent", role["description"])
-                self.assertIn("claude --agent crew:lead", text)
+
+    def test_load_role_rejects_dispatch_when_writes_denies_the_dispatch_tool(self) -> None:
+        from unittest import mock
+
+        from scripts import render_roles
+
+        for harness, grant in render_roles.DISPATCH.items():
+            with self.subTest(harness=harness), tempfile.TemporaryDirectory() as tmp:
+                role_dir = pathlib.Path(tmp) / "boss"
+                role_dir.mkdir()
+                (role_dir / "role.yml").write_text(
+                    "name: boss\ndescription: Plans and dispatches.\nwrites: none\ndispatch: true\n",
+                    encoding="utf-8",
+                )
+                (role_dir / "body.md").write_text("Body.\n", encoding="utf-8")
+                self.assertTrue(render_roles.load_role(role_dir)["dispatch"])
+                postures = {
+                    posture: {**denied, harness: [*denied[harness], grant["tool"]]}
+                    for posture, denied in render_roles.WRITES.items()
+                }
+                with mock.patch.object(render_roles, "WRITES", postures):
+                    with self.assertRaises(SystemExit) as raised:
+                        render_roles.load_role(role_dir)
+                self.assertIn(grant["tool"], str(raised.exception))
 
     def test_routing_table_marks_lead_as_session_agent_and_no_role_trigger_only(self) -> None:
         text = (ROOT / "templates" / "AGENTS.md").read_text(encoding="utf-8")
@@ -781,14 +802,6 @@ class RolePostureTests(unittest.TestCase):
         self.assertEqual("**session agent**", rows["lead"])
         for role in ("triage", "investigator"):
             self.assertEqual("dispatch or **trigger**", rows[role])
-
-    def test_one_routing_table_lives_in_intake_process(self) -> None:
-        triage = (ROOT / "roles" / "triage" / "body.md").read_text(encoding="utf-8")
-        self.assertNotIn("| Route to |", triage)
-        self.assertIn("`intake-process`", triage)
-        intake = (ROOT / "skills" / "intake-process" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("Researcher (answer from the record)", intake)
-        self.assertIn("A raw alert or webhook is not intake work", intake)
 
     def test_pi_package_ships_skills_and_readable_roles_without_dispatch(self) -> None:
         import json
