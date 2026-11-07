@@ -159,13 +159,6 @@ detected is `DEGRADED` — name the pack to install. With the pack installed, a
 lingering `crew:<skill>` is still `DEGRADED` until it becomes `<pack>:<skill>`.
 Report only; the rename is Onboarding's to propose.
 
-Then check for roles Crew retired. `retired_role_references` scans the same
-consumer files for a namespaced reference (`crew:<role>`, `crew.<role>`) or a
-backticked bare name of any role in the `RETIRED_ROLES` table; pass its result as
-`retired_role_refs=` to `compose_doctor_report`. Each referenced retired role is
-`DEGRADED` and names the role that absorbed it (`responder` moved into
-`researcher` in 0.66.0). Report only; updating the reference is the consumer's.
-
 Report the always-on description total for Crew plus every detected pack against
 the dated harness budgets in `crew_doctor.py`, which are measurements and not
 limits. This row never fails. When the total exceeds a budget, name the packs an

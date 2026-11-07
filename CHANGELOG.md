@@ -32,8 +32,7 @@ in the same release.
   `roles/responder/`). No alias ships: dispatch `researcher` instead.
 - **Action needed:** replace every `crew:responder` / `crew.responder`
   dispatch and every `responder` routing row in your `AGENTS.md` and role
-  overlays with `researcher`; Crew Doctor reports any that remain as
-  `retired-roles.responder` (`DEGRADED`). Start Lead as the session agent
+  overlays with `researcher` by hand. Start Lead as the session agent
   (`claude --agent crew:lead`) instead of dispatching it. Update the
   Activation column of your routing table: `lead` is the session agent, and
   `triage` and `investigator` are "dispatch or trigger". Re-pin the
@@ -67,14 +66,6 @@ in the same release.
 - **`autonomous-agent-design`** counts six roles and its tool table covers
   every remaining role, with researcher's write scope corrected.
 - Role counts in the README, manifests, quickstarts and `MAINTAINERS.md`.
-
-### Added
-
-- **Retired-role record in Crew Doctor.** `RETIRED_ROLES` maps
-  `responder` to `researcher`; `retired_role_references` scans a consumer's
-  entry files, local skills and role overlays, and `compose_doctor_report(...,
-  retired_role_refs=...)` adds a `retired-roles.<role>` row naming the
-  successor.
 
 ## 0.65.0
 
