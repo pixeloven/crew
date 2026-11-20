@@ -1,0 +1,11 @@
+{
+  "name": "language-skills",
+  "description": "A Crew pack of language and toolchain conventions, one skill per language: Python today. Skills only; each project's house choices defer to the consumer's local skills.",
+  "skills": "./skills",
+  "version": "0.1.0",
+  "author": {
+    "name": "PixelOven"
+  },
+  "repository": "https://github.com/pixeloven/language-skills",
+  "license": "MIT"
+}
