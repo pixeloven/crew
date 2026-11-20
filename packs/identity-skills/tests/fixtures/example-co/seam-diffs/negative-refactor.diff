@@ -1,0 +1,11 @@
+--- a/auth-api/session/cookies.ts
++++ b/auth-api/session/cookies.ts
+@@ -1,9 +1,11 @@
+-export function sessionCookie(value: string) {
+-  return { name: "sid", value, httpOnly: true, secure: true, sameSite: "lax" as const };
+-}
++const SESSION_COOKIE_FLAGS = { httpOnly: true, secure: true, sameSite: "lax" as const };
++
++export function sessionCookie(value: string) {
++  return { name: "sid", value, ...SESSION_COOKIE_FLAGS };
++}

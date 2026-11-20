@@ -1,0 +1,4 @@
+date,kind,surface,summary
+2026-09-03,deploy,auth-api,log format change for reason codes
+2026-09-21,release,analytics-sdk,client analytics SDK upgraded on web and app; challenge events now recorded on screen render as well as on submit
+2026-10-02,experiment,hosted-login-flows,passwordless option shown to 10% of web sessions

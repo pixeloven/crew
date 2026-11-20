@@ -808,11 +808,72 @@ class RolePostureTests(unittest.TestCase):
 
         package = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         # On pi Crew provides skills; roles ship as readable files, not dispatch.
-        self.assertEqual({"skills": ["./skills"]}, package["pi"])
+        # pi installs one repo as one package, so the root manifest also
+        # declares every folded pack's skills; consumers narrow with filters.
+        packs = sorted(path.name for path in (ROOT / "packs").iterdir() if path.is_dir())
+        self.assertEqual({"skills"}, set(package["pi"]))
+        self.assertEqual("./skills", package["pi"]["skills"][0])
+        self.assertEqual(
+            sorted(f"./packs/{name}/skills" for name in packs),
+            sorted(package["pi"]["skills"][1:]),
+        )
         self.assertIn("pi-agents", package["files"])
+        self.assertIn("packs", package["files"])
         self.assertNotIn("peerDependencies", package)
         self.assertNotIn("dependencies", package)
         self.assertFalse((ROOT / "pi-extension").exists())
+
+    def test_catalogue_serves_crew_and_every_folded_pack_from_this_repo(self) -> None:
+        import json
+
+        catalogue = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
+        self.assertEqual("pixeloven", catalogue["name"])
+        relative = {
+            entry["name"]: entry["source"]
+            for entry in catalogue["plugins"]
+            if isinstance(entry["source"], str)
+        }
+        packs = sorted(path.name for path in (ROOT / "packs").iterdir() if path.is_dir())
+        self.assertEqual(
+            {"crew": "./", **{name: f"./packs/{name}" for name in packs}},
+            relative,
+        )
+        for name, source in relative.items():
+            manifest = json.loads(
+                (ROOT / source / ".claude-plugin/plugin.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(name, manifest["name"], source)
+            self.assertEqual("./skills", manifest["skills"], source)
+        # Plugins hosted elsewhere stay pinned by url + sha.
+        for entry in catalogue["plugins"]:
+            if not isinstance(entry["source"], str):
+                self.assertEqual("url", entry["source"]["source"], entry["name"])
+                self.assertRegex(entry["source"]["sha"], r"^[0-9a-f]{40}$", entry["name"])
+
+    def test_ci_checks_every_folded_pack(self) -> None:
+        from scripts.check_skills import yaml_module
+
+        workflow = yaml_module().safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+        job = workflow["jobs"]["packs"]
+        packs = sorted(path.name for path in (ROOT / "packs").iterdir() if path.is_dir())
+        self.assertEqual(packs, sorted(job["strategy"]["matrix"]["pack"]))
+        checks = {step["env"]["CHECK"] for step in job["steps"] if "CHECK" in step.get("env", {})}
+        expected = {
+            f"scripts/{script}"
+            for script in ("check_skills.py", "check_skill_layout.py", "check_links.py", "check_versions.py")
+        }
+        self.assertEqual(expected, checks)
+        for check in checks:
+            self.assertTrue((ROOT / check).is_file(), check)
+        shipped = [
+            step["env"]["SHIPPED_PATHS"].split()
+            for step in workflow["jobs"]["version-bump"]["steps"]
+            if "SHIPPED_PATHS" in step.get("env", {})
+        ]
+        self.assertEqual(1, len(shipped))
+        self.assertEqual(
+            {"skills", "agents", "pi-agents", "roles", "templates", "scripts", "packs"}, set(shipped[0])
+        )
 
     def test_every_runtime_knob_is_observably_rejected(self) -> None:
         for key in ("model", "thinking", "effort", "model_reasoning_effort", "turnBudget", "maxTurns"):

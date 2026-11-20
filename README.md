@@ -48,10 +48,19 @@ One identity, three spellings: the repo is `pixeloven/crew`, the package is
 `@pixeloven/crew`, and the plugin is `crew@pixeloven`. Nothing is published to a
 package registry — releases are git tags.
 
-Claude Code and Codex install the plugin from the shared catalogue at
-[`pixeloven/marketplace`](https://github.com/pixeloven/marketplace), which pins
-this repo by commit SHA; this repo carries no marketplace of its own. Pi has no
-marketplace concept and installs the package from a `vX.Y.Z` tag directly.
+Since 0.67.0 this repo is also the `pixeloven` marketplace: its catalogue,
+[`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json), serves Crew
+and the packs under [`packs/`](packs/) by relative path, beside PixelOven
+plugins hosted elsewhere. Claude Code and Codex add the marketplace from
+`pixeloven/crew` **pinned to a release tag**, and one tag pins Crew and every
+pack together: the tag is the release gate, so a consumer tracking the default
+branch instead receives every change as it merges. Pi has no marketplace concept
+and installs the package from a `vX.Y.Z` tag directly; the same package carries
+the packs, and settings filters choose which load.
+
+Coming from the old `pixeloven/marketplace` catalogue? Switch the marketplace
+source as the [0.67.0 changelog](CHANGELOG.md#0670) describes per harness. Plugin
+IDs (`crew@pixeloven`, `<pack>@pixeloven`) do not change.
 
 ## Local overlays and collisions
 
@@ -76,10 +85,22 @@ consumer roles in `agents/`, `.claude/agents/`, and `.pi/agents/`.
 
 ## Packs
 
-Domain, stack, and craft skills belong in **packs**: sibling `<domain>-skills`
+Domain, stack, and craft skills belong in **packs**: `<domain>-skills`
 plugins that ship skills only, may fill Crew's slots with `provides:`, declare
-`plugin:crew@>=X.Y.Z` in every skill's `requires:`, and run Crew's own checks —
-in CI, one job:
+`plugin:crew@>=X.Y.Z` in every skill's `requires:`, and run Crew's own checks.
+PixelOven's packs live in this repo under `packs/` and ship on Crew's release
+line:
+
+| Pack | Covers |
+|---|---|
+| [`infra-skills`](packs/infra-skills/) | Terraform, Ansible, Kubernetes, GitHub Actions conventions, infrastructure seams, go-public review |
+| [`planning-skills`](packs/planning-skills/) | product planning: idea shaping, readiness, themes, story breakdown, requirements and cross-functional review |
+| [`identity-skills`](packs/identity-skills/) | vendor-neutral identity and auth method: seams, surface map, flow tracing, funnel baselines, investigations |
+| [`language-skills`](packs/language-skills/) | language and toolchain conventions, Python first |
+
+Each installs as its own plugin, `<pack>@pixeloven`, on Claude Code and Codex.
+A pack in its own repo meets the same contract and runs the checks in CI with
+one job:
 
 ```yaml
 jobs:
@@ -109,7 +130,7 @@ Crew core now keeps only portable practice. What moved:
 
 | Was in Crew | Now in |
 |---|---|
-| `crew:python-conventions` | `language-skills:python-conventions` ([`language-skills`](https://github.com/pixeloven/language-skills)) |
+| `crew:python-conventions` | `language-skills:python-conventions` ([`language-skills`](packs/language-skills/)) |
 | `crew:pr-review-checklist` Kubernetes, secret-sync, Terraform and Ansible checks | the "Review checks" in `infra-skills:k8s-kustomize-conventions`, `infra-skills:k8s-workload-patterns`, `infra-skills:terraform-conventions` and `infra-skills:ansible-conventions` |
 | `crew:seam-detection` secret, scheduling, LLM-gateway access and RBAC seams | `infra-skills:infra-seams`, which seeds them into your `protected-seams` registry |
 | `crew:incident-runbook-template` Kubernetes sweep sections and diagnostic commands | `infra-skills:k8s-diagnostics` |
@@ -144,7 +165,7 @@ return. A project that relies on it can keep a local copy until then.
 
 `terraform-conventions`, `ansible-conventions`, `k8s-kustomize-conventions`,
 `k8s-workload-patterns`, and `github-actions-conventions` no longer ship with
-Crew. They live in the [`infra-skills`](https://github.com/pixeloven/infra-skills)
+Crew. They live in the [`infra-skills`](packs/infra-skills/)
 pack (`infra-skills@pixeloven`). To keep them:
 
 1. install `infra-skills` beside Crew on each harness;

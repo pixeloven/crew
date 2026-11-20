@@ -9,6 +9,7 @@ claims repeatable and fixture-testable.
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import math
 import os
@@ -48,9 +49,15 @@ except ImportError:  # Direct script execution.
 CREW_REPO = "pixeloven/crew"
 # Plugin identity is <plugin>@<marketplace>. The marketplace is the org so a
 # single PixelOven marketplace can serve crew alongside its siblings.
-# The catalogue lives in its own repo so one marketplace can serve every
-# PixelOven plugin; this repo is only the plugin it points at.
-MARKETPLACE_REPO = "pixeloven/marketplace"
+# Since 0.67.0 the catalogue lives in this repo (.claude-plugin/marketplace.json)
+# and serves crew and the packs folded under packs/ by relative source.
+MARKETPLACE_REPO = CREW_REPO
+# Catalogue repos a consumer may still point at from before the fold. Doctor
+# accepts them as Crew's marketplace so an unmigrated install still resolves,
+# and reports the source switch as DEGRADED (CHANGELOG 0.67.0). Temporary:
+# it covers installs not yet switched after the crew release; remove it once
+# pixeloven/marketplace is archived.
+LEGACY_MARKETPLACE_REPOS = ("pixeloven/marketplace",)
 MARKETPLACE_NAME = "pixeloven"
 PLUGIN_NAME = "crew"
 PLUGIN_ID = f"{PLUGIN_NAME}@{MARKETPLACE_NAME}"
@@ -205,6 +212,98 @@ def _pi_package_ref(value: str) -> str | None:
     return ref if separator else None
 
 
+def _pi_package_entry(item: Any) -> tuple[str, list[str] | None, bool] | None:
+    """(source, skills filters or None, autoload) for one pi `packages` entry."""
+    if isinstance(item, str):
+        return item, None, True
+    if not isinstance(item, dict) or not isinstance(item.get("source"), str):
+        return None
+    filters = item.get("skills")
+    if not isinstance(filters, list) or not all(isinstance(value, str) for value in filters):
+        filters = None
+    return item["source"], filters, item.get("autoload") is not False
+
+
+def pi_effective_filters(entries: list[tuple[str, list[str] | None, bool]]) -> list[list[str] | None]:
+    """The `skills` filters that apply to one pi package across scopes.
+
+    `entries` are (scope, filters, autoload) for every settings entry naming the
+    package. A project entry without `autoload: false` replaces the user entry,
+    so only project entries apply; otherwise every entry applies, an
+    `autoload: false` one being a delta on the other scope's entry.
+    """
+    if any(scope == "project" and autoload for scope, _, autoload in entries):
+        return [filters for scope, filters, _ in entries if scope == "project"]
+    return [filters for _, filters, _ in entries]
+
+
+def pi_declared_skill_roots(package_root: pathlib.Path) -> list[pathlib.Path]:
+    """Skill roots a pi package declares in package.json `pi.skills`.
+
+    A package without the declaration exposes its conventional `skills/`.
+    Entries may be globs (`./packs/*/skills`); only existing directories count.
+    """
+    package_root = pathlib.Path(package_root)
+    declared: Any = None
+    try:
+        manifest = json.loads((package_root / "package.json").read_text(encoding="utf-8"))
+        declared = manifest.get("pi", {}).get("skills") if isinstance(manifest, dict) else None
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AttributeError):
+        declared = None
+    if not isinstance(declared, list) or not declared:
+        declared = ["./skills"]
+    roots: list[pathlib.Path] = []
+    for value in declared:
+        if not isinstance(value, str) or not value.strip():
+            continue
+        pattern = value.strip().removeprefix("./")
+        matches = sorted(package_root.glob(pattern)) if any(c in pattern for c in "*?[") else [package_root / pattern]
+        roots.extend(path for path in matches if path.is_dir() and _path_within(path, package_root))
+    return list(dict.fromkeys(roots))
+
+
+def _pi_filter_admits(relative: str, filters: list[str] | None) -> bool:
+    """Whether one entry's `skills` filters let a package-relative path through.
+
+    No filter admits everything. Otherwise an include list (patterns without
+    `!`) must match when present, and no `!` exclusion may match. Patterns match
+    the path of a skill's SKILL.md relative to the package root.
+    """
+    if filters is None:
+        return True
+    includes = [value for value in filters if not value.startswith("!")]
+    excludes = [value[1:] for value in filters if value.startswith("!")]
+    if includes and not any(fnmatch.fnmatchcase(relative, value) for value in includes):
+        return False
+    return not any(fnmatch.fnmatchcase(relative, value) for value in excludes)
+
+
+def folded_pack_roots(
+    package_root: pathlib.Path, entries_filters: list[list[str] | None] | None = None
+) -> list[pathlib.Path]:
+    """Pack roots folded into a pi package that its settings entries load.
+
+    A folded pack is a declared skill root other than the package's own
+    `skills/`, e.g. `packs/<name>/skills`; its pack root is that root's parent.
+    Pass each settings entry's `skills` filters (None for an unfiltered entry);
+    a pack counts when any entry admits at least one of its skills. With no
+    entries, every declared pack counts. Claude Code and Codex install each pack
+    as its own plugin, so this applies to pi only.
+    """
+    package_root = pathlib.Path(package_root)
+    entries = entries_filters if entries_filters else [None]
+    packs: list[pathlib.Path] = []
+    for skill_root in pi_declared_skill_roots(package_root):
+        pack_root = skill_root.parent
+        if pack_root == package_root:
+            continue
+        skills = sorted(skill_root.glob("*/SKILL.md"))
+        relatives = [path.relative_to(package_root).as_posix() for path in skills]
+        if any(_pi_filter_admits(rel, filters) for filters in entries for rel in relatives):
+            packs.append(pack_root)
+    return list(dict.fromkeys(packs))
+
+
 def _version_tuple(
     value: Any,
 ) -> tuple[int, int, int, int, tuple[tuple[int, int | str], ...]] | None:
@@ -221,19 +320,28 @@ def _version_tuple(
     return (major, minor, patch, 0 if separator else 1, identifiers)
 
 
-def _is_marketplace_source(value: Any) -> bool:
-    if value == MARKETPLACE_REPO:
-        return True
-    return (
+def _marketplace_source_repo(value: Any) -> str | None:
+    """The accepted catalogue repo a Claude marketplace source names, if any."""
+    accepted = (MARKETPLACE_REPO, *LEGACY_MARKETPLACE_REPOS)
+    if isinstance(value, str) and value in accepted:
+        return value
+    if (
         isinstance(value, dict)
         and value.get("source") == "github"
-        and value.get("repo") == MARKETPLACE_REPO
-    )
+        and value.get("repo") in accepted
+    ):
+        return value["repo"]
+    return None
 
 
-def _is_codex_marketplace_git_source(source_type: Any, source: Any) -> bool:
+def _is_marketplace_source(value: Any) -> bool:
+    return _marketplace_source_repo(value) is not None
+
+
+def _codex_marketplace_repo(source_type: Any, source: Any) -> str | None:
+    """The accepted catalogue repo a Codex git marketplace source names, if any."""
     if source_type != "git" or not isinstance(source, str):
-        return False
+        return None
     normalized = source.strip().rstrip("/")
     if normalized.endswith(".git"):
         normalized = normalized[:-4]
@@ -246,7 +354,26 @@ def _is_codex_marketplace_git_source(source_type: Any, source: Any) -> bool:
         if normalized.startswith(prefix):
             normalized = normalized[len(prefix) :]
             break
-    return normalized == MARKETPLACE_REPO
+    return normalized if normalized in (MARKETPLACE_REPO, *LEGACY_MARKETPLACE_REPOS) else None
+
+
+def _is_codex_marketplace_git_source(source_type: Any, source: Any) -> bool:
+    return _codex_marketplace_repo(source_type, source) is not None
+
+
+def _flag_legacy_marketplace(result: dict[str, Any], sources: list[str]) -> None:
+    """Report a marketplace still sourced from the pre-fold catalogue repo."""
+    if not sources:
+        return
+    if result["status"] != "MISSING":
+        result["status"] = "DEGRADED"
+    _add_finding(
+        result,
+        f"marketplace {MARKETPLACE_NAME} is still sourced from the retired catalogue "
+        f"{' or '.join(LEGACY_MARKETPLACE_REPOS)}; switch the source to {MARKETPLACE_REPO} "
+        "pinned to a release tag (CHANGELOG 0.67.0, Consumer impact)",
+        *sources,
+    )
 
 
 def _evidence(kind: str, claim: str, source: str = "") -> dict[str, str]:
@@ -888,16 +1015,28 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
             _mark_config_malformed(result, settings_path, "packages must be a string sequence")
             packages = []
         for item in packages:
-            if not isinstance(item, str):
-                _mark_config_malformed(result, settings_path, "packages entries must be strings")
+            # pi takes a package as a source string or as an object whose
+            # `source` is that string, with optional `skills` filters and
+            # `autoload` (docs/quickstart-pi.md).
+            entry = _pi_package_entry(item)
+            if entry is None:
+                _mark_config_malformed(
+                    result,
+                    settings_path,
+                    "packages entries must be strings or objects with a string source",
+                )
                 continue
-            if PI_CREW_PACKAGE.fullmatch(item):
+            source, filters, autoload = entry
+            if PI_CREW_PACKAGE.fullmatch(source):
                 registrations.append(
                     {
                         "settings": str(settings_path),
-                        "package": item,
-                        "ref": _pi_package_ref(item),
-                        "version": _pi_package_version(item),
+                        "package": source,
+                        "ref": _pi_package_ref(source),
+                        "version": _pi_package_version(source),
+                        "skills": filters,
+                        "autoload": autoload,
+                        "scope": "project" if settings_path == project / ".pi/settings.json" else "user",
                     }
                 )
     result["registrations"] = registrations
@@ -914,9 +1053,12 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         root_versions={pathlib.Path(item["root"]): item["version"] for item in resolved},
     )
     result["resolved_installations"] = resolved
+    # An `autoload: false` entry is a filter delta on another scope's package,
+    # not a pin of its own, so it never selects the configured version.
+    pinning = [item for item in registrations if item.get("autoload", True)] or registrations
     primary = next(
-        (item for item in registrations if item["settings"] == str(project / ".pi/settings.json")),
-        registrations[0] if registrations else None,
+        (item for item in pinning if item["settings"] == str(project / ".pi/settings.json")),
+        pinning[0] if pinning else None,
     )
     runtime_root_matches = set(result["runtime_root_matches"])
     runtime_matches = [item for item in resolved if item["root"] in runtime_root_matches]
@@ -937,6 +1079,21 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
         [selected["root"]] if selected else [item["root"] for item in resolved]
     )
     result["resolved_package_roots"] = [selected["root"]] if selected else []
+    # The crew package also carries the folded packs; which of them pi loads
+    # follows the registrations' `skills` filters (a string entry loads all).
+    result["folded_packs"] = (
+        [
+            {"name": root.name, "root": str(root)}
+            for root in folded_pack_roots(
+                pathlib.Path(selected["root"]),
+                pi_effective_filters(
+                    [(item["scope"], item["skills"], item["autoload"]) for item in registrations]
+                ),
+            )
+        ]
+        if selected
+        else []
+    )
     if resolved:
         source = selected["root"] if selected else "; ".join(item["root"] for item in resolved)
         result["installation"] = {"state": "present", "source": source}
@@ -997,10 +1154,10 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
             "package is configured but its resolved checkout manifest was unavailable",
             str(primary["settings"]),
         )
-    if len(registrations) > 1:
+    if len(pinning) > 1:
         result["status"] = "DEGRADED"
-        claim = f"Crew is registered in {len(registrations)} Pi settings scopes"
-        _add_finding(result, claim, *(str(item["settings"]) for item in registrations))
+        claim = f"Crew is registered in {len(pinning)} Pi settings scopes"
+        _add_finding(result, claim, *(str(item["settings"]) for item in pinning))
     if (
         result.get("configured_version")
         and result.get("resolved_version")
@@ -1034,6 +1191,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     settings_records: list[dict[str, Any]] = []
     enabled_records: list[dict[str, Any]] = []
     marketplace_records: list[dict[str, Any]] = []
+    legacy_marketplace_sources: list[str] = []
     for scope, settings_path in settings_paths:
         settings = _record_config_read(
             result,
@@ -1065,6 +1223,8 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             source_valid = isinstance(crew_marketplace, dict) and _is_marketplace_source(
                 source
             )
+            if source_valid and _marketplace_source_repo(source) != MARKETPLACE_REPO:
+                legacy_marketplace_sources.append(str(settings_path))
             marketplace_records.append(
                 {"scope": scope, "path": str(settings_path), "valid": source_valid}
             )
@@ -1106,6 +1266,8 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
     registry_source_valid = False
     if record:
         registry_source_valid = _is_marketplace_source(record.get("source"))
+        if registry_source_valid and _marketplace_source_repo(record.get("source")) != MARKETPLACE_REPO:
+            legacy_marketplace_sources.append(str(registry_path))
         if not registry_source_valid:
             _mark_config_malformed(
                 result,
@@ -1366,6 +1528,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             *(record["path"] for record in marketplace_records),
         )
     if result["installation"]["state"] != "present":
+        _flag_legacy_marketplace(result, legacy_marketplace_sources)
         _degrade_for_runtime(result)
         return result
     result["status"] = (
@@ -1428,6 +1591,7 @@ def _inspect_claude(project: pathlib.Path, home: pathlib.Path, runtime: dict[str
             str(location) if result.get("served_version") else "",
             result["runtime"].get("source", "") if result.get("loaded_version") else "",
         )
+    _flag_legacy_marketplace(result, legacy_marketplace_sources)
     _degrade_for_runtime(result)
     return result
 
@@ -1720,6 +1884,8 @@ def _inspect_codex(project: pathlib.Path, home: pathlib.Path, runtime: dict[str,
             str(config_path),
             str(resolved_root),
         )
+    if crew_source_valid and _codex_marketplace_repo(raw_source_type, raw_source) != MARKETPLACE_REPO:
+        _flag_legacy_marketplace(result, [str(config_path)])
     _degrade_for_runtime(result)
     return result
 

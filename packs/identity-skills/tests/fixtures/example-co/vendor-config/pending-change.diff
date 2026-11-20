@@ -1,0 +1,9 @@
+--- a/identity-config/flows/sign-in.json
++++ b/identity-config/flows/sign-in.json
+@@ -1,4 +1,4 @@
+ {
+-  "steps": ["identifier", "password", "mfa-challenge", "session"],
+-  "mfa": "always"
++  "steps": ["identifier", "password", "session"],
++  "mfa": "risk-based"
+ }

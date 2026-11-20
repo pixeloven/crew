@@ -1,0 +1,10 @@
+--- a/auth-api/issuer/verify.ts
++++ b/auth-api/issuer/verify.ts
+@@ -12,7 +12,7 @@ export async function verifyAccessToken(token: string) {
+   return jwtVerify(token, keySet, {
+     issuer: ISSUER,
+-    audience: "checkout",
++    audience: ["checkout", "partner-portal", "internal-tools"],
+     algorithms: ["RS256"],
+   });
+ }

@@ -13,12 +13,28 @@ dated compatibility evidence and re-check it on a major Codex release.
 Pin a published tag by replacing `vX.Y.Z`:
 
 ```sh
-codex plugin marketplace add pixeloven/marketplace
+codex plugin marketplace add pixeloven/crew --ref vX.Y.Z
 codex plugin add crew@pixeloven
 ```
 
-The marketplace is the catalogue repo; it pins each plugin by commit SHA,
-so the served version is whatever `pixeloven/marketplace` currently points at. A resolved plugin normally appears at
+Crew's repo is the marketplace: its `.claude-plugin/marketplace.json` serves
+Crew and the packs under `packs/` by relative path, so the served content is
+whatever the marketplace `ref` points at. **Pin the ref.** Codex serves the
+marketplace checkout as it is on every `codex plugin marketplace upgrade`, even
+when no `version` changed, so an unpinned marketplace delivers each merge to the
+default branch, scripts included. To upgrade, read the `### Consumer impact`
+section of every [CHANGELOG](../CHANGELOG.md) release between your tag and the
+new one, set `ref` under `[marketplaces.pixeloven]` in `~/.codex/config.toml`,
+and run `codex plugin marketplace upgrade pixeloven`.
+
+**Moving from `pixeloven/marketplace` (before 0.67.0).** Edit
+`[marketplaces.pixeloven]` in `~/.codex/config.toml`: set `source` to
+`pixeloven/crew` (keep `source_type = "git"`) and `ref` to the release tag, then
+run `codex plugin marketplace upgrade pixeloven`. Installed plugins are
+re-pointed in place and their `[plugins."<name>@pixeloven"]` entries are kept;
+no re-add is needed.
+
+A resolved plugin normally appears at
 `~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/skills`; the exact
 skill-root table in `codex debug prompt-input "hi"` is stronger evidence.
 

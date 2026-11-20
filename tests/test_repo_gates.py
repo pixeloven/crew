@@ -184,6 +184,54 @@ class VersionCheckTests(unittest.TestCase):
             self.assertNotEqual(0, bad.returncode)
             self.assertIn("git tag: 1.2.4", bad.stdout)
 
+    def test_folded_pack_manifests_join_the_release_line(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(
+                tmp,
+                **{
+                    "package.json": {"version": "1.2.3"},
+                    ".claude-plugin__plugin.json": {"version": "1.2.3"},
+                    "packs__a-skills__package.json": {"version": "1.2.3"},
+                    "packs__a-skills__.claude-plugin__plugin.json": {"version": "0.3.0"},
+                },
+            )
+            completed = run("check_versions.py", str(root))
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("packs/a-skills/.claude-plugin/plugin.json: 0.3.0", completed.stdout)
+
+    def test_folded_pack_without_a_manifest_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(
+                tmp,
+                **{
+                    "package.json": {"version": "1.2.3"},
+                    ".claude-plugin__plugin.json": {"version": "1.2.3"},
+                },
+            )
+            write(root, "packs/a-skills/skills/x/SKILL.md", "---\nname: x\n---\n")
+            completed = run("check_versions.py", str(root))
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn("packs/a-skills: no manifest", completed.stdout)
+
+    def test_folded_pack_floor_above_the_repo_version_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.repo(
+                tmp,
+                **{
+                    "package.json": {"version": "1.2.3"},
+                    ".claude-plugin__plugin.json": {"version": "1.2.3"},
+                    "packs__a-skills__package.json": {"version": "1.2.3"},
+                },
+            )
+            skill = "packs/a-skills/skills/x/SKILL.md"
+            write(root, skill, "---\nname: x\nrequires: [plugin:crew@>=1.3.0]\n---\n")
+            completed = run("check_versions.py", str(root))
+            self.assertNotEqual(0, completed.returncode)
+            self.assertIn(f"{skill}: plugin:crew@>=1.3.0", completed.stdout)
+            write(root, skill, "---\nname: x\nrequires: [plugin:crew@>=1.2.3]\n---\n")
+            completed = run("check_versions.py", str(root))
+            self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)
+
     def test_repo_itself_passes(self) -> None:
         completed = run("check_versions.py")
         self.assertEqual(0, completed.returncode, completed.stdout + completed.stderr)

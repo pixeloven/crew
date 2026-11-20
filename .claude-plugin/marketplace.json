@@ -1,0 +1,88 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "pixeloven",
+  "description": "PixelOven's plugins for Claude Code and Codex — the agent foundation, its skill packs, and the design system.",
+  "owner": {
+    "name": "PixelOven"
+  },
+  "plugins": [
+    {
+      "name": "crew",
+      "description": "Portable agent methodology: 6 crew roles, planning/review/orchestration disciplines, onboarding, doctor and learn. Needs no platform; domain and stack skills ship as packs in this repo.",
+      "author": {
+        "name": "PixelOven"
+      },
+      "category": "workflow",
+      "source": "./",
+      "homepage": "https://github.com/pixeloven/crew"
+    },
+    {
+      "name": "infra-skills",
+      "description": "Crew skills pack: Terraform, Ansible, Kubernetes (Kustomize, workloads, health sweeps) and GitHub Actions conventions, plus infrastructure seam detection and go-public review, with estate choices deferred to the project's local skills.",
+      "author": {
+        "name": "PixelOven"
+      },
+      "category": "development",
+      "source": "./packs/infra-skills",
+      "homepage": "https://github.com/pixeloven/crew/tree/main/packs/infra-skills"
+    },
+    {
+      "name": "language-skills",
+      "description": "Crew skills pack: language and toolchain conventions for coding agents, one skill per language, Python first.",
+      "author": {
+        "name": "PixelOven"
+      },
+      "category": "development",
+      "source": "./packs/language-skills",
+      "homepage": "https://github.com/pixeloven/crew/tree/main/packs/language-skills"
+    },
+    {
+      "name": "planning-skills",
+      "description": "Crew skills pack for product planning: idea shaping, requirements review, readiness, themes, story breakdown and cross-functional review. Drafts only; tracker sync optional.",
+      "author": {
+        "name": "PixelOven"
+      },
+      "category": "development",
+      "source": "./packs/planning-skills",
+      "homepage": "https://github.com/pixeloven/crew/tree/main/packs/planning-skills"
+    },
+    {
+      "name": "identity-skills",
+      "description": "Crew skills pack for identity and auth engineering: auth seams, flow tracing, surface mapping, signal reliability, account investigation and vendor config review.",
+      "author": {
+        "name": "PixelOven"
+      },
+      "category": "development",
+      "source": "./packs/identity-skills",
+      "homepage": "https://github.com/pixeloven/crew/tree/main/packs/identity-skills"
+    },
+    {
+      "name": "design",
+      "description": "Brand assets and design-system usage: the tokens, typography and component conventions a consuming project applies.",
+      "author": {
+        "name": "PixelOven"
+      },
+      "category": "design",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/pixeloven/design.git",
+        "sha": "9e856c9f9fd2c3e9954fb8b760af52f382e41ae1"
+      },
+      "homepage": "https://github.com/pixeloven/design"
+    },
+    {
+      "name": "comfyui-docker",
+      "description": "Authoring and operating a ComfyUI model store: comfy.yaml manifests, resolved locks, and the image channels that serve them.",
+      "author": {
+        "name": "PixelOven"
+      },
+      "category": "workflow",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/pixeloven/ComfyUI-Docker.git",
+        "sha": "8940fdc2cf04e7ee5377e65ef922bf00b1ceee0f"
+      },
+      "homepage": "https://github.com/pixeloven/ComfyUI-Docker"
+    }
+  ]
+}

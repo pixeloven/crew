@@ -9,19 +9,25 @@ as [operator](https://github.com/pixeloven/operator) does it.
 ## 1. Install the package
 
 Pin a published Crew release for reproducibility; replace `vX.Y.Z` with the
-chosen tag:
+chosen tag. Install Crew alone at user scope, in `~/.pi/agent/settings.json`:
 
 ```json
 {
   "packages": [
-    "git:github.com/pixeloven/crew@vX.Y.Z"
+    { "source": "git:github.com/pixeloven/crew@vX.Y.Z", "skills": ["skills/**"] }
   ]
 }
 ```
 
-The package's `pi` manifest declares only `skills`, so pi loads every Crew skill
-from `skills/`. The checkout also carries `pi-agents/*.md` and the rest of the
-repo (`scripts/`, `templates/`) that some skills run by absolute path. Read the
+The `skills` filter matters. The package's `pi` manifest declares only
+`skills`: Crew's own `skills/` and, since 0.67.0, the skills of each pack folded
+under `packs/<name>/` (`infra-skills`, `planning-skills`, `identity-skills`,
+`language-skills`). pi identifies a git package by its repository, so the packs
+cannot be separate packages, and a plain string entry
+(`"git:github.com/pixeloven/crew@vX.Y.Z"`) loads Crew and every pack: 45 skills
+instead of 21. Use the plain string only if every project should see every
+pack. The checkout also carries `pi-agents/*.md` and the rest of the repo
+(`scripts/`, `templates/`) that some skills run by absolute path. Read the
 configured pin from settings and the resolved version from the checkout's
 `.claude-plugin/plugin.json`. Do not use `git describe` for package version.
 
@@ -29,12 +35,43 @@ To use the skills without installing a package at all, see section 5.
 
 ### Enable packs per project
 
-Add each pack to the `packages` of the project that uses it, in `.pi/settings.json`
-(`pi install git:github.com/pixeloven/<pack>@vX.Y.Z -l`), rather than to
-`~/.pi/agent/settings.json`. User settings are the alternative for a pack every
-project needs. Pi lists every visible skill's description in full in every
-session, with no budget, so each pack a project doesn't use is pure cost there.
-A package's `skills` filter (`"!skills/<name>"`) narrows one pack further.
+Pi lists every visible skill's description in full in every session, with no
+budget, so each pack a project doesn't use is pure cost there. Keep the
+Crew-only entry above at user scope.
+
+Then add each pack to the project that uses it, in `.pi/settings.json`, as a
+delta on that same package:
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/pixeloven/crew@vX.Y.Z",
+      "autoload": false,
+      "skills": ["packs/infra-skills/**"]
+    }
+  ]
+}
+```
+
+The project then sees Crew plus that pack, loaded from your single user-scope
+checkout. Keep `"autoload": false`: a project entry without it replaces the user
+entry and needs its own checkout (`pi install … -l`), and loads nothing until
+that runs. pi keys a package by its repository, not its ref, so the delta's tag
+does not have to match. Filters only narrow what the manifest declares: a
+plain string entry, or a filter that admits a pack, loads that pack everywhere
+the entry applies. Another filter form loads Crew plus chosen packs in one
+entry: `"skills": ["skills/**", "packs/infra-skills/**"]`. A `!` pattern
+excludes, e.g. `"!packs/planning-skills/**"` or `"!skills/<name>"` for one skill.
+
+To move to a new release, run `pi install git:github.com/pixeloven/crew@vNEW`.
+It updates the entry in place and keeps its `skills` filter.
+
+**Moving from separate pack packages (before 0.67.0).** Replace each
+`git:github.com/pixeloven/<pack>@…` entry with the forms above: drop it from user
+settings and, where a project used it, add the `autoload: false` delta naming
+`packs/<pack>/**`. To keep every pack at user scope, as before, use one plain
+`git:github.com/pixeloven/crew@vX.Y.Z` string entry.
 
 ## 2. Verify skill discovery
 

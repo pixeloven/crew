@@ -1,0 +1,6 @@
+--- a/auth-api/login/handler.ts
++++ b/auth-api/login/handler.ts
+@@ -40,6 +40,7 @@ export async function login(req: Request) {
+   const result = await authenticate(credentials);
++  metrics.increment("login_attempt", { outcome: result.outcome, reason: result.reasonCode });
+   if (!result.ok) return deny(result.reasonCode);

@@ -1,0 +1,6 @@
+# identity-skills: slots this pack's skills defer to.
+# Each has a starter stub at templates/local-skills/<slot>.md.
+# Slots are the OUTPUT of discovery, never a prerequisite: every skill works
+# with them empty and proposes their content for the operator to commit.
+identity-surfaces
+identity-event-schema

@@ -1,0 +1,4 @@
+# language-skills: slots this pack's skills defer to.
+# Each has a starter stub at templates/local-skills/<slot>.md.
+# Every skill runs on its stated defaults while its slot is empty.
+python-stack

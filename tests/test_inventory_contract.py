@@ -121,6 +121,70 @@ class SecretTests(InventoryTestCase):
         self.assertNotIn("canary", json.dumps(ids))
 
 
+class FoldedPackTests(unittest.TestCase):
+    """pi installs one repo as one package; packs folded under packs/ count as
+    packs only when the settings entries' `skills` filters admit them."""
+
+    def build(self, user_packages: list, project_packages: list | None = None) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            home, project = base / "home", base / "project"
+            checkout = home / ".pi/agent/git/github.com/pixeloven/crew"
+            files = {
+                "package.json": json.dumps(
+                    {"name": "@pixeloven/crew", "pi": {"skills": ["./skills", "./packs/*/skills"]}}
+                ),
+                "skills/doctor/SKILL.md": "---\nname: doctor\n---\n",
+                "packs/a-skills/package.json": json.dumps({"name": "a-skills"}),
+                "packs/a-skills/skills/alpha/SKILL.md": "---\nname: alpha\nrequires: [plugin:crew@>=0.1.0]\n---\n",
+                "packs/b-skills/package.json": json.dumps({"name": "b-skills"}),
+                "packs/b-skills/skills/beta/SKILL.md": "---\nname: beta\nrequires: [plugin:crew@>=0.1.0]\n---\n",
+            }
+            for rel, text in files.items():
+                path = checkout / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text, encoding="utf-8")
+            settings = home / ".pi/agent/settings.json"
+            settings.parent.mkdir(parents=True, exist_ok=True)
+            settings.write_text(json.dumps({"packages": user_packages}), encoding="utf-8")
+            if project_packages is not None:
+                (project / ".pi").mkdir(parents=True)
+                (project / ".pi/settings.json").write_text(
+                    json.dumps({"packages": project_packages}), encoding="utf-8"
+                )
+            project.mkdir(exist_ok=True)
+            return build_inventory(project, home, which=fake_which, now="2026-11-20T00:00:00Z")
+
+    def names(self, inventory: dict) -> tuple[set[str], set[str]]:
+        packs = {pack["name"] for pack in inventory["packs"]}
+        skills = {skill["name"] for skill in inventory["skills"]}
+        return packs, skills
+
+    def test_unfiltered_package_loads_every_folded_pack(self) -> None:
+        packs, skills = self.names(self.build(["git:github.com/pixeloven/crew@v0.67.0"]))
+        self.assertTrue({"a-skills", "b-skills"} <= packs)
+        self.assertTrue({"alpha", "beta"} <= skills)
+
+    def test_crew_only_filter_loads_no_folded_pack_and_a_delta_adds_one(self) -> None:
+        crew_only = [{"source": "git:github.com/pixeloven/crew@v0.67.0", "skills": ["skills/**"]}]
+        packs, skills = self.names(self.build(crew_only))
+        self.assertFalse({"a-skills", "b-skills"} & packs)
+        self.assertFalse({"alpha", "beta"} & skills)
+
+        delta = [{"source": "git:github.com/pixeloven/crew@v0.67.0", "autoload": False,
+                  "skills": ["packs/a-skills/**"]}]
+        packs, skills = self.names(self.build(crew_only, delta))
+        self.assertIn("a-skills", packs)
+        self.assertNotIn("b-skills", packs)
+        self.assertIn("alpha", skills)
+        self.assertNotIn("beta", skills)
+
+    def test_project_entry_without_autoload_false_replaces_the_user_entry(self) -> None:
+        crew_only = [{"source": "git:github.com/pixeloven/crew@v0.67.0", "skills": ["skills/**"]}]
+        packs, _ = self.names(self.build(["git:github.com/pixeloven/crew@v0.67.0"], crew_only))
+        self.assertFalse({"a-skills", "b-skills"} & packs)
+
+
 class PackageRefTests(unittest.TestCase):
     def test_userinfo_query_and_fragment_never_survive(self) -> None:
         _safe_package_ref = crew_inventory._safe_package_ref
