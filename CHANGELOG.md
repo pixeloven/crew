@@ -23,7 +23,8 @@ convention and are not backfilled.
 
 Crew's repo now holds the four PixelOven packs and the `pixeloven` marketplace.
 `infra-skills`, `planning-skills`, `identity-skills` and `language-skills` live
-under `packs/<name>/` with their git history, each still its own plugin, and
+under `packs/<name>/`, imported at each repo's `main` head, each still its own
+plugin, and
 `.claude-plugin/marketplace.json` serves Crew and the packs from this repo. One
 release line and one tag now cover Crew and every pack.
 
@@ -64,7 +65,12 @@ release line and one tag now cover Crew and every pack.
     `.pi/settings.json`:
     `{"source": "git:github.com/pixeloven/crew@v0.67.0", "autoload": false, "skills": ["packs/<pack>/**"]}`.
     Keep `autoload: false`: without it the project entry replaces the user
-    entry and loads nothing until it has its own checkout.
+    entry and loads nothing until it has its own checkout. **A Crew-only pi
+    install that just moves its tag** from a string entry like
+    `git:github.com/pixeloven/crew@v0.66.0` now loads 24 more skills (the four
+    packs): 45 instead of 21, and about 10,200 always-on description
+    characters instead of 4,440. Switch it to the filtered entry above to keep
+    Crew alone.
 
   The old pack repos and `pixeloven/marketplace` stay where they are for now,
   so an unmigrated install keeps resolving its old pins; it receives nothing
@@ -72,10 +78,12 @@ release line and one tag now cover Crew and every pack.
 
 ### Added
 
-- **Packs folded in with history.** Each pack was imported with
-  `git subtree add` at its repo's `main` head, so its commits are reachable
-  from Crew's history. Its own CI and `.gitignore` are dropped; its manifests
-  point at `pixeloven/crew` (`package.json` adds `directory`).
+- **Packs folded in.** Each pack was imported at its repo's `main` head;
+  earlier history stays in the original pack repo
+  (`pixeloven/<pack>`), which each pack README points at. Its own CI and
+  `.gitignore` are dropped; its manifests point at `pixeloven/crew`
+  (`package.json` adds `directory`) and it is no longer a pi package of its
+  own (`pi` key and `pi-package` keyword removed).
 - **The `pixeloven` catalogue,** `.claude-plugin/marketplace.json`: `crew` is
   `"./"`, each pack is `"./packs/<name>"`, and `design` and `comfyui-docker`
   keep their `url`+`sha` entries.
@@ -95,9 +103,8 @@ release line and one tag now cover Crew and every pack.
   watches `scripts/` and `packs/`.
 - **Doctor** reads the marketplace from `pixeloven/crew`. A source still naming
   `pixeloven/marketplace` resolves but is `DEGRADED` with the switch to make.
-  That acceptance is temporary: it keeps machines not yet switched resolving
-  while dotfiles moves after this release, and is removed once
-  `pixeloven/marketplace` is archived.
+  That acceptance is temporary: it keeps installs that have not yet switched
+  resolving, and is removed once `pixeloven/marketplace` is archived.
   On pi it accepts object `packages` entries (`source`, `skills`, `autoload`),
   treats an `autoload: false` entry as a delta rather than a second pin, and
   reports the folded packs the filters load as `folded_packs`; the inventory

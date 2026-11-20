@@ -3,7 +3,6 @@
   "version": "0.67.0",
   "description": "A Crew pack of vendor-neutral identity and authentication method: auth seams, surface map, flow tracing, funnel baselines, account investigation, risk trends, and vendor-config review. Skills only; every organisation fact is discovered into the project's own slots.",
   "keywords": [
-    "pi-package",
     "claude-plugin",
     "skills",
     "crew-pack",
@@ -25,10 +24,5 @@
     "skills",
     "slots.txt",
     "templates"
-  ],
-  "pi": {
-    "skills": [
-      "./skills"
-    ]
-  }
+  ]
 }

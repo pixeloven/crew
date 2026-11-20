@@ -55,8 +55,8 @@ MARKETPLACE_REPO = CREW_REPO
 # Catalogue repos a consumer may still point at from before the fold. Doctor
 # accepts them as Crew's marketplace so an unmigrated install still resolves,
 # and reports the source switch as DEGRADED (CHANGELOG 0.67.0). Temporary:
-# it covers machines not yet switched while dotfiles moves after the crew
-# release; remove it once pixeloven/marketplace is archived.
+# it covers installs not yet switched after the crew release; remove it once
+# pixeloven/marketplace is archived.
 LEGACY_MARKETPLACE_REPOS = ("pixeloven/marketplace",)
 MARKETPLACE_NAME = "pixeloven"
 PLUGIN_NAME = "crew"

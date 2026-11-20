@@ -8,14 +8,14 @@ How the foundation itself is built, versioned, and kept honest. Consumers don't 
 crew/
 ├── roles/<role>/                   # SINGLE SOURCE for the 6 role agents — exactly role.yml + body.md
 ├── roles/_shared/<part>.md         # text every role carries verbatim, pulled in by `<!-- include: <part> -->`
-│   └── expected-local-skills.txt   # backtick-token allowlist: local-skill SLOT names agent bodies may cite
+├── roles/expected-local-skills.txt # backtick-token allowlist: local-skill SLOT names agent bodies may cite
 ├── skills/<name>/SKILL.md          # one tree → all three harnesses read it (schema-v2 frontmatter)
 ├── agents/*.md                     # RENDERED Claude subagent files (do not edit)
 ├── pi-agents/*.md                  # RENDERED readable pi role files (do not edit) — same names as agents/
 ├── docs/CATALOG.md                 # GENERATED skill inventory
 ├── docs/capabilities.txt           # capability vocabulary (documented in docs/CAPABILITIES.md)
 ├── templates/AGENTS.md             # the onboarding scaffold (behavioral spine + ▸ Fill blocks)
-├── templates/local-skills/         # 5 declared slot stubs
+├── templates/local-skills/         # 6 declared slot stubs
 ├── templates/capture/              # opt-in hook capture wiring per harness (never auto-loaded)
 ├── scripts/render_roles.py         # role renderer; --check is the CI drift gate
 ├── scripts/role_contract.py        # shared role posture/runtime-knob contract
@@ -77,7 +77,16 @@ crew/
 
 One semver line drives all consumers, Crew and every folded pack alike. Claude Code re-fetches a plugin only when its `plugin.json` `version` changes, and Codex serves the marketplace checkout whatever the version, so **every PR that touches `skills/`, `agents/`, `pi-agents/`, `roles/`, `templates/`, `scripts/` or `packs/` bumps the version in the PR itself** (usually the patch; set minor/major explicitly when warranted) — enforced by the `version-bump` check in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml). On merge, [`.github/workflows/release.yml`](../.github/workflows/release.yml) tags the merged version — tag-only; it pushes nothing to `main`. Keep the root `plugin.json` == `package.json` == every `packs/<name>/` manifest == git tag `vX.Y.Z` — `scripts/check_versions.py` enforces the manifests (and that no pack skill's `plugin:crew@>=` floor exceeds the version) in CI and again before tagging (`--tag vX.Y.Z` also compares a tag). Every release re-fetches all the plugins on Claude Code; they are small. Consumers pin the marketplace (or, on pi, the package) to the tag, and one tag pins Crew and every pack.
 
-Every version bump adds its `## X.Y.Z` section to [`CHANGELOG.md`](../CHANGELOG.md), opening with the `### Consumer impact` section whose fixed items the top of that file defines. Peer floors count as **Action needed**. Moving a skill to a pack counts as a move, because its namespaced name changes (`crew:<name>` becomes `<pack>:<name>`); record it in `MOVED_SKILLS` too. Releasing is one step: merging the bumped PR tags it, and the tag is what consumers pin. There is no second catalogue commit; `.claude-plugin/marketplace.json` serves Crew and the packs by relative path. Doctor still accepts a source naming the retired `pixeloven/marketplace` (`LEGACY_MARKETPLACE_REPOS`, reported `DEGRADED`) only temporarily, so machines not yet switched keep resolving while dotfiles moves after the crew release; remove that acceptance once `pixeloven/marketplace` is archived. Change a `url`+`sha` entry for a plugin hosted elsewhere only to a commit that carries that plugin's release tag. Cadence is guidance, not a gate: now that packs absorb most churn, prefer batching changes into fewer minor releases, so a pinned consumer has fewer releases to read.
+Every version bump adds its `## X.Y.Z` section to [`CHANGELOG.md`](../CHANGELOG.md), opening with the `### Consumer impact` section whose fixed items the top of that file defines. Peer floors count as **Action needed**. Moving a skill to a pack counts as a move, because its namespaced name changes (`crew:<name>` becomes `<pack>:<name>`); record it in `MOVED_SKILLS` too. Releasing is one step: merging the bumped PR tags it, and the tag is what consumers pin. There is no second catalogue commit; `.claude-plugin/marketplace.json` serves Crew and the packs by relative path. Doctor still accepts a source naming the retired `pixeloven/marketplace` (`LEGACY_MARKETPLACE_REPOS`, reported `DEGRADED`) only temporarily, so installs not yet switched keep resolving; remove that acceptance once `pixeloven/marketplace` is archived. Point a `url`+`sha` entry for a plugin hosted elsewhere at a commit its own repo has published on its default branch, preferably one that carries a release tag. Cadence is guidance, not a gate: now that packs absorb most churn, prefer batching changes into fewer minor releases, so a pinned consumer has fewer releases to read.
+
+## Go-public exceptions
+
+`go-public-review` (in `infra-skills`) treats an employer email domain in commit
+metadata as should-fix unless the project records an exception before the audit.
+Crew records one: the maintainer's own work address in author and committer
+metadata is accepted, on existing commits and future ones, and history is not
+rewritten for it. The exception covers the maintainer only, never colleagues,
+and never file content, PR, issue or release text.
 
 ## CI gates
 

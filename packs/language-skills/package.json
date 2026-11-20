@@ -3,7 +3,6 @@
   "version": "0.67.0",
   "description": "A Crew pack of language and toolchain conventions, one skill per language: Python today. Skills only; each project's house choices defer to the consumer's local skills.",
   "keywords": [
-    "pi-package",
     "claude-plugin",
     "skills",
     "crew-pack",
@@ -24,10 +23,5 @@
     "skills",
     "slots.txt",
     "templates"
-  ],
-  "pi": {
-    "skills": [
-      "./skills"
-    ]
-  }
+  ]
 }

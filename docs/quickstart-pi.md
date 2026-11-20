@@ -9,34 +9,7 @@ as [operator](https://github.com/pixeloven/operator) does it.
 ## 1. Install the package
 
 Pin a published Crew release for reproducibility; replace `vX.Y.Z` with the
-chosen tag:
-
-```json
-{
-  "packages": [
-    "git:github.com/pixeloven/crew@vX.Y.Z"
-  ]
-}
-```
-
-The package's `pi` manifest declares only `skills`: Crew's own `skills/` and,
-since 0.67.0, the skills of each pack folded under `packs/<name>/`
-(`infra-skills`, `planning-skills`, `identity-skills`, `language-skills`). pi
-identifies a git package by its repository, so the packs cannot be separate
-packages; a plain string entry like the one above loads Crew and every pack.
-To load Crew alone, use the filter in the next section. The checkout also
-carries `pi-agents/*.md` and the rest of the repo (`scripts/`, `templates/`)
-that some skills run by absolute path. Read the
-configured pin from settings and the resolved version from the checkout's
-`.claude-plugin/plugin.json`. Do not use `git describe` for package version.
-
-To use the skills without installing a package at all, see section 5.
-
-### Enable packs per project
-
-Pi lists every visible skill's description in full in every session, with no
-budget, so each pack a project doesn't use is pure cost there. Install Crew
-alone at user scope with a `skills` filter, in `~/.pi/agent/settings.json`:
+chosen tag. Install Crew alone at user scope, in `~/.pi/agent/settings.json`:
 
 ```json
 {
@@ -45,6 +18,26 @@ alone at user scope with a `skills` filter, in `~/.pi/agent/settings.json`:
   ]
 }
 ```
+
+The `skills` filter matters. The package's `pi` manifest declares only
+`skills`: Crew's own `skills/` and, since 0.67.0, the skills of each pack folded
+under `packs/<name>/` (`infra-skills`, `planning-skills`, `identity-skills`,
+`language-skills`). pi identifies a git package by its repository, so the packs
+cannot be separate packages, and a plain string entry
+(`"git:github.com/pixeloven/crew@vX.Y.Z"`) loads Crew and every pack: 45 skills
+instead of 21. Use the plain string only if every project should see every
+pack. The checkout also carries `pi-agents/*.md` and the rest of the repo
+(`scripts/`, `templates/`) that some skills run by absolute path. Read the
+configured pin from settings and the resolved version from the checkout's
+`.claude-plugin/plugin.json`. Do not use `git describe` for package version.
+
+To use the skills without installing a package at all, see section 5.
+
+### Enable packs per project
+
+Pi lists every visible skill's description in full in every session, with no
+budget, so each pack a project doesn't use is pure cost there. Keep the
+Crew-only entry above at user scope.
 
 Then add each pack to the project that uses it, in `.pi/settings.json`, as a
 delta on that same package:

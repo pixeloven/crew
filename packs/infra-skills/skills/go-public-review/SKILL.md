@@ -50,9 +50,11 @@ Never copy a finding's sensitive value into the report: give its location
 - [ ] No content copied from private references. A bare link to a private
       repository is should-fix in mutable docs and acceptable in immutable
       records (accepted decision records, merged PR text, commit messages).
-- [ ] The maintainer's own identity is the one exception: their names and email
-      addresses, work and personal, are acceptable, including an employer email
-      domain in commit metadata. This does not extend to colleagues.
+- [ ] Commit metadata names only identities the maintainer means to publish.
+      An employer email domain on a commit is should-fix by default: it ties
+      the work to that employer for every reader. A project that accepts it
+      records the exception in its own go-public decision before the audit
+      starts; the exception never extends to colleagues.
 
 ### C2 — Branches, tags and PR refs
 

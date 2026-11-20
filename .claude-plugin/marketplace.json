@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "pixeloven",
-  "description": "PixelOven's plugins for Claude Code and Codex — the agent foundation, the knowledge substrate, and the design system.",
+  "description": "PixelOven's plugins for Claude Code and Codex — the agent foundation, its skill packs, and the design system.",
   "owner": {
     "name": "PixelOven"
   },

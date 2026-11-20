@@ -82,11 +82,14 @@ On pi.dev, the per-project form is an `autoload: false` delta on the Crew
 package in the project's `.pi/settings.json` (same quickstart section). To try
 a local checkout, run `claude --plugin-dir /absolute/path/to/crew/packs/language-skills`.
 
-One identity, three spellings: the directory is `packs/language-skills` in
-`pixeloven/crew`, the package is `@pixeloven/language-skills`, and the plugin is
-`language-skills@pixeloven`. Before Crew 0.67.0 the pack had its own repo,
-`pixeloven/language-skills`; the plugin ID is unchanged. Nothing is published to a
-package registry — releases are Crew's git tags.
+The pack lives at `packs/language-skills` in `pixeloven/crew` and installs as the
+plugin `language-skills@pixeloven`. Its `package.json` names it `@pixeloven/language-skills`, but
+it is not a pi package of its own: pi loads it through the Crew package. Before
+Crew 0.67.0 the pack had its own repo,
+[`pixeloven/language-skills`](https://github.com/pixeloven/language-skills); the fold imported it
+at that repo's `main` head, and its earlier commit history stays there. The
+plugin ID is unchanged. Nothing is published to a package registry — releases
+are Crew's git tags.
 
 As with Crew, Claude Code and Codex namespace plugin skills
 (`language-skills:<name>`) while project skills stay bare, so a same-named local skill
@@ -95,7 +98,7 @@ pack skill.
 
 ## Description cost
 
-Measured with Crew's `check_skills.py --pack --report-cost` at Crew v0.50.0:
+Measured with Crew's `check_skills.py --pack --report-cost` at Crew v0.67.0:
 
 ```text
 python-conventions  248

@@ -35,12 +35,12 @@ jobs:
   <job-name>:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@<commit-sha> # vX
+      - uses: actions/checkout@vX
       - name: <step>
         run: <command>
 ```
 
-Pin third-party actions to a full commit SHA with the version in a trailing comment; a tag can be moved under you.
+Reference every action by a semantic version tag, never a commit SHA. The major tag (`@v4`) receives the action's fixes without a PR; an exact release tag (`@v4.2.1`) makes every upgrade a reviewed change, and suits a job that holds write scope or secrets. A SHA says neither which release runs nor whether a change is a patch or a break, so SHA pins get bumped blind or not at all. An action's owner can move a tag, so keep each job's `permissions:` narrow, prefer actions from GitHub or verified creators, and read the release notes before raising a pinned version. Where the project's own policy differs, its local skill wins.
 
 ## Python workflows
 
@@ -48,7 +48,7 @@ Use `uv` for Python setup — faster than pip, consistent with local development
 
 ```yaml
 - name: Install uv
-  uses: astral-sh/setup-uv@<commit-sha> # vX
+  uses: astral-sh/setup-uv@vX
 
 - name: Install dependencies
   run: uv sync
@@ -72,7 +72,7 @@ Pre-commit secret scanning via gitleaks prevents accidental secret commits. In C
 
 ```yaml
 - name: Secret scan
-  uses: gitleaks/gitleaks-action@<commit-sha> # v2
+  uses: gitleaks/gitleaks-action@v2
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```

@@ -9,16 +9,16 @@ pack's own releases from when it had a repo of its own.
 
 - New **`go-public-review`** skill: the go-public criteria for a GitHub
   repository as a checklist — C1 content over all reachable history, commit
-  metadata and PR refs (the maintainer's own identity acceptable; credentials,
-  employer and colleague names, internal hosts and URLs, and copied private
-  content not), C2 branches, tags and PR refs, C3 documentation, C4 CI on a
+  metadata and PR refs (credentials, employer and colleague names, internal
+  hosts and URLs, and copied private content not acceptable; identities in
+  commit metadata checked against what the maintainer means to publish), C2 branches, tags and PR refs, C3 documentation, C4 CI on a
   public repository, C5 security policy, C6 licence — with the audit method
   (criteria before findings; must-fix, should-fix or acceptable; forward fix
   unless a live exposure cannot be rotated; settings are owner actions) and a
   report shape. Pairs with `github-actions-conventions` for C4.
 - README install guidance recommends user-scope installation beside Crew
   (`claude plugin install infra-skills@pixeloven --scope user`), matching
-  machine-wide delivery (operator ADR-0019), with project or local scope
+  machine-wide delivery, with project or local scope
   (`enabledPlugins` in the project's `.claude/settings.json` or
   `.claude/settings.local.json`) as the per-repo alternative
   (pixeloven/infra-skills#8, pixeloven/crew#103).
