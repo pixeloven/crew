@@ -2365,6 +2365,12 @@ class InstallationTruthTests(unittest.TestCase):
                   "skills": ["packs/a-skills/**"]}],
                 ["a-skills"],
             ),
+            (
+                "project entry without autoload:false replaces the user entry",
+                [source],
+                [{"source": source, "skills": ["skills/**"]}],
+                [],
+            ),
         )
         for label, user_packages, project_packages, expected in cases:
             with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
@@ -2386,9 +2392,29 @@ class InstallationTruthTests(unittest.TestCase):
                 self.assertNotIn(
                     "malformed", {read["state"] for read in pi["configuration_reads"]}
                 )
-                # The delta's own ref never pins: the user entry selects v0.67.0.
+                # A delta's own ref never pins: the user entry selects v0.67.0.
                 self.assertEqual("0.67.0", pi["configured_version"])
-                self.assertEqual("OK", pi["status"])
+
+    def test_pi_project_delta_is_not_a_second_registration(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            self.write_folded_crew_checkout(home)
+            write_json(
+                home / ".pi/agent/settings.json",
+                {"packages": [{"source": "git:github.com/pixeloven/crew@v0.67.0", "skills": ["skills/**"]}]},
+            )
+            write_json(
+                project / ".pi/settings.json",
+                {"packages": [{"source": "git:github.com/pixeloven/crew@v0.66.0", "autoload": False,
+                               "skills": ["packs/a-skills/**"]}]},
+            )
+
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+            self.assertEqual("OK", pi["status"])
+            self.assertEqual([], pi["findings"])
 
     def test_pi_object_entry_without_a_string_source_is_malformed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

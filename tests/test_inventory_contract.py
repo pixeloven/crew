@@ -179,6 +179,11 @@ class FoldedPackTests(unittest.TestCase):
         self.assertIn("alpha", skills)
         self.assertNotIn("beta", skills)
 
+    def test_project_entry_without_autoload_false_replaces_the_user_entry(self) -> None:
+        crew_only = [{"source": "git:github.com/pixeloven/crew@v0.67.0", "skills": ["skills/**"]}]
+        packs, _ = self.names(self.build(["git:github.com/pixeloven/crew@v0.67.0"], crew_only))
+        self.assertFalse({"a-skills", "b-skills"} & packs)
+
 
 class PackageRefTests(unittest.TestCase):
     def test_userinfo_query_and_fragment_never_survive(self) -> None:

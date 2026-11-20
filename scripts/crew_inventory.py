@@ -38,6 +38,7 @@ try:
         declared_local_slots,
         folded_pack_roots,
         inspect_packs,
+        pi_effective_filters,
         slot_fills,
     )
     from .frontmatter import read_frontmatter
@@ -52,6 +53,7 @@ except ImportError:  # Direct script execution.
         declared_local_slots,
         folded_pack_roots,
         inspect_packs,
+        pi_effective_filters,
         slot_fills,
     )
     from frontmatter import read_frontmatter
@@ -380,7 +382,7 @@ def _pi_identity(package_id: str) -> str:
 
 def _pi(project: pathlib.Path, home: pathlib.Path, reads: list[dict[str, str]]) -> dict[str, Any]:
     plugins: list[dict[str, Any]] = []
-    filters_by_identity: dict[str, list[list[str] | None]] = {}
+    entries_by_identity: dict[str, list[tuple[str, list[str] | None, bool]]] = {}
     for scope, settings_path, base in (
         ("project", project / ".pi/settings.json", project / ".pi"),
         ("user", home / ".pi/agent/settings.json", home / ".pi/agent"),
@@ -390,10 +392,10 @@ def _pi(project: pathlib.Path, home: pathlib.Path, reads: list[dict[str, str]]) 
             entry = _pi_package_entry(item)
             if entry is None or not entry[0].strip():
                 continue
-            spec, filters, _ = entry
+            spec, filters, autoload = entry
             root, version = _pi_package_root(spec.strip(), base, settings_path.parent)
             package_id = _safe_package_ref(spec.strip())
-            filters_by_identity.setdefault(_pi_identity(package_id), []).append(filters)
+            entries_by_identity.setdefault(_pi_identity(package_id), []).append((scope, filters, autoload))
             plugins.append(
                 {
                     "id": package_id,
@@ -413,7 +415,8 @@ def _pi(project: pathlib.Path, home: pathlib.Path, reads: list[dict[str, str]]) 
         if not plugin["root"] or identity in seen:
             continue
         seen.add(identity)
-        for pack_root in folded_pack_roots(pathlib.Path(plugin["root"]), filters_by_identity[identity]):
+        filters = pi_effective_filters(entries_by_identity[identity])
+        for pack_root in folded_pack_roots(pathlib.Path(plugin["root"]), filters):
             folded.append(
                 {
                     "id": f"{plugin['id']}#packs/{pack_root.name}",

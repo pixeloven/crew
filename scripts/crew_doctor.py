@@ -222,6 +222,19 @@ def _pi_package_entry(item: Any) -> tuple[str, list[str] | None, bool] | None:
     return item["source"], filters, item.get("autoload") is not False
 
 
+def pi_effective_filters(entries: list[tuple[str, list[str] | None, bool]]) -> list[list[str] | None]:
+    """The `skills` filters that apply to one pi package across scopes.
+
+    `entries` are (scope, filters, autoload) for every settings entry naming the
+    package. A project entry without `autoload: false` replaces the user entry,
+    so only project entries apply; otherwise every entry applies, an
+    `autoload: false` one being a delta on the other scope's entry.
+    """
+    if any(scope == "project" and autoload for scope, _, autoload in entries):
+        return [filters for scope, filters, _ in entries if scope == "project"]
+    return [filters for _, filters, _ in entries]
+
+
 def pi_declared_skill_roots(package_root: pathlib.Path) -> list[pathlib.Path]:
     """Skill roots a pi package declares in package.json `pi.skills`.
 
@@ -1021,6 +1034,7 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
                         "version": _pi_package_version(source),
                         "skills": filters,
                         "autoload": autoload,
+                        "scope": "project" if settings_path == project / ".pi/settings.json" else "user",
                     }
                 )
     result["registrations"] = registrations
@@ -1070,7 +1084,9 @@ def _inspect_pi(project: pathlib.Path, home: pathlib.Path, runtime: dict[str, An
             {"name": root.name, "root": str(root)}
             for root in folded_pack_roots(
                 pathlib.Path(selected["root"]),
-                [item["skills"] for item in registrations],
+                pi_effective_filters(
+                    [(item["scope"], item["skills"], item["autoload"]) for item in registrations]
+                ),
             )
         ]
         if selected
