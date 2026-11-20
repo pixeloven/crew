@@ -1,0 +1,33 @@
+{
+  "name": "@pixeloven/infra-skills",
+  "version": "0.3.0",
+  "description": "A Crew pack of infrastructure stack conventions, seams and diagnostics: Terraform, Ansible, Kubernetes (Kustomize, workload patterns, health sweeps), GitHub Actions, infrastructure seam detection, and a GitHub go-public review. Skills only; estate specifics defer to the consumer's local skills.",
+  "keywords": [
+    "pi-package",
+    "claude-plugin",
+    "skills",
+    "crew-pack",
+    "infrastructure",
+    "terraform",
+    "ansible",
+    "kubernetes",
+    "github-actions"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pixeloven/infra-skills.git"
+  },
+  "files": [
+    ".claude-plugin",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "skills"
+  ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  }
+}

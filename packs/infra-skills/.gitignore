@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+.DS_Store
+node_modules/
+# CI checks crew out here; never commit it
+.crew/
