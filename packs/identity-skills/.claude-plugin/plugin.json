@@ -1,0 +1,11 @@
+{
+  "name": "identity-skills",
+  "description": "A Crew pack of vendor-neutral identity and authentication method: auth seams, surface map, flow tracing, funnel baselines, account investigation, risk trends, and vendor-config review. Skills only; every organisation fact is discovered into the project's own slots.",
+  "skills": "./skills",
+  "version": "0.1.0",
+  "author": {
+    "name": "PixelOven"
+  },
+  "repository": "https://github.com/pixeloven/identity-skills",
+  "license": "MIT"
+}

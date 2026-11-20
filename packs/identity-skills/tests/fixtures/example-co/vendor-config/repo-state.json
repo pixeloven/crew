@@ -1,0 +1,34 @@
+{
+  "deployed_commit": "0000000000000000000000000000000000000abc",
+  "flows": {
+    "sign-in": {
+      "steps": [
+        "identifier",
+        "password",
+        "mfa-challenge",
+        "session"
+      ],
+      "mfa": "always"
+    },
+    "recovery": {
+      "steps": [
+        "identifier",
+        "email-link",
+        "mfa-challenge",
+        "new-password"
+      ],
+      "reauth_after": true
+    }
+  },
+  "session": {
+    "idle_minutes": 30,
+    "absolute_hours": 12
+  },
+  "redirect_allow_list": [
+    "https://app.example.com/callback"
+  ],
+  "lockout": {
+    "failed_attempts": 5,
+    "window_minutes": 15
+  }
+}

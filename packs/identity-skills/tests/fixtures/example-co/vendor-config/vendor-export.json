@@ -1,0 +1,9 @@
+{
+  "flows": {
+    "sign-in": {"steps": ["identifier", "password", "mfa-challenge", "session"], "mfa": "always"},
+    "recovery": {"steps": ["identifier", "email-link", "new-password"], "reauth_after": true}
+  },
+  "session": {"idle_minutes": 30, "absolute_hours": 72},
+  "redirect_allow_list": ["https://app.example.com/callback", "https://staging.example.net/callback"],
+  "client_secret": "CANARY-CLIENT-SECRET-0001"
+}
