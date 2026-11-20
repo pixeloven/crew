@@ -5,8 +5,30 @@ it. Crew's core is agent behaviour — roles, planning, delegation, review. A do
 a stack, or a craft lives in a pack beside it, installed from the same marketplace,
 and plugs into Crew's roles through the slots Crew already has.
 
-This page is the contract a pack meets. Crew never names a pack, and no pack is
-privileged: the same rules apply to every one.
+This page is the contract a pack meets. No role or Crew skill names a pack, and
+no pack is privileged: the same rules apply to every one.
+
+## Where packs live
+
+PixelOven's packs are folded into this repo, one directory each under
+`packs/<name>/` (`infra-skills`, `planning-skills`, `identity-skills`,
+`language-skills`). Each is still its own plugin, with its own
+`.claude-plugin/plugin.json` and `package.json` and its own `skills/`:
+
+- **Claude Code and Codex** install it as `<name>@pixeloven` from the catalogue in
+  this repo, `.claude-plugin/marketplace.json`, which points at
+  `./packs/<name>`. Plugin IDs are the same as when each pack had its own repo.
+- **pi.dev** installs one git repo as one package, so Crew's root `package.json`
+  declares every pack's `skills/` beside its own, and a consumer narrows the
+  package with settings filters ([pi.dev quickstart](quickstart-pi.md#enable-packs-per-project)).
+- **Versions:** a folded pack carries Crew's version and ships in Crew's release;
+  `check_versions.py` enforces it. Its `plugin:crew@>=X.Y.Z` floors still apply
+  and may not exceed that version.
+- **Checks:** the `packs` matrix job in Crew's `ci.yml` runs the four pack checks
+  below against each `packs/<name>` with the scripts in the same checkout.
+
+A pack can also live in a repo of its own. It meets the same contract, and the
+sections below on installing and checking an external pack apply to it.
 
 ## The contract
 
@@ -267,8 +289,10 @@ edits a description.
 
 ### Install
 
-Before a pack has a marketplace entry, its install section says so plainly and
-gives what works today:
+A folded pack's install section names its plugin, `<pack>@pixeloven`, for
+Claude Code and Codex, and the pi.dev filter that loads it from the Crew
+package; it never names a repo of its own. An external pack, before it has a
+marketplace entry, says so plainly and gives what works today:
 
 - **pi.dev:** the package from a `vX.Y.Z` tag, added beside Crew in `packages`;
   pi.dev has no marketplace, so nothing is pending there.
@@ -286,7 +310,9 @@ Either way, tell readers to install Crew first: a pack adds skills, not setup.
 
 ### In CI: the reusable workflow
 
-A pack's CI is one job calling Crew's reusable workflow:
+The packs folded into Crew are checked by Crew's own CI (see
+[Where packs live](#where-packs-live)). A pack in its own repo runs the same
+checks with one job calling Crew's reusable workflow:
 
 ```yaml
 jobs:

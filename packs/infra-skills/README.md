@@ -46,25 +46,19 @@ slot (`provides:`); these are conventions and methods, not estate facts.
 
 ## Install
 
-| Harness | How | Notes |
-|---|---|---|
-| Claude Code | plugin `infra-skills@pixeloven` | from `pixeloven/marketplace` |
-| pi.dev | git package `git:github.com/pixeloven/infra-skills@vX.Y.Z` | add beside Crew in `packages` |
-| OpenAI Codex | plugin `infra-skills@pixeloven`, or vendor `skills/` into `.agents/skills/` | from `pixeloven/marketplace` |
+This pack lives in Crew's repo, under
+[`packs/infra-skills`](https://github.com/pixeloven/crew/tree/main/packs/infra-skills), and ships on Crew's release
+line. Install Crew first and follow its quickstarts; this pack adds skills, not
+setup.
 
-One identity, three spellings: the repo is `pixeloven/infra-skills`, the
-package is `@pixeloven/infra-skills`, and the plugin is `infra-skills@pixeloven`.
-Nothing is published to a package registry — releases are git tags.
+| Harness | How |
+|---|---|
+| Claude Code | `claude plugin install infra-skills@pixeloven`, from the `pixeloven` marketplace (`pixeloven/crew`, pinned to a release tag) |
+| OpenAI Codex | `codex plugin add infra-skills@pixeloven`, from the same marketplace |
+| pi.dev | the Crew package `git:github.com/pixeloven/crew@vX.Y.Z` carries this pack; a `skills` filter such as `["skills/**", "packs/infra-skills/**"]` loads it beside Crew ([pi.dev quickstart](https://github.com/pixeloven/crew/blob/main/docs/quickstart-pi.md#enable-packs-per-project)) |
 
-Claude Code and Codex install the plugin from the shared catalogue at
-[`pixeloven/marketplace`](https://github.com/pixeloven/marketplace), which pins
-this repo by commit SHA, the same way it pins Crew. Codex reads the same
-`.claude-plugin/plugin.json` `"skills": "./skills"` declaration Crew uses; there
-is no separate Codex manifest. For a local checkout, `claude --plugin-dir
-/absolute/path/to/infra-skills` works too.
-
-Install the pack at user scope, beside Crew, so it is available machine-wide
-in every session. Install Crew (`crew@pixeloven`) first, then:
+On Claude Code, install the pack at user scope, beside Crew, so it is available
+machine-wide in every session:
 
 ```sh
 claude plugin install infra-skills@pixeloven --scope user
@@ -82,12 +76,20 @@ To enable the pack only in specific infrastructure repos instead, run
 root. This writes the same entry to the project's `.claude/settings.json`,
 which you can also edit by hand and commit so the whole team gets it.
 `--scope local` does the same in `.claude/settings.local.json` for you alone.
+On pi.dev, the per-project form is an `autoload: false` delta on the Crew
+package in the project's `.pi/settings.json` (same quickstart section). To try
+a local checkout, run `claude --plugin-dir /absolute/path/to/crew/packs/infra-skills`.
 
-Follow Crew's quickstarts; this pack adds skills, not setup. As with Crew,
-Claude Code and Codex namespace plugin skills
-(`infra-skills:<name>`) while project skills stay bare, so a same-named local
-skill does not shadow the pack copy. Do not rely on collision behaviour to
-disable a pack skill.
+One identity, three spellings: the directory is `packs/infra-skills` in
+`pixeloven/crew`, the package is `@pixeloven/infra-skills`, and the plugin is
+`infra-skills@pixeloven`. Before Crew 0.67.0 the pack had its own repo,
+`pixeloven/infra-skills`; the plugin ID is unchanged. Nothing is published to a
+package registry — releases are Crew's git tags.
+
+As with Crew, Claude Code and Codex namespace plugin skills
+(`infra-skills:<name>`) while project skills stay bare, so a same-named local skill
+does not shadow the pack copy. Do not rely on collision behaviour to disable a
+pack skill.
 
 ## Description cost
 
@@ -107,21 +109,27 @@ total always-on description chars: 1741 (8 skills)
 
 ## Checks
 
-Run Crew's checks from the installed Crew root, by absolute path:
+Crew's CI checks this pack in its `packs` matrix job, with the scripts from the
+same checkout. To run the same checks locally from a Crew checkout:
 
 ```sh
-CREW=/absolute/resolved/crew/root
-python3 "$CREW/scripts/check_skills.py" --pack --root /absolute/path/to/infra-skills --report-cost
-python3 "$CREW/scripts/check_skill_layout.py" /absolute/path/to/infra-skills
+CREW=/absolute/path/to/crew
+PACK="$CREW/packs/infra-skills"
+python3 "$CREW/scripts/check_skills.py" --pack --root "$PACK" --report-cost
+python3 "$CREW/scripts/check_skill_layout.py" "$PACK"
+python3 "$CREW/scripts/check_links.py" "$PACK"
+python3 "$CREW/scripts/check_versions.py" "$PACK"
 ```
-
-CI calls Crew's reusable `pack-checks.yml` workflow (see `.github/workflows/ci.yml`).
 
 ## Versioning
 
-`.claude-plugin/plugin.json` and `package.json` carry the same version, and the
-release tag is `vX.Y.Z` of that version. Bump it in any change that touches
-`skills/`; Claude Code re-fetches a plugin only when its version changes.
+This pack carries Crew's version: `.claude-plugin/plugin.json` and
+`package.json` match Crew's, and Crew's `vX.Y.Z` tag releases them together
+([Versioning](https://github.com/pixeloven/crew/blob/main/docs/MAINTAINERS.md#versioning)). Bump Crew's
+version in any change that touches this pack; Claude Code re-fetches a plugin
+only when its version changes. From 0.67.0 the release notes are in
+[Crew's CHANGELOG](https://github.com/pixeloven/crew/blob/main/CHANGELOG.md). [CHANGELOG.md](CHANGELOG.md) here covers the pack's own releases up
+to 0.3.0.
 
 ## License
 

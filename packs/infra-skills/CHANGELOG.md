@@ -1,5 +1,10 @@
 # Changelog
 
+From 0.67.0 this pack lives in Crew's repo under `packs/infra-skills` and ships
+on Crew's release line; its release notes are in
+[Crew's CHANGELOG](https://github.com/pixeloven/crew/blob/main/CHANGELOG.md). The entries below are the
+pack's own releases from when it had a repo of its own.
+
 ## 0.3.0
 
 - New **`go-public-review`** skill: the go-public criteria for a GitHub

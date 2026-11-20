@@ -9,13 +9,13 @@ Use GitHub private vulnerability reporting: open this repository's **Security**
 tab and choose **Report a vulnerability**. Never report a vulnerability in a
 public issue, pull request or discussion.
 
-Include what is affected (a skill, role, script or workflow), how to reproduce
-it, and the impact you expect.
+Include what is affected (a skill, role, script or workflow, or a pack under
+`packs/`), how to reproduce it, and the impact you expect. This policy covers
+the packs folded into this repo too.
 
 ## Supported versions
 
-Crew ships one version line from `main`, and each release is a `vX.Y.Z` tag.
-Fixes land on `main` and go out in the next release. Older tags are not
-patched: Claude Code and Codex pick a fix up once `pixeloven/marketplace` moves
-its commit pin and the plugin updates; pi users move their pin to the tag that
-carries it.
+Crew and its packs ship one version line from `main`, and each release is a
+`vX.Y.Z` tag. Fixes land on `main` and go out in the next release. Older tags
+are not patched: consumers move their marketplace `ref` (Claude Code, Codex) or
+package pin (pi) to the tag that carries the fix.

@@ -19,6 +19,90 @@ pin and the new tag to decide whether the bump is safe. The other sections
 (`Added`, `Changed`, `Fixed`) carry the full detail. Older sections predate the
 convention and are not backfilled.
 
+## 0.67.0
+
+Crew's repo now holds the four PixelOven packs and the `pixeloven` marketplace.
+`infra-skills`, `planning-skills`, `identity-skills` and `language-skills` live
+under `packs/<name>/` with their git history, each still its own plugin, and
+`.claude-plugin/marketplace.json` serves Crew and the packs from this repo. One
+release line and one tag now cover Crew and every pack.
+
+### Consumer impact
+
+- **Renamed or moved:** the four packs moved from their own repos to
+  `pixeloven/crew` under `packs/<name>/`; the `pixeloven` marketplace moved from
+  `pixeloven/marketplace` to `pixeloven/crew`. Plugin IDs (`crew@pixeloven`,
+  `<pack>@pixeloven`) and skill names are unchanged.
+- **Removed:** None.
+- **Action needed:** switch the marketplace source, per harness, and pin it to
+  a release tag. The tag is now the release gate: with relative sources the
+  catalogue no longer pins each plugin by commit, so an unpinned marketplace
+  follows the default branch.
+  - **Claude Code:** edit settings **first**: set
+    `extraKnownMarketplaces.pixeloven.source` to
+    `{"source": "github", "repo": "pixeloven/crew", "ref": "v0.67.0"}`. Then run
+    `claude plugin marketplace add pixeloven/crew#v0.67.0` (the same source) and
+    `claude plugin update` for Crew and each installed pack. Running
+    `marketplace add` with the new source while settings still name the old
+    one fails, and after a settings edit `marketplace update` reports the
+    marketplace as not found until that `marketplace add` runs. **Never run
+    `claude plugin marketplace remove pixeloven`** to migrate or move a ref: it
+    uninstalls every plugin from the marketplace and empties their
+    `enabledPlugins` entries. `enabledPlugins` keys are unchanged.
+  - **Codex:** in `~/.codex/config.toml`, set `[marketplaces.pixeloven]`
+    `source` to `pixeloven/crew` (keep `source_type = "git"`) and
+    `ref = "v0.67.0"`, then run `codex plugin marketplace upgrade pixeloven`.
+    Installed plugins are re-pointed in place; `[plugins."<name>@pixeloven"]`
+    entries are kept. Pin the ref: Codex serves the marketplace checkout on
+    every upgrade even when no version changed.
+  - **pi.dev:** replace every `git:github.com/pixeloven/<pack>@…` entry with the
+    Crew package, which now carries the packs. One plain
+    `git:github.com/pixeloven/crew@v0.67.0` string loads Crew and all four packs
+    (today's all-packs-at-user-scope setup). For Crew alone at user scope, use
+    `{"source": "git:github.com/pixeloven/crew@v0.67.0", "skills": ["skills/**"]}`,
+    and add a pack to one project with an `autoload: false` delta in its
+    `.pi/settings.json`:
+    `{"source": "git:github.com/pixeloven/crew@v0.67.0", "autoload": false, "skills": ["packs/<pack>/**"]}`.
+    Keep `autoload: false`: without it the project entry replaces the user
+    entry and loads nothing until it has its own checkout.
+
+  The old pack repos and `pixeloven/marketplace` stay where they are for now,
+  so an unmigrated install keeps resolving its old pins; it receives nothing
+  new.
+
+### Added
+
+- **Packs folded in with history.** Each pack was imported with
+  `git subtree add` at its repo's `main` head, so its commits are reachable
+  from Crew's history. Its own CI and `.gitignore` are dropped; its manifests
+  point at `pixeloven/crew` (`package.json` adds `directory`).
+- **The `pixeloven` catalogue,** `.claude-plugin/marketplace.json`: `crew` is
+  `"./"`, each pack is `"./packs/<name>"`, and `design` and `comfyui-docker`
+  keep their `url`+`sha` entries.
+- **pi manifest declares the pack roots.** `package.json` `pi.skills` lists
+  `./skills` and each `./packs/<name>/skills`; `files` adds `packs`.
+- **CI `packs` matrix job** runs the pack checks (`check_skills.py --pack`,
+  layout, links, versions, description-cost summary) against each
+  `packs/<name>` with the scripts in the same checkout. The reusable
+  `pack-checks.yml` stays for packs in their own repos.
+
+### Changed
+
+- **One release line.** Every pack manifest carries Crew's version (the packs
+  jump from 0.1.0/0.3.0 to 0.67.0). `check_versions.py` compares every
+  `packs/<name>/` manifest with the root's and fails a pack skill whose
+  `plugin:crew@>=` floor exceeds the repo version. `version-bump` now also
+  watches `scripts/` and `packs/`.
+- **Doctor** reads the marketplace from `pixeloven/crew`. A source still naming
+  `pixeloven/marketplace` resolves but is `DEGRADED` with the switch to make.
+  On pi it accepts object `packages` entries (`source`, `skills`, `autoload`),
+  treats an `autoload: false` entry as a delta rather than a second pin, and
+  reports the folded packs the filters load as `folded_packs`; the inventory
+  counts them as packs for slots and description cost.
+- **Docs:** README install and packs, the three quickstarts (marketplace ref
+  pin, migration steps, pi filter recipe), MAINTAINERS (layout, one-step
+  release), PACKS (where packs live), SECURITY, and each pack README.
+
 ## 0.66.0
 
 Crew ships six roles instead of seven, and every role definition is sharpened

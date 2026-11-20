@@ -2,18 +2,48 @@
 
 ## 1. Install and enable Crew
 
-Add this at project or user scope:
+Add this at project or user scope, replacing `vX.Y.Z` with a published Crew
+release tag:
 
 ```json
 {
   "extraKnownMarketplaces": {
-    "pixeloven": { "source": { "source": "github", "repo": "pixeloven/marketplace" }, "autoUpdate": true }
+    "pixeloven": {
+      "source": { "source": "github", "repo": "pixeloven/crew", "ref": "vX.Y.Z" },
+      "autoUpdate": true
+    }
   },
   "enabledPlugins": { "crew@pixeloven": true }
 }
 ```
 
-Restart Claude Code; plugins load at session start.
+Restart Claude Code; plugins load at session start. The CLI equivalent is
+`claude plugin marketplace add pixeloven/crew#vX.Y.Z`, then
+`claude plugin install crew@pixeloven`.
+
+The `ref` is the release gate. The catalogue serves Crew and its packs from
+this repo by relative path, so one tag pins all of them, and Claude Code
+re-fetches each plugin when its `version` changes at the new ref. Without a
+`ref`, the marketplace follows the default branch and every merged release
+arrives on the next refresh. To upgrade, read the `### Consumer impact` section
+of every [CHANGELOG](../CHANGELOG.md) release between your tag and the new one,
+change `ref` in settings, run `claude plugin marketplace add
+pixeloven/crew#<new tag>`, then `claude plugin update crew@pixeloven` (and each
+enabled pack).
+
+**Moving from `pixeloven/marketplace` (before 0.67.0).** Edit the settings entry
+first: change `extraKnownMarketplaces.pixeloven.source` to the block above.
+Then run `claude plugin marketplace add pixeloven/crew#vX.Y.Z` with the same
+source, and `claude plugin update` for each installed plugin. The marketplace
+name and plugin IDs stay the same, so `enabledPlugins` keeps working. Two
+pitfalls:
+
+- Running `marketplace add` with the new source while settings still name the
+  old one fails ("source doesn't match its extraKnownMarketplaces entry").
+  Change the settings entry first.
+- **Never run `claude plugin marketplace remove pixeloven`** to migrate or move
+  the ref. It uninstalls every plugin from that marketplace and empties their
+  `enabledPlugins` entries.
 
 ### Enable packs per project
 

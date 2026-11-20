@@ -66,15 +66,23 @@ slot as filled when no registry exists.
 
 ## Install
 
-Install the pack at user scope, beside Crew, from the `pixeloven` marketplace,
-so it is available machine-wide in every session. Install Crew
-(`crew@pixeloven`) first.
+This pack lives in Crew's repo, under
+[`packs/identity-skills`](https://github.com/pixeloven/crew/tree/main/packs/identity-skills), and ships on Crew's release
+line. Install Crew first and follow its quickstarts; this pack adds skills, not
+setup.
 
 | Harness | How |
 |---|---|
-| Claude Code | `claude plugin install identity-skills@pixeloven --scope user` |
-| pi.dev | `pi install git:github.com/pixeloven/identity-skills@vX.Y.Z` |
-| OpenAI Codex | `codex plugin marketplace add pixeloven/marketplace`, then `codex plugin add identity-skills@pixeloven` |
+| Claude Code | `claude plugin install identity-skills@pixeloven`, from the `pixeloven` marketplace (`pixeloven/crew`, pinned to a release tag) |
+| OpenAI Codex | `codex plugin add identity-skills@pixeloven`, from the same marketplace |
+| pi.dev | the Crew package `git:github.com/pixeloven/crew@vX.Y.Z` carries this pack; a `skills` filter such as `["skills/**", "packs/identity-skills/**"]` loads it beside Crew ([pi.dev quickstart](https://github.com/pixeloven/crew/blob/main/docs/quickstart-pi.md#enable-packs-per-project)) |
+
+On Claude Code, install the pack at user scope, beside Crew, so it is available
+machine-wide in every session:
+
+```sh
+claude plugin install identity-skills@pixeloven --scope user
+```
 
 User scope is the CLI default and writes
 `"enabledPlugins": { "identity-skills@pixeloven": true }` to
@@ -83,28 +91,25 @@ always-on skill listing, and Claude Code collapses an over-budget listing to
 names only, which hurts skill selection; the description cost below is the
 price of keeping the pack on everywhere.
 
-pi installs globally by default, into `packages` in `~/.pi/agent/settings.json`;
-add `-l` to install into the project's `.pi/settings.json` instead. Codex
-records installed plugins in `~/.codex/config.toml`.
-
 To enable the pack only in specific identity repos instead, run
-`claude plugin install identity-skills@pixeloven --scope project` from the
-project root. This writes the same entry to the project's
-`.claude/settings.json`, which you can also edit by hand and commit so the
-whole team gets it. `--scope local` does the same in
-`.claude/settings.local.json` for you alone.
+`claude plugin install identity-skills@pixeloven --scope project` from the project
+root. This writes the same entry to the project's `.claude/settings.json`,
+which you can also edit by hand and commit so the whole team gets it.
+`--scope local` does the same in `.claude/settings.local.json` for you alone.
+On pi.dev, the per-project form is an `autoload: false` delta on the Crew
+package in the project's `.pi/settings.json` (same quickstart section). To try
+a local checkout, run `claude --plugin-dir /absolute/path/to/crew/packs/identity-skills`.
 
-To try a local checkout instead, run `claude --plugin-dir /absolute/path/to/identity-skills`.
+One identity, three spellings: the directory is `packs/identity-skills` in
+`pixeloven/crew`, the package is `@pixeloven/identity-skills`, and the plugin is
+`identity-skills@pixeloven`. Before Crew 0.67.0 the pack had its own repo,
+`pixeloven/identity-skills`; the plugin ID is unchanged. Nothing is published to a
+package registry — releases are Crew's git tags.
 
-One identity, three spellings: the repo is `pixeloven/identity-skills`, the
-package is `@pixeloven/identity-skills`, and the plugin installs as
-`identity-skills@pixeloven`.
-Nothing is published to a package registry — releases are git tags.
-
-Install Crew first and follow its quickstarts; this pack adds skills, not setup.
-Claude Code and Codex namespace plugin skills (`identity-skills:<name>`) while
-project skills stay bare, so a same-named local skill does not shadow the pack
-copy. Do not rely on collision behaviour to disable a pack skill.
+As with Crew, Claude Code and Codex namespace plugin skills
+(`identity-skills:<name>`) while project skills stay bare, so a same-named local skill
+does not shadow the pack copy. Do not rely on collision behaviour to disable a
+pack skill.
 
 ## Description cost
 
@@ -131,25 +136,26 @@ Co in [`tests/fixtures/example-co/`](tests/fixtures/example-co/).
 
 ## Checks
 
-Run Crew's checks from the installed Crew root, by absolute path:
+Crew's CI checks this pack in its `packs` matrix job, with the scripts from the
+same checkout. To run the same checks locally from a Crew checkout:
 
 ```sh
-CREW=/absolute/resolved/crew/root
-PACK=/absolute/path/to/identity-skills
+CREW=/absolute/path/to/crew
+PACK="$CREW/packs/identity-skills"
 python3 "$CREW/scripts/check_skills.py" --pack --root "$PACK" --report-cost
 python3 "$CREW/scripts/check_skill_layout.py" "$PACK"
 python3 "$CREW/scripts/check_links.py" "$PACK"
 python3 "$CREW/scripts/check_versions.py" "$PACK"
 ```
 
-CI calls Crew's reusable `pack-checks.yml` workflow (see `.github/workflows/ci.yml`).
-
 ## Versioning
 
-`.claude-plugin/plugin.json` and `package.json` carry the same version, and the
-release tag is `vX.Y.Z` of that version. Bump it in any change that touches
-`skills/` or `templates/`; Claude Code re-fetches a plugin only when its version
-changes.
+This pack carries Crew's version: `.claude-plugin/plugin.json` and
+`package.json` match Crew's, and Crew's `vX.Y.Z` tag releases them together
+([Versioning](https://github.com/pixeloven/crew/blob/main/docs/MAINTAINERS.md#versioning)). Bump Crew's
+version in any change that touches this pack; Claude Code re-fetches a plugin
+only when its version changes. From 0.67.0 the release notes are in
+[Crew's CHANGELOG](https://github.com/pixeloven/crew/blob/main/CHANGELOG.md).
 
 ## License
 
