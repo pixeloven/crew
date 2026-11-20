@@ -95,6 +95,9 @@ release line and one tag now cover Crew and every pack.
   watches `scripts/` and `packs/`.
 - **Doctor** reads the marketplace from `pixeloven/crew`. A source still naming
   `pixeloven/marketplace` resolves but is `DEGRADED` with the switch to make.
+  That acceptance is temporary: it keeps machines not yet switched resolving
+  while dotfiles moves after this release, and is removed once
+  `pixeloven/marketplace` is archived.
   On pi it accepts object `packages` entries (`source`, `skills`, `autoload`),
   treats an `autoload: false` entry as a delta rather than a second pin, and
   reports the folded packs the filters load as `folded_packs`; the inventory

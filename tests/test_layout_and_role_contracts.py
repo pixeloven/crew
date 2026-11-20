@@ -857,17 +857,23 @@ class RolePostureTests(unittest.TestCase):
         job = workflow["jobs"]["packs"]
         packs = sorted(path.name for path in (ROOT / "packs").iterdir() if path.is_dir())
         self.assertEqual(packs, sorted(job["strategy"]["matrix"]["pack"]))
-        run = "\n".join(step.get("run", "") for step in job["steps"])
-        for script in ("check_skills.py", "check_skill_layout.py", "check_links.py", "check_versions.py"):
-            self.assertIn(f"scripts/{script}", run)
-            self.assertTrue((ROOT / "scripts" / script).is_file(), script)
-        bump = next(
-            step["run"]
+        checks = {step["env"]["CHECK"] for step in job["steps"] if "CHECK" in step.get("env", {})}
+        expected = {
+            f"scripts/{script}"
+            for script in ("check_skills.py", "check_skill_layout.py", "check_links.py", "check_versions.py")
+        }
+        self.assertEqual(expected, checks)
+        for check in checks:
+            self.assertTrue((ROOT / check).is_file(), check)
+        shipped = [
+            step["env"]["SHIPPED_PATHS"].split()
             for step in workflow["jobs"]["version-bump"]["steps"]
-            if "git diff --name-only" in step.get("run", "")
+            if "SHIPPED_PATHS" in step.get("env", {})
+        ]
+        self.assertEqual(1, len(shipped))
+        self.assertEqual(
+            {"skills", "agents", "pi-agents", "roles", "templates", "scripts", "packs"}, set(shipped[0])
         )
-        for path in ("skills", "agents", "pi-agents", "roles", "templates", "scripts", "packs"):
-            self.assertRegex(bump, rf"-- [^|]*\b{path}\b")
 
     def test_every_runtime_knob_is_observably_rejected(self) -> None:
         for key in ("model", "thinking", "effort", "model_reasoning_effort", "turnBudget", "maxTurns"):

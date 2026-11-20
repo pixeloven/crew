@@ -77,7 +77,8 @@ jobs:
   # The packs under packs/ meet the same contract as an external pack
   # (docs/PACKS.md), checked with the scripts in this same checkout -- the
   # reusable pack-checks.yml stays for packs that live in their own repo.
-  # tests/test_pack_workflow.py keeps this list equal to the packs/ dirs.
+  # test_ci_checks_every_folded_pack (tests/test_layout_and_role_contracts.py)
+  # keeps this list equal to the packs/ dirs.
   packs:
     name: Pack checks (${{ matrix.pack }})
     runs-on: ubuntu-latest
@@ -92,13 +93,21 @@ jobs:
         with:
           persist-credentials: false
       - name: Schema v2, description budget, pack contract
-        run: python3 scripts/check_skills.py --pack --root "$PACK_ROOT"
+        env:
+          CHECK: scripts/check_skills.py
+        run: python3 "$CHECK" --pack --root "$PACK_ROOT"
       - name: Skill layout is what the harnesses read
-        run: python3 scripts/check_skill_layout.py "$PACK_ROOT"
+        env:
+          CHECK: scripts/check_skill_layout.py
+        run: python3 "$CHECK" "$PACK_ROOT"
       - name: Relative Markdown links resolve inside the pack
-        run: python3 scripts/check_links.py "$PACK_ROOT"
+        env:
+          CHECK: scripts/check_links.py
+        run: python3 "$CHECK" "$PACK_ROOT"
       - name: Manifest versions agree
-        run: python3 scripts/check_versions.py "$PACK_ROOT"
+        env:
+          CHECK: scripts/check_versions.py
+        run: python3 "$CHECK" "$PACK_ROOT"
       - name: Description cost (job summary)
         if: always()
         run: |
@@ -131,12 +140,13 @@ jobs:
       - name: Require a plugin.json version bump when shipped content changes
         env:
           BASE: ${{ github.event.pull_request.base.ref }}
+          SHIPPED_PATHS: skills agents pi-agents roles templates scripts packs
         run: |
           set -euo pipefail
           git fetch origin "$BASE" --depth=1 -q
-          changed=$(git diff --name-only "origin/$BASE...HEAD" -- skills agents pi-agents roles templates scripts packs || true)
+          changed=$(git diff --name-only "origin/$BASE...HEAD" -- $SHIPPED_PATHS || true)
           if [ -z "$changed" ]; then
-            echo "No skills/agents/roles/templates/scripts/packs change — version bump not required."; exit 0
+            echo "No change under $SHIPPED_PATHS — version bump not required."; exit 0
           fi
           base_ver=$(git show "origin/$BASE:.claude-plugin/plugin.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
           head_ver=$(python3 -c 'import json; print(json.load(open(".claude-plugin/plugin.json"))["version"])')
