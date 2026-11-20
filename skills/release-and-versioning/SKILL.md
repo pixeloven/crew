@@ -121,14 +121,15 @@ concurrency group and cancel older ones. Two merges in quick succession can
 therefore leave a commit with no published artifact at all. Give every
 non-PR ref its own concurrency group, keyed by commit.
 
-## Pin by digest; read the version to decide whether to move
+## Pin by version tag; verify against the published digest
 
-A tag can move; a digest cannot. Semver exists to say whether a digest change
-was a patch or a break — which a sha cannot express. Consumers should pin the
-digest and read the version.
+Consumers pin a semantic version tag by default: the version says whether a
+move is a patch or a break, which a digest or sha cannot express. The release
+still publishes checksums and digests, so a consumer may verify the artifact it
+pulled against them.
 
 **The concrete pinning rules are deployment policy, not release policy** — how a
-consumer records digests, and what needs verification before a pin changes,
+consumer records its pins, and what needs verification before a pin changes,
 belongs to the local `platform-conventions` skill. Publish the digest somewhere
 findable (a job summary, a release asset) and stop there.
 

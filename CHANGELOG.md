@@ -109,6 +109,9 @@ release line and one tag now cover Crew and every pack.
   treats an `autoload: false` entry as a delta rather than a second pin, and
   reports the folded packs the filters load as `folded_packs`; the inventory
   counts them as packs for slots and description cost.
+- **`release-and-versioning`** tells consumers to pin a semantic version tag
+  by default and verify the artifact against the published digest, instead of
+  pinning the digest.
 - **Docs:** README install and packs, the three quickstarts (marketplace ref
   pin, migration steps, pi filter recipe), MAINTAINERS (layout, one-step
   release), PACKS (where packs live), SECURITY, and each pack README.
