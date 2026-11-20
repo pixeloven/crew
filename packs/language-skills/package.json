@@ -1,6 +1,6 @@
 {
   "name": "@pixeloven/language-skills",
-  "version": "0.1.0",
+  "version": "0.67.0",
   "description": "A Crew pack of language and toolchain conventions, one skill per language: Python today. Skills only; each project's house choices defer to the consumer's local skills.",
   "keywords": [
     "pi-package",
@@ -14,7 +14,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pixeloven/language-skills.git"
+    "url": "git+https://github.com/pixeloven/crew.git",
+    "directory": "packs/language-skills"
   },
   "files": [
     ".claude-plugin",

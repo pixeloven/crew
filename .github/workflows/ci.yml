@@ -74,6 +74,48 @@ jobs:
       - name: docs/CATALOG.md matches frontmatter
         run: python3 scripts/gen_catalog.py --check
 
+  # The packs under packs/ meet the same contract as an external pack
+  # (docs/PACKS.md), checked with the scripts in this same checkout -- the
+  # reusable pack-checks.yml stays for packs that live in their own repo.
+  # tests/test_pack_workflow.py keeps this list equal to the packs/ dirs.
+  packs:
+    name: Pack checks (${{ matrix.pack }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pack: [identity-skills, infra-skills, language-skills, planning-skills]
+    env:
+      PACK_ROOT: packs/${{ matrix.pack }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Schema v2, description budget, pack contract
+        run: python3 scripts/check_skills.py --pack --root "$PACK_ROOT"
+      - name: Skill layout is what the harnesses read
+        run: python3 scripts/check_skill_layout.py "$PACK_ROOT"
+      - name: Relative Markdown links resolve inside the pack
+        run: python3 scripts/check_links.py "$PACK_ROOT"
+      - name: Manifest versions agree
+        run: python3 scripts/check_versions.py "$PACK_ROOT"
+      - name: Description cost (job summary)
+        if: always()
+        run: |
+          report=$(python3 scripts/check_skills.py --pack --root "$PACK_ROOT" --report-cost \
+            | sed '/^total always-on description chars:/q' || true)
+          total=$(printf '%s\n' "$report" | grep '^total always-on description chars:' || true)
+          {
+            echo "## Description cost: ${{ matrix.pack }}"
+            echo
+            echo '```text'
+            printf '%s\n' "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$total" ] && ! grep -qxF "$total" "$PACK_ROOT/README.md" 2>/dev/null; then
+            echo "::warning::$PACK_ROOT/README.md does not carry the current total line ($total); update its Description cost section (docs/PACKS.md)"
+          fi
+
   version-bump:
     name: Version bumped on content change
     if: github.event_name == 'pull_request'
@@ -82,21 +124,25 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Require a plugin.json version bump when skills/agents change
+      # scripts/ is here because Codex serves the marketplace HEAD whatever the
+      # version, so a script change reaches Codex users with or without a bump;
+      # bumping keeps every harness on the same release. packs/ is here because
+      # each pack plugin re-fetches on the same version line.
+      - name: Require a plugin.json version bump when shipped content changes
         env:
           BASE: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
           git fetch origin "$BASE" --depth=1 -q
-          changed=$(git diff --name-only "origin/$BASE...HEAD" -- skills agents pi-agents roles templates || true)
+          changed=$(git diff --name-only "origin/$BASE...HEAD" -- skills agents pi-agents roles templates scripts packs || true)
           if [ -z "$changed" ]; then
-            echo "No skills/agents/templates change — version bump not required."; exit 0
+            echo "No skills/agents/roles/templates/scripts/packs change — version bump not required."; exit 0
           fi
           base_ver=$(git show "origin/$BASE:.claude-plugin/plugin.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["version"])')
           head_ver=$(python3 -c 'import json; print(json.load(open(".claude-plugin/plugin.json"))["version"])')
           echo "base=$base_ver head=$head_ver"
           if [ "$base_ver" = "$head_ver" ]; then
-            echo "::error::skills/agents changed but .claude-plugin/plugin.json version is still $head_ver — bump it so consumers receive the update (the release tags this version on merge)."
+            echo "::error::shipped content changed but .claude-plugin/plugin.json version is still $head_ver — bump it (and every pack manifest, scripts/check_versions.py) so consumers receive the update (the release tags this version on merge)."
             exit 1
           fi
           echo "version bumped $base_ver -> $head_ver"

@@ -2,7 +2,7 @@
   "name": "crew",
   "description": "Portable cross-project agent foundation: a methodology skill catalogue and an onboarding scaffold/skill for Claude Code, pi.dev and OpenAI Codex, plus 6 role agents for Claude Code, also shipped as readable role files for pi.dev.",
   "skills": "./skills",
-  "version": "0.66.0",
+  "version": "0.67.0",
   "author": {
     "name": "PixelOven"
   },

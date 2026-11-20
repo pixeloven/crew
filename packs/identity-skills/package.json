@@ -1,6 +1,6 @@
 {
   "name": "@pixeloven/identity-skills",
-  "version": "0.1.0",
+  "version": "0.67.0",
   "description": "A Crew pack of vendor-neutral identity and authentication method: auth seams, surface map, flow tracing, funnel baselines, account investigation, risk trends, and vendor-config review. Skills only; every organisation fact is discovered into the project's own slots.",
   "keywords": [
     "pi-package",
@@ -15,7 +15,8 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pixeloven/identity-skills.git"
+    "url": "git+https://github.com/pixeloven/crew.git",
+    "directory": "packs/identity-skills"
   },
   "files": [
     ".claude-plugin",

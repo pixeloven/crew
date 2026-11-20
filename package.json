@@ -1,6 +1,6 @@
 {
   "name": "@pixeloven/crew",
-  "version": "0.66.0",
+  "version": "0.67.0",
   "description": "Portable cross-project agent foundation: a methodology skill catalogue and an onboarding scaffold/skill for Claude Code, pi.dev and OpenAI Codex, plus 6 role agents for Claude Code, also shipped as readable role files for pi.dev.",
   "keywords": [
     "pi-package",
@@ -20,6 +20,7 @@
     "CHANGELOG.md",
     "docs",
     "LICENSE",
+    "packs",
     "pi-agents",
     "README.md",
     "roles",
@@ -29,7 +30,11 @@
   ],
   "pi": {
     "skills": [
-      "./skills"
+      "./skills",
+      "./packs/infra-skills/skills",
+      "./packs/planning-skills/skills",
+      "./packs/identity-skills/skills",
+      "./packs/language-skills/skills"
     ]
   }
 }
