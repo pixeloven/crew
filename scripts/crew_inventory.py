@@ -34,7 +34,9 @@ try:
         _read_json,
         _read_toml,
         _string_list,
+        _pi_package_entry,
         declared_local_slots,
+        folded_pack_roots,
         inspect_packs,
         slot_fills,
     )
@@ -46,7 +48,9 @@ except ImportError:  # Direct script execution.
         _read_json,
         _read_toml,
         _string_list,
+        _pi_package_entry,
         declared_local_slots,
+        folded_pack_roots,
         inspect_packs,
         slot_fills,
     )
@@ -368,27 +372,58 @@ def _pi_package_root(spec: str, base: pathlib.Path, settings_dir: pathlib.Path) 
     return None, None
 
 
+def _pi_identity(package_id: str) -> str:
+    """A pi package's identity: its source without the ref (pi keys on that)."""
+    head, at, ref = package_id.rpartition("@")
+    return head if at and "/" in head and "/" not in ref else package_id
+
+
 def _pi(project: pathlib.Path, home: pathlib.Path, reads: list[dict[str, str]]) -> dict[str, Any]:
     plugins: list[dict[str, Any]] = []
+    filters_by_identity: dict[str, list[list[str] | None]] = {}
     for scope, settings_path, base in (
         ("project", project / ".pi/settings.json", project / ".pi"),
         ("user", home / ".pi/agent/settings.json", home / ".pi/agent"),
     ):
         packages = _json_mapping(settings_path, reads).get("packages", [])
         for item in packages if isinstance(packages, list) else []:
-            spec = item.get("source") if isinstance(item, dict) else item
-            if not isinstance(spec, str) or not spec.strip():
+            entry = _pi_package_entry(item)
+            if entry is None or not entry[0].strip():
                 continue
+            spec, filters, _ = entry
             root, version = _pi_package_root(spec.strip(), base, settings_path.parent)
+            package_id = _safe_package_ref(spec.strip())
+            filters_by_identity.setdefault(_pi_identity(package_id), []).append(filters)
             plugins.append(
                 {
-                    "id": _safe_package_ref(spec.strip()),
+                    "id": package_id,
                     "version": version,
                     "root": str(root) if root and root.is_dir() else None,
                     "scope": scope,
                     "enabled": True,
                 }
             )
+    # A package may fold packs in under packs/<name>/ (Crew since 0.67.0). pi
+    # loads the ones its entries' `skills` filters admit, from whichever
+    # scope's checkout exists; an `autoload: false` delta has none of its own.
+    folded: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for plugin in plugins:
+        identity = _pi_identity(plugin["id"])
+        if not plugin["root"] or identity in seen:
+            continue
+        seen.add(identity)
+        for pack_root in folded_pack_roots(pathlib.Path(plugin["root"]), filters_by_identity[identity]):
+            folded.append(
+                {
+                    "id": f"{plugin['id']}#packs/{pack_root.name}",
+                    "version": plugin["version"],
+                    "root": str(pack_root),
+                    "scope": plugin["scope"],
+                    "enabled": True,
+                }
+            )
+    plugins.extend(folded)
     skill_roots = [
         *_skill_root(project / ".pi/skills", "project"),
         *_skill_root(project / ".agents/skills", "project"),

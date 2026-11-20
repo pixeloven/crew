@@ -65,8 +65,13 @@ an incidental source clone.
 ### 1. Reconcile installation, enablement, and version
 
 **Pi.** In applicable project/user `.pi/settings.json`, find the current git
-identity `git:github.com/pixeloven/crew@vX.Y.Z`. Report the configured pin and
-the resolved checkout separately. Read the resolved version from that checkout's
+identity `git:github.com/pixeloven/crew@vX.Y.Z`, as a string entry or as the
+`source` of an object entry. Report the configured pin and
+the resolved checkout separately. An object entry with `autoload: false` is a
+filter delta on another scope's entry, not a second pin. The checkout also
+carries the packs folded under `packs/<name>/`; which of them load follows the
+entries' `skills` filters (a string entry loads all), reported as
+`folded_packs`. Read the resolved version from that checkout's
 `.claude-plugin/plugin.json`; never use `git describe`. A pin below `v0.35.0` is
 **DEGRADED**, not missing: pi-subagents silently drops roles without frontmatter
 `name:`, so the Crew fleet is invisible below the first role-discoverable
@@ -78,8 +83,9 @@ this Pi session exposes it.
 
 **Claude Code.** Reconcile four distinct facts:
 
-1. settings declare marketplace `pixeloven` (sourced from `pixeloven/marketplace`)
-   and enable `crew@pixeloven`;
+1. settings declare marketplace `pixeloven` (sourced from `pixeloven/crew`,
+   ideally pinned to a release tag) and enable `crew@pixeloven`; a source still
+   naming the retired `pixeloven/marketplace` is **DEGRADED** until switched;
 2. `known_marketplaces.json` records source, install location, and timestamp —
    it does **not** carry a served version;
 3. the marketplace clone's `.claude-plugin/plugin.json` carries the served
@@ -136,7 +142,9 @@ Crew currently ships no recommended vocabulary beyond the declared slots; a name
 that no installed skill declares must never appear as unfilled.
 
 Pass the other installed plugin and package roots found in check 1 to
-`inspect_packs`. A root is a pack when a skill declares `plugin:crew@>=X` or
+`inspect_packs`, including on pi each folded pack root the filters load (the
+crew checkout's own `packs/` tree is inert on Claude Code and Codex, which
+install each pack as its own plugin). A root is a pack when a skill declares `plugin:crew@>=X` or
 `provides:`. Then pass the packs to `declared_local_slots(..., packs=...)`: each
 pack's `slots.txt` adds its own slots to the declared set, labelled with the
 pack, and an unfilled one is reported as that pack's slot. A slot name two packs

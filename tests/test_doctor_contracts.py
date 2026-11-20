@@ -65,7 +65,7 @@ def write_claude_marketplace_identity(home: pathlib.Path) -> None:
         home / ".claude/plugins/known_marketplaces.json",
         {
             "pixeloven": {
-                "source": {"source": "github", "repo": "pixeloven/marketplace"},
+                "source": {"source": "github", "repo": "pixeloven/crew"},
             }
         },
     )
@@ -75,7 +75,7 @@ def write_codex_marketplace_identity(home: pathlib.Path) -> None:
     config = home / ".codex/config.toml"
     config.parent.mkdir(parents=True, exist_ok=True)
     config.write_text(
-        "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n",
+        "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n",
         encoding="utf-8",
     )
 
@@ -98,7 +98,7 @@ class InstallationTruthTests(unittest.TestCase):
             home / ".claude/settings.json",
             {
                 "extraKnownMarketplaces": {
-                    "pixeloven": {"source": {"source": "github", "repo": "pixeloven/marketplace"}}
+                    "pixeloven": {"source": {"source": "github", "repo": "pixeloven/crew"}}
                 },
                 "enabledPlugins": {"crew@pixeloven": True},
             },
@@ -107,7 +107,7 @@ class InstallationTruthTests(unittest.TestCase):
             home / ".claude/plugins/known_marketplaces.json",
             {
                 "pixeloven": {
-                    "source": {"source": "github", "repo": "pixeloven/marketplace"},
+                    "source": {"source": "github", "repo": "pixeloven/crew"},
                     "installLocation": str(marketplace),
                     "lastUpdated": "2026-09-05T00:00:00Z",
                 }
@@ -158,7 +158,7 @@ class InstallationTruthTests(unittest.TestCase):
         config = home / ".codex/config.toml"
         config.parent.mkdir(parents=True, exist_ok=True)
         config.write_text(
-            "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'v0.29.0'\n\n"
+            "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.29.0'\n\n"
             "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
             encoding="utf-8",
         )
@@ -374,7 +374,7 @@ class InstallationTruthTests(unittest.TestCase):
             project, home = self.make_install_tree(pathlib.Path(tmp))
             config = home / ".codex/config.toml"
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'v0.29.0'\n",
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.29.0'\n",
                 encoding="utf-8",
             )
             codex = inspect_installations(project, home)["harnesses"]["codex"]
@@ -451,7 +451,7 @@ class InstallationTruthTests(unittest.TestCase):
             write_json(
                 base / "home/.claude/settings.json",
                 {
-                    "extraKnownMarketplaces": {"pixeloven": {"source": "pixeloven/marketplace"}},
+                    "extraKnownMarketplaces": {"pixeloven": {"source": "pixeloven/crew"}},
                     "enabledPlugins": {"crew@pixeloven": True},
                 },
             )
@@ -500,7 +500,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                 "ref = 'v0.35.0'\n[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -545,7 +545,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                 "ref = 'v0.35.0'\n[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -588,7 +588,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                 "ref = 'v0.36.0'\n[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -749,7 +749,7 @@ class InstallationTruthTests(unittest.TestCase):
             project, home = self.make_install_tree(base)
             config = home / ".codex/config.toml"
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'v0.36.0'\n\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.36.0'\n\n"
                 "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -928,7 +928,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'v0.35.0'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1157,7 +1157,7 @@ class InstallationTruthTests(unittest.TestCase):
                 config = home / ".codex/config.toml"
                 config.parent.mkdir(parents=True, exist_ok=True)
                 config.write_text(
-                    "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                    "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                     "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                     encoding="utf-8",
                 )
@@ -1193,7 +1193,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/settings.json",
                 {
                     "extraKnownMarketplaces": {
-                        "pixeloven": {"source": "pixeloven/marketplace"}
+                        "pixeloven": {"source": "pixeloven/crew"}
                     },
                     "enabledPlugins": {"crew@pixeloven": True},
                 },
@@ -1207,7 +1207,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/plugins/known_marketplaces.json",
                 {
                     "pixeloven": {
-                        "source": {"source": "github", "repo": "pixeloven/marketplace"},
+                        "source": {"source": "github", "repo": "pixeloven/crew"},
                         "installLocation": str(claude_root),
                     }
                 },
@@ -1222,7 +1222,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                 "ref = 'v0.36.0'\n[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1266,7 +1266,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                f"[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'v{version}'\n"
+                f"[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v{version}'\n"
                 "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -1691,11 +1691,11 @@ class InstallationTruthTests(unittest.TestCase):
                 ("marketplaces must be a mapping", "plugins must be a mapping"),
             ),
             (
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 36\n",
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 36\n",
                 ("marketplaces.pixeloven.ref must be a SemVer string",),
             ),
             (
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'banana'\n",
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'banana'\n",
                 ("marketplaces.pixeloven.ref must be a SemVer string",),
             ),
         )
@@ -1786,15 +1786,15 @@ class InstallationTruthTests(unittest.TestCase):
                 if item["source"] == str(config)
             )
             self.assertEqual("malformed", read["state"])
-            self.assertIn("git source identifying pixeloven/marketplace", read["detail"])
+            self.assertIn("git source identifying pixeloven/crew", read["detail"])
 
     def test_codex_marketplace_requires_git_kind_and_normalizes_git_sources(self) -> None:
         supported_sources = (
-            "pixeloven/marketplace",
-            "https://github.com/pixeloven/marketplace.git",
-            "git+https://github.com/pixeloven/marketplace.git",
-            "git@github.com:pixeloven/marketplace.git",
-            "ssh://git@github.com/pixeloven/marketplace.git",
+            "pixeloven/crew",
+            "https://github.com/pixeloven/crew.git",
+            "git+https://github.com/pixeloven/crew.git",
+            "git@github.com:pixeloven/crew.git",
+            "ssh://git@github.com/pixeloven/crew.git",
         )
         for source in supported_sources:
             with self.subTest(source=source), tempfile.TemporaryDirectory() as tmp:
@@ -1819,7 +1819,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.write_text(
                 "[marketplaces.pixeloven]\nsource_type = 'local'\n"
-                "source = 'pixeloven/marketplace'\nref = 'v0.29.0'\n"
+                "source = 'pixeloven/crew'\nref = 'v0.29.0'\n"
                 "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -2012,7 +2012,7 @@ class InstallationTruthTests(unittest.TestCase):
             project, home = self.make_install_tree(base)
             config = home / ".codex/config.toml"
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                 "ref = 'junk@v0.29.0'\n[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -2039,7 +2039,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                 "ref = 'v0.36.0'\n[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -2330,6 +2330,117 @@ class InstallationTruthTests(unittest.TestCase):
             self.assertEqual("malformed", read["state"])
             self.assertIn("packages must be a string sequence", read["detail"])
 
+    def write_folded_crew_checkout(self, home: pathlib.Path) -> pathlib.Path:
+        root = home / ".pi/agent/git/github.com/pixeloven/crew"
+        write_json(root / ".claude-plugin/plugin.json", {"version": "0.67.0"})
+        write_json(
+            root / "package.json",
+            {
+                "name": "@pixeloven/crew",
+                "version": "0.67.0",
+                "pi": {"skills": ["./skills", "./packs/a-skills/skills", "./packs/b-skills/skills"]},
+            },
+        )
+        for rel in ("skills/doctor", "packs/a-skills/skills/alpha", "packs/b-skills/skills/beta"):
+            skill = root / rel / "SKILL.md"
+            skill.parent.mkdir(parents=True, exist_ok=True)
+            skill.write_text(f"---\nname: {skill.parent.name}\n---\n", encoding="utf-8")
+        return root
+
+    def test_pi_object_entries_register_crew_and_their_filters_pick_folded_packs(self) -> None:
+        source = "git:github.com/pixeloven/crew@v0.67.0"
+        cases = (
+            ("plain string loads every declared pack", [source], None, ["a-skills", "b-skills"]),
+            ("crew-only filter loads no pack", [{"source": source, "skills": ["skills/**"]}], None, []),
+            (
+                "exclusion drops one pack",
+                [{"source": source, "skills": ["!packs/b-skills/**"]}],
+                None,
+                ["a-skills"],
+            ),
+            (
+                "project delta adds one pack to a crew-only user entry",
+                [{"source": source, "skills": ["skills/**"]}],
+                [{"source": "git:github.com/pixeloven/crew@v0.66.0", "autoload": False,
+                  "skills": ["packs/a-skills/**"]}],
+                ["a-skills"],
+            ),
+        )
+        for label, user_packages, project_packages, expected in cases:
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                base = pathlib.Path(tmp)
+                project = base / "project"
+                home = base / "home"
+                root = self.write_folded_crew_checkout(home)
+                write_json(home / ".pi/agent/settings.json", {"packages": user_packages})
+                if project_packages:
+                    write_json(project / ".pi/settings.json", {"packages": project_packages})
+
+                pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+                self.assertEqual("present", pi["enablement"]["state"])
+                self.assertEqual(
+                    [{"name": name, "root": str(root / "packs" / name)} for name in expected],
+                    pi["folded_packs"],
+                )
+                self.assertNotIn(
+                    "malformed", {read["state"] for read in pi["configuration_reads"]}
+                )
+                # The delta's own ref never pins: the user entry selects v0.67.0.
+                self.assertEqual("0.67.0", pi["configured_version"])
+                self.assertEqual("OK", pi["status"])
+
+    def test_pi_object_entry_without_a_string_source_is_malformed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            project = base / "project"
+            home = base / "home"
+            settings = project / ".pi/settings.json"
+            write_json(settings, {"packages": [{"skills": ["skills/**"]}, 7]})
+            self.write_folded_crew_checkout(home)
+
+            pi = inspect_installations(project, home)["harnesses"]["pi"]
+
+            read = next(item for item in pi["configuration_reads"] if item["source"] == str(settings))
+            self.assertEqual("malformed", read["state"])
+            self.assertIn("objects with a string source", read["detail"])
+            self.assertEqual("unavailable", pi["enablement"]["state"])
+
+    def test_retired_catalogue_source_still_resolves_but_asks_for_the_switch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            project, home = self.make_install_tree(pathlib.Path(tmp), "v0.35.0")
+            for path in (home / ".claude/settings.json", home / ".claude/plugins/known_marketplaces.json"):
+                path.write_text(
+                    path.read_text(encoding="utf-8").replace("pixeloven/crew", "pixeloven/marketplace"),
+                    encoding="utf-8",
+                )
+            config = home / ".codex/config.toml"
+            config.write_text(
+                config.read_text(encoding="utf-8").replace("pixeloven/crew", "pixeloven/marketplace"),
+                encoding="utf-8",
+            )
+
+            harnesses = inspect_installations(project, home)["harnesses"]
+
+            for name, sources in (
+                ("claude", {str(home / ".claude/settings.json"),
+                            str(home / ".claude/plugins/known_marketplaces.json")}),
+                ("codex", {str(config)}),
+            ):
+                with self.subTest(harness=name):
+                    harness = harnesses[name]
+                    self.assertEqual("present", harness["installation"]["state"])
+                    self.assertEqual("present", harness["enablement"]["state"])
+                    self.assertEqual("DEGRADED", harness["status"])
+                    self.assertNotIn(
+                        "malformed", {read["state"] for read in harness["configuration_reads"]}
+                    )
+                    finding = next(
+                        item for item in harness["findings"] if "retired catalogue" in item["claim"]
+                    )
+                    self.assertIn("pixeloven/crew", finding["claim"])
+                    self.assertEqual(sources, {item["source"] for item in finding["evidence"]})
+
     def test_claude_duplicate_enablement_scopes_use_project_precedence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -2360,7 +2471,7 @@ class InstallationTruthTests(unittest.TestCase):
                 project / ".claude/settings.json",
                 {
                     "extraKnownMarketplaces": {
-                        "pixeloven": {"source": "pixeloven/marketplace"}
+                        "pixeloven": {"source": "pixeloven/crew"}
                     }
                 },
             )
@@ -2448,7 +2559,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/settings.json",
                 {
                     "extraKnownMarketplaces": {
-                        "pixeloven": {"source": "pixeloven/marketplace"}
+                        "pixeloven": {"source": "pixeloven/crew"}
                     },
                     "enabledPlugins": {"crew@pixeloven": True},
                 },
@@ -2483,7 +2594,7 @@ class InstallationTruthTests(unittest.TestCase):
                 if item["source"] == str(project / ".claude/settings.local.json")
             )
             self.assertEqual("malformed", read["state"])
-            self.assertIn("source must identify pixeloven/marketplace", read["detail"])
+            self.assertIn("source must identify pixeloven/crew", read["detail"])
 
     def test_claude_installed_manifest_version_participates_in_cross_harness_skew(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2505,7 +2616,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'v0.35.0'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -2590,7 +2701,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/settings.json",
                 {
                     "extraKnownMarketplaces": {
-                        "pixeloven": {"source": "pixeloven/marketplace"}
+                        "pixeloven": {"source": "pixeloven/crew"}
                     },
                     "enabledPlugins": {"crew@pixeloven": True},
                 },
@@ -2632,7 +2743,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/settings.json",
                 {
                     "extraKnownMarketplaces": {
-                        "pixeloven": {"source": "pixeloven/marketplace"}
+                        "pixeloven": {"source": "pixeloven/crew"}
                     },
                     "enabledPlugins": {"crew@pixeloven": True},
                 },
@@ -2697,7 +2808,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\n"
                 "ref = 'v0.35.0'\n[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -2705,7 +2816,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/settings.json",
                 {
                     "extraKnownMarketplaces": {
-                        "pixeloven": {"source": "pixeloven/marketplace"}
+                        "pixeloven": {"source": "pixeloven/crew"}
                     },
                     "enabledPlugins": {"crew@pixeloven": True},
                 },
@@ -2716,7 +2827,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/plugins/known_marketplaces.json",
                 {
                     "pixeloven": {
-                        "source": {"source": "github", "repo": "pixeloven/marketplace"},
+                        "source": {"source": "github", "repo": "pixeloven/crew"},
                         "installLocation": str(served_root),
                     }
                 },
@@ -2807,7 +2918,7 @@ class InstallationTruthTests(unittest.TestCase):
             config = home / ".codex/config.toml"
             config.parent.mkdir(parents=True, exist_ok=True)
             config.write_text(
-                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/marketplace'\nref = 'v0.35.0'\n"
+                "[marketplaces.pixeloven]\nsource_type = 'git'\nsource = 'pixeloven/crew'\nref = 'v0.35.0'\n"
                 "[plugins.\"crew@pixeloven\"]\nenabled = true\n",
                 encoding="utf-8",
             )
@@ -2855,7 +2966,7 @@ class InstallationTruthTests(unittest.TestCase):
                 home / ".claude/plugins/known_marketplaces.json",
                 {
                     "pixeloven": {
-                        "source": {"source": "github", "repo": "pixeloven/marketplace"},
+                        "source": {"source": "github", "repo": "pixeloven/crew"},
                         "installLocation": str(served_root),
                     }
                 },
