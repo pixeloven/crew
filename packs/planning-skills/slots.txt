@@ -1,0 +1,8 @@
+# planning-skills: slots this pack's skills defer to.
+# Each has a starter stub at templates/local-skills/<slot>.md.
+# Every skill runs on generic defaults while its slot is empty.
+planning-stages
+prd-bar
+review-lenses
+planning-conventions
+tracker-fields

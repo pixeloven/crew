@@ -1,0 +1,11 @@
+{
+  "name": "planning-skills",
+  "description": "A Crew pack for product planning: shape ideas, check stage readiness, group themes, break items into stories, review requirements and cross-functional risk, and sync drafts with a tracker. Skills only; every org-specific fact lives in pack-owned slots.",
+  "skills": "./skills",
+  "version": "0.1.0",
+  "author": {
+    "name": "PixelOven"
+  },
+  "repository": "https://github.com/pixeloven/planning-skills",
+  "license": "MIT"
+}

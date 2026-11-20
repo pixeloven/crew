@@ -1,0 +1,33 @@
+{
+  "name": "@pixeloven/planning-skills",
+  "version": "0.1.0",
+  "description": "A Crew pack for product planning: shape ideas, check stage readiness, group themes, break items into stories, review requirements and cross-functional risk, and sync drafts with a tracker. Skills only; every org-specific fact lives in pack-owned slots.",
+  "keywords": [
+    "pi-package",
+    "claude-plugin",
+    "skills",
+    "crew-pack",
+    "product-planning",
+    "requirements",
+    "backlog",
+    "roadmap"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pixeloven/planning-skills.git"
+  },
+  "files": [
+    ".claude-plugin",
+    "LICENSE",
+    "README.md",
+    "skills",
+    "slots.txt",
+    "templates"
+  ],
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  }
+}

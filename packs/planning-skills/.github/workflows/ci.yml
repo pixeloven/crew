@@ -1,0 +1,18 @@
+---
+# This pack's skills load AS INSTRUCTIONS into every consumer's agents, so it
+# lints itself on every PR with Crew's published checks, never copies
+# (docs/PACKS.md in pixeloven/crew).
+# Pinned to the Crew release our skills require.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  crew:
+    uses: pixeloven/crew/.github/workflows/pack-checks.yml@v0.45.0
